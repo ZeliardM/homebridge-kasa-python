@@ -73,7 +73,14 @@
     "ajv": "^8.16.0",
     "ajv-formats": "^3.0.1",
     "axios": "^1.7.2",
+    "chalk": "^5.3.0",
+    "child_process": "^1.0.2",
+    "fs": "^0.0.1-security",
     "lodash.defaults": "^4.2.0",
-    "ts-essentials": "^10.0.1"
+    "path": "^0.12.7",
+    "semver": "^7.6.3",
+    "ts-essentials": "^10.0.1",
+    "url": "^0.11.3",
+    "util": "^0.12.5"
   }
 }
