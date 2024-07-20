@@ -1,5 +1,4 @@
 {
-  "private": true,
   "displayName": "Homebridge Kasa Python",
   "name": "homebridge-kasa-python",
   "version": "1.0.0",
