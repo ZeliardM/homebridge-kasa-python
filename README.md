@@ -1,191 +1,398 @@
-<p align="center">
+<p align="center" style="text-align:center;">
 
-<img src="https://github.com/homebridge/branding/raw/latest/logos/homebridge-wordmark-logo-vertical.png" width="150">
+<img src="https://github.com/homebridge/branding/raw/latest/logos/homebridge-wordmark-logo-vertical.png" width="150" style="display:block; margin:auto;">
 
 </p>
 
 <span align="center">
 
-# Homebridge Platform Plugin Template
+# Homebridge Kasa Python Plug-In
 
 </span>
 
-This is a template Homebridge dynamic platform plugin and can be used as a base to help you get started developing your own plugin.
+<p align="center">
+  <a href="https://github.com/ZeliardM/homebridge-kasa-python/blob/latest/LICENSE"><img src="https://badgen.net/badge/license/MIT" alt="mit license"></a>
+  <a href="https://www.npmjs.com/package/homebridge-kasa-python"><img src="https://img.shields.io/npm/v/homebridge-kasa-python" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/homebridge-kasa-python"><img src="https://badgen.net/npm/dt/homebridge-kasa-python" alt="npm downloads total"></a>
+  <a href="https://www.npmjs.com/package/homebridge-kasa-python"><img src="https://badgen.net/npm/dm/homebridge-kasa-python" alt="npm downloads monthly"></a>
+  <a href="https://www.paypal.me/ZeliardM/USD/"><img src="https://badgen.net/badge/donate/paypal/E69138" alt="donate"></a>
+  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue" alt="PyPI pyversions"></a>
+</p>
 
-This template should be used in conjunction with the [developer documentation](https://developers.homebridge.io/). A full list of all supported service types, and their characteristics is available on this site.
+This is a [Homebridge](https://github.com/homebridge/homebridge) plug-in based on the Python-Kasa API Library to interact with TP-Link Kasa Devices.
 
-### Clone As Template
+This plug-in automatically discovers your TP-Link Kasa Devices on your network and configures them to be used in HomeKit.
 
-Click the link below to create a new GitHub Repository using this template, or click the *Use This Template* button above.
+Automatic Discovery is possible only for some devices, some newer devices require the Username and Password for your TP-Link Kasa Cloud Account.
 
-<span align="center">
+### Features
 
-### [Create New Repository From Template](https://github.com/homebridge/homebridge-plugin-template/generate)
-
-</span>
-
-### Setup Development Environment
-
-To develop Homebridge plugins you must have Node.js 18 or later installed, and a modern code editor such as [VS Code](https://code.visualstudio.com/). This plugin template uses [TypeScript](https://www.typescriptlang.org/) to make development easier and comes with pre-configured settings for [VS Code](https://code.visualstudio.com/) and ESLint. If you are using VS Code install these extensions:
-
-- [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
-
-### Install Development Dependencies
-
-Using a terminal, navigate to the project folder and run this command to install the development dependencies:
-
-```shell
-npm install
-```
-
-### Update package.json
-
-Open the [`package.json`](./package.json) and change the following attributes:
-
-- `name` - this should be prefixed with `homebridge-` or `@username/homebridge-`, is case-sensitive, and contains no spaces nor special characters apart from a dash `-`
-- `displayName` - this is the "nice" name displayed in the Homebridge UI
-- `repository.url` - Link to your GitHub repo
-- `bugs.url` - Link to your GitHub repo issues page
-
-When you are ready to publish the plugin you should set `private` to false, or remove the attribute entirely.
-
-### Update Plugin Defaults
-
-Open the [`src/settings.ts`](./src/settings.ts) file and change the default values:
-
-- `PLATFORM_NAME` - Set this to be the name of your platform. This is the name of the platform that users will use to register the plugin in the Homebridge `config.json`.
-- `PLUGIN_NAME` - Set this to be the same name you set in the [`package.json`](./package.json) file. 
-
-Open the [`config.schema.json`](./config.schema.json) file and change the following attribute:
-
-- `pluginAlias` - set this to match the `PLATFORM_NAME` you defined in the previous step.
-
-### Build Plugin
-
-TypeScript needs to be compiled into JavaScript before it can run. The following command will compile the contents of your [`src`](./src) directory and put the resulting code into the `dist` folder.
-
-```shell
-npm run build
-```
-
-### Link To Homebridge
-
-Run this command so your global installation of Homebridge can discover the plugin in your development environment:
-
-```shell
-npm link
-```
-
-You can now start Homebridge, use the `-D` flag, so you can see debug log messages in your plugin:
-
-```shell
-homebridge -D
-```
-
-### Watch For Changes and Build Automatically
-
-If you want to have your code compile automatically as you make changes, and restart Homebridge automatically between changes, you first need to add your plugin as a platform in `~/.homebridge/config.json`:
-```
-{
-...
-    "platforms": [
-        {
-            "name": "Config",
-            "port": 8581,
-            "platform": "config"
-        },
-        {
-            "name": "<PLUGIN_NAME>",
-            //... any other options, as listed in config.schema.json ...
-            "platform": "<PLATFORM_NAME>"
-        }
-    ]
-}
-```
-
-and then you can run:
-
-```shell
-npm run watch
-```
-
-This will launch an instance of Homebridge in debug mode which will restart every time you make a change to the source code. It will load the config stored in the default location under `~/.homebridge`. You may need to stop other running instances of Homebridge while using this command to prevent conflicts. You can adjust the Homebridge startup command in the [`nodemon.json`](./nodemon.json) file.
-
-### Customise Plugin
-
-You can now start customising the plugin template to suit your requirements.
-
-- [`src/platform.ts`](./src/platform.ts) - this is where your device setup and discovery should go.
-- [`src/platformAccessory.ts`](./src/platformAccessory.ts) - this is where your accessory control logic should go, you can rename or create multiple instances of this file for each accessory type you need to implement as part of your platform plugin. You can refer to the [developer documentation](https://developers.homebridge.io/) to see what characteristics you need to implement for each service type.
-- [`config.schema.json`](./config.schema.json) - update the config schema to match the config you expect from the user. See the [Plugin Config Schema Documentation](https://developers.homebridge.io/#/config-schema).
-
-### Versioning Your Plugin
-
-Given a version number `MAJOR`.`MINOR`.`PATCH`, such as `1.4.3`, increment the:
-
-1. **MAJOR** version when you make breaking changes to your plugin,
-2. **MINOR** version when you add functionality in a backwards compatible manner, and
-3. **PATCH** version when you make backwards compatible bug fixes.
-
-You can use the `npm version` command to help you with this:
-
-```shell
-# major update / breaking changes
-npm version major
-
-# minor update / new features
-npm version update
-
-# patch / bugfixes
-npm version patch
-```
-
-### Publish Package
-
-When you are ready to publish your plugin to [npm](https://www.npmjs.com/), make sure you have removed the `private` attribute from the [`package.json`](./package.json) file then run:
-
-```shell
-npm publish
-```
-
-If you are publishing a scoped plugin, i.e. `@username/homebridge-xxx` you will need to add `--access=public` to command the first time you publish.
-
-#### Publishing Beta Versions
-
-You can publish *beta* versions of your plugin for other users to test before you release it to everyone.
-
-```shell
-# create a new pre-release version (eg. 2.1.0-beta.1)
-npm version prepatch --preid beta
-
-# publish to @beta
-npm publish --tag=beta
-```
-
-Users can then install the  *beta* version by appending `@beta` to the install command, for example:
-
-```shell
-sudo npm install -g homebridge-example-plugin@beta
-```
-
-### Best Practices
-Consider creating your plugin with the [Homebridge Verified](https://github.com/homebridge/verified) criteria in mind. This will help you to create a plugin that is easy to use and works well with Homebridge.
-You can then submit your plugin to the Homebridge Verified list for review.
-The most up-to-date criteria can be found [here](https://github.com/homebridge/verified#requirements).
-For reference, the current criteria are:
-
-- The plugin must successfully install.
-- The plugin must implement the [Homebridge Plugin Settings GUI](https://github.com/oznu/homebridge-config-ui-x/wiki/Developers:-Plugin-Settings-GUI).
-- The plugin must not start unless it is configured.
-- The plugin must not execute post-install scripts that modify the users' system in any way.
-- The plugin must not contain any analytics or calls that enable you to track the user.
-- The plugin must not throw unhandled exceptions, the plugin must catch and log its own errors.
-- The plugin must be published to npm and the source code available on GitHub.
-  - A GitHub release - with patch notes - should be created for every new version of your plugin.
-- The plugin must run on all [supported LTS versions of Node.js](https://github.com/homebridge/homebridge/wiki/How-To-Update-Node.js), at the time of writing this is Node.js v16 and v18.
-- The plugin must not require the user to run Homebridge in a TTY or with non-standard startup parameters, even for initial configuration.
-- If the plugin needs to write files to disk (cache, keys, etc.), it must store them inside the Homebridge storage directory.
-
-### Useful Links
-Note these links are here for help but are not supported/verified by the Homebridge team
-- [Custom Characteristics](https://github.com/homebridge/homebridge-plugin-template/issues/20)
+-   Automatically discover TP-Link Kasa Devices on your network.
+-   Change Device States for Plugs, Change Device State and Supports Dimming for Switches, Change Device State, and Supports Hue, Saturation, and Value (HSV), Color, and Temperature Adjustments for Bulbs that Support those options.
+-   Supported Devices are listed below, Devices with an asterisks ('*') next to the specific firmware will require the Username and Password for your TP-Link Kasa Cloud Account to connect and function.
+<div align="center">
+<table style="border-collapse: collapse; border: 1px solid black;">
+  <thead>
+    <tr>
+      <th align="center" style="border: 1px solid black; padding: 8px;">Category</th>
+      <th align="center" style="border: 1px solid black; padding: 8px;">Model</th>
+      <th align="center" style="border: 1px solid black; padding: 8px;">Hardware Version</th>
+      <th align="center" style="border: 1px solid black; padding: 8px;">Firmware Version</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center" rowspan="23" style="border: 1px solid black; padding: 8px;">Plugs</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">EP10</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.2</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">EP25</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">2.6 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.1*</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.2*</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="4" style="border: 1px solid black; padding: 8px;">HS100</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (UK)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.2.6</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">4.1 (UK)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.1.0*</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.2.5</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">2.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.5.6</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">HS103</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.5.7</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">2.1 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.1.2</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.1.4</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">HS105</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.5.6</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">HS110</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (EU)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.2.5</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">4.0 (EU)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.4</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.2.6</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">KP100</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">3.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.1</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KP105</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (UK)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.5</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.7</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">KP115</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (EU)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.16</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.17</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.21</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">KP125</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.6</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">KP125M</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.1.3*</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">KP401</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.0</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="13" style="border: 1px solid black; padding: 8px;">Power Strips</td>
+      <td align="center" rowspan="1" style="border: 1px solid black; padding: 8px;">EP40</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.2</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">HS107</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.8</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="4" style="border: 1px solid black; padding: 8px;">HS300</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.10</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.21</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">2.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.3</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.12</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">KP200</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">3.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.3</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KP303</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (UK)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.3</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">2.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.3</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="4" style="border: 1px solid black; padding: 8px;">KP400</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.10</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">2.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.6</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">3.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.3</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.4</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="19" style="border: 1px solid black; padding: 8px;">Wall Switches</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">ES20M</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.8</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">HS200</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">2.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.5.7</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">5.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.2</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">HS210</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.5.8</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">HS220</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.5.7</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">2.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.3</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">3.26 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.1*</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KP405</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.5</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.6</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KS200M</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.8</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.11</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KS205</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.2*</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.1.0*</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">KS220M</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.4</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KS225</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.2*</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.1.0*</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">KS230</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.14</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KS240</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.4*</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.5*</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="13" style="border: 1px solid black; padding: 8px;">Bulbs</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">KL110</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.8.11</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KL120</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.8.6</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.8.11</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">KL125</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.20 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.5</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">2.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.7</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">4.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.5</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KL130</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (EU)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.8.8</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.8.11</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">KL135</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.6</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">KL50</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.1.13</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KL60</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (UN)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.1.4</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.1.13</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">LB110</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.8.11</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="8" style="border: 1px solid black; padding: 8px;">Light Strips</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KL400L5</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.5</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.8</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">KL420L5</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.2</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="5" style="border: 1px solid black; padding: 8px;">KL430</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">2.0 (UN)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.8</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.10</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">2.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.8</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.9</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.11</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="1" style="border: 1px solid black; padding: 8px;">Hubs</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">KH100</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (UK)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.5.6*</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">Hub-Connected Devices</td>
+      <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">KE100</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (EU)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">2.4.0*</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">2.8.0*</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (UK)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">2.8.0*</td>
+    </tr>
+  </tbody>
+</table>
+</div>

@@ -1,34 +1,55 @@
 {
   "private": true,
-  "displayName": "Plugin Name",
-  "name": "homebridge-plugin-name",
+  "displayName": "Homebridge Kasa Python",
+  "name": "homebridge-kasa-python",
   "version": "1.0.0",
-  "description": "A short description about what your plugin does.",
+  "description": "Plugin that uses Python-Kasa API to communicate with Kasa Devices.",
   "license": "Apache-2.0",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/USERNAME/GITHUB_PROJECT_NAME.git"
+    "url": "git+https://github.com/ZeliardM/homebridge-kasa-python.git"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME/issues"
+    "url": "https://github.com/ZeliardM/homebridge-kasa-python/issues"
   },
   "engines": {
     "node": "^18.17.0 || ^20.9.0",
-    "homebridge": "^1.8.0"
+    "homebridge": "^1.8.0",
+    "python": "^3.9.0"
   },
   "main": "dist/index.js",
   "scripts": {
     "lint": "eslint src/**/*.ts --max-warnings=0",
     "watch": "npm run build && npm link && nodemon",
-    "build": "rimraf ./dist && tsc",
+    "build": "npm ci && rimraf -I ./dist && npm run lint && tsc && cp ./src/python/*.py ./dist/python",
     "prepublishOnly": "npm run lint && npm run build"
   },
   "keywords": [
-    "homebridge-plugin"
+    "homebridge",
+    "homebridge-plugin",
+    "homebridge-kasa",
+    "homebridge-kasa-python",
+    "homekit",
+    "kasa",
+    "plugin",
+    "python",
+    "python-kasa",
+    "smarthome",
+    "tplink",
+    "tplink-kasa",
+    "tplink-smarthome"
+  ],
+  "files": [
+    "config.schema.json",
+    "dist",
+    "LICENSE",
+    "requirements.txt"
   ],
   "devDependencies": {
+    "@types/lodash.defaults": "^4.2.9",
     "@types/node": "^20.12.13",
+    "@types/semver": "^7.5.8",
     "@typescript-eslint/eslint-plugin": "^7.11.0",
     "@typescript-eslint/parser": "^7.11.0",
     "eslint": "^8.57.0",
@@ -37,5 +58,23 @@
     "rimraf": "^5.0.7",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
+  },
+  "homepage": "https://github.com/ZeliardM/homebridge-kasa-python#readme",
+  "funding": [
+    {
+      "type": "paypal",
+      "url": "https://www.paypal.me/ZeliardM/USD"
+    },
+    {
+      "type": "github",
+      "url": "https://github.com/sponsors/ZeliardM"
+    }
+  ],
+  "dependencies": {
+    "ajv": "^8.16.0",
+    "ajv-formats": "^3.0.1",
+    "axios": "^1.7.2",
+    "lodash.defaults": "^4.2.0",
+    "ts-essentials": "^10.0.1"
   }
 }

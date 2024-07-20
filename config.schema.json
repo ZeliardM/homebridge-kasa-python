@@ -1,7 +1,9 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "KasaPython",
   "pluginType": "platform",
   "singular": true,
+  "headerDisplay": "Kasa Python Plugin.<p>Most users do not require configuration and can just click \"Save\" to get started. See [README](https://github.com/ZeliardM/homebridge-kasa-python/blob/master/README.md) for more information.</p>",
+  "footerDisplay": "",
   "schema": {
     "type": "object",
     "properties": {
@@ -9,8 +11,204 @@
         "title": "Name",
         "type": "string",
         "required": true,
-        "default": "Example Dynamic Platform"
+        "default": "KasaPython",
+        "minLength": 1
+      },
+      "username": {
+        "title": "Username",
+        "type": "string",
+        "required": false,
+        "description": "Username for the Kasa account. Required for cloud devices.",
+        "placeholder": "Username",
+        "minLength": 1
+      },
+      "password": {
+        "title": "Password",
+        "type": "string",
+        "required": false,
+        "description": "Password for the Kasa account. Required for cloud devices.",
+        "placeholder": "Password",
+        "minLength": 1
+      },
+      "powerStrip": {
+        "title": "Create Multi-Outlet Devices as a Power Strip",
+        "type": "boolean",
+        "required": false,
+        "description": "Enable to create a single power strip accessory with multiple outlets, used for models HS107, KP200, HS300, KP303, KP400, and EP40. Default: false",
+        "default": false
+      },
+      "discoveryPort": {
+        "title": "Port",
+        "type": "number",
+        "required": false,
+        "description": "Port to bind UDP socket for discovery. If port is not specified or is 0, the operating system will attempt to bind to a random port. Default: 0",
+        "placeholder": "0"
+      },
+      "broadcastAddress": {
+        "title": "Broadcast Address",
+        "type": "string",
+        "required": false,
+        "description": "Broadcast Address. If discovery is not working tweak to match your subnet, eg: 192.168.1.255",
+        "placeholder": "255.255.255.255",
+        "format": "ipv4"
+      },
+      "pollingInterval": {
+        "title": "Polling Interval (seconds)",
+        "type": "integer",
+        "required": false,
+        "description": "How often to check device status in the background (seconds)",
+        "placeholder": "10"
+      },
+      "includeMacAddresses": {
+        "title": "Include MAC Addresses",
+        "description": "Allow-list of MAC Addresses to include. If specified will ignore other devices. Supports glob-style patterns",
+        "type": "array",
+        "items": {
+          "title": "MAC Address",
+          "type": "string",
+          "required": true
+        }
+      },
+      "excludeMacAddresses": {
+        "title": "Exclude MAC Addresses",
+        "description": "Deny-list of MAC Addresses to exclude. Supports glob-style patterns",
+        "type": "array",
+        "items": {
+          "title": "MAC Address",
+          "type": "string",
+          "required": true
+        }
+      },
+      "devices": {
+        "title": "Manual List of Devices",
+        "type": "array",
+        "items": {
+          "title": "Device",
+          "type": "object",
+          "properties": {
+            "host": {
+              "title": "Host",
+              "type": "string",
+              "required": true,
+              "placeholder": "192.168.1.1",
+              "format": "ipv4"
+            },
+            "port": {
+              "title": "Port",
+              "type": "string",
+              "required": false,
+              "placeholder": "9999"
+            }
+          }
+        }
+      },
+      "forceVenvRecreate": {
+        "title": "Force Venv Recreation",
+        "type": "boolean",
+        "required": true,
+        "description": "Set this to force to recreate the virtual python environment with the next restart of the plugin.",
+        "default": false
+      },
+      "pythonExecutable": {
+        "title": "Python Executable",
+        "type": "string",
+        "required": false,
+        "description": "Here you can specify a path that points to a python executable. The plugin uses the systems default python as default. Setting a specific python executable here may be required if your systems default python version is too current for the plugin.",
+        "placeholder": "/path/to/python3"
+      },
+      "timeout": {
+        "title": "Timeout (seconds)",
+        "type": "integer",
+        "required": false,
+        "description": "Communication Timeout (seconds)",
+        "placeholder": "15"
+      },
+      "waitTimeUpdate": {
+        "title": "Wait Time Update (milliseconds)",
+        "type": "integer",
+        "required": false,
+        "description": "The time to wait to combine similar commands for a device before sending a command to a device (milliseconds). Default: 100.",
+        "placeholder": "100"
       }
     }
-  }
+  },
+  "layout": [
+    "name",
+    "username",
+    "password",
+    {
+      "type": "help",
+      "helpvalue": "Username and Password will be required for specific devices only."
+    },
+    {
+      "type": "fieldset",
+      "title": "HomeKit (Optional)",
+      "description": "Customize how devices are exposed in HomeKit",
+      "expandable": true,
+      "items": [
+        "powerStrip"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Device Discovery (Optional)",
+      "description": "Customize device discovery",
+      "expandable": true,
+      "items": [
+        "broadcastAddress",
+        "pollingInterval",
+        "discoveryPort",
+        {
+          "key": "includeMacAddresses",
+          "type": "array",
+          "buttonText": "Add MAC Address",
+          "items": {
+            "title": "Include MAC Address",
+            "type": "string",
+            "required": true
+          }
+        },
+        {
+          "key": "excludeMacAddresses",
+          "type": "array",
+          "buttonText": "Add MAC Address",
+          "items": {
+            "title": "Exclude MAC Address",
+            "type": "string",
+            "required": true
+          }
+        },
+        {
+          "type": "fieldset",
+          "title": "Manual Discovery",
+          "description": "If automatic discovery is not working, try this.",
+          "expandable": true,
+          "items": [
+            {
+              "key": "devices",
+              "type": "array",
+              "buttonText": "Add Device",
+              "items": ["devices[].host", "devices[].port"]
+            },
+            {
+              "type": "help",
+              "helpvalue": "Before resorting to manually specifying devices, try setting the broadcast address and check your router/switch/firewall configuration. You must assign static IP addresses to your devices to use this configuration."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Advanced Settings (Optional)",
+      "description": "Don't change these, unless you understand what you're doing.",
+      "expandable": true,
+      "items": [
+        "pythonExecutable",
+        "forceVenvRecreate",
+        "timeout",
+        "waitTimeUpdate"
+      ]
+    }
+  ]
 }

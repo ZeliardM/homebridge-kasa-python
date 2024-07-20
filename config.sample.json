@@ -1,0 +1,31 @@
+{
+    "bridge": {
+        "name": "Homebridge",
+        "username": "11:22:33:AA:BB:CC",
+        "port": 51999,
+        "pin": "001-02-003"
+    },
+
+    "description": "This is an example configuration file.",
+
+    "platforms": [{
+        "platform": "KasaPython",
+        "name": "KasaPython",
+        "loggingLevel": 3,
+        "userName": "Username",
+        "password": "Password",
+        "powerStrip": true,
+        "discoveryPort": 0,
+        "broadcastAddress": "255.255.255.255",
+        "pollingInterval": 10,
+        "includeMacAddresses": [],
+        "excludeMacAddresses": [],
+        "devices": [],
+        "forceVenvRecreate": false,
+        "pythonExecutable": "",
+        "timeout": 15,
+        "waitTimeUpdate": 100
+    }],
+
+    "accessories": []
+}
