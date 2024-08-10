@@ -16,20 +16,32 @@
   <a href="https://www.npmjs.com/package/homebridge-kasa-python"><img src="https://badgen.net/npm/dt/homebridge-kasa-python" alt="npm downloads total"></a>
   <a href="https://www.npmjs.com/package/homebridge-kasa-python"><img src="https://badgen.net/npm/dm/homebridge-kasa-python" alt="npm downloads monthly"></a>
   <a href="https://www.paypal.me/ZeliardM/USD/"><img src="https://badgen.net/badge/donate/paypal/E69138" alt="donate"></a>
+  <a href="https://github.com/sponsors/ZeliardM"><img src="https://badgen.net/badge/donate/github/E69138" alt="donate"></a>
   <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue" alt="PyPI pyversions"></a>
 </p>
 
+<div align="center">
+
+> ## IMPORTANT!!!
+>This Plug-In Has Only Been Configured And Tested On Proxmox LXC. I Have Not Tested This On Any Other Platforms. If You Install It On Another Platform and It Works, Please Let Me Know So It Can Be Added To The List Of Supported Platforms.</p>
+>Updates To Code Require Cached Accessories To Be Removed To Update Naming Conventions For Homebridge 2.0 Update.
+
+</div>
+
 This is a [Homebridge](https://github.com/homebridge/homebridge) plug-in based on the Python-Kasa API Library to interact with TP-Link Kasa Devices.
 
-This plug-in automatically discovers your TP-Link Kasa Devices on your network and configures them to be used in HomeKit.
+This plug-in will automatically discover your TP-Link Kasa Devices on your network locally only and configure them to be used in HomeKit.
 
-Automatic Discovery is possible only for some devices, some newer devices require the Username and Password for your TP-Link Kasa Cloud Account.
+Automatic Discovery is possible only for some devices, some newer devices require the Username and Password for your TP-Link Kasa Cloud Account. Credentials can be provided in the plug-in settings.
+
+### Current Supported and Tested Devices
+-   I currently have used this plug-in with the HS300 (US) Power Strip and the KP115 (US) Plug. All other devices are yet to be tested and fully supported. If you have a device that is a plug or power strip and it does work as expected in HomeKit, please let me know and I can add it to the list of tested and supported devices. I don't have a lot of devices so cannot fully test everything.
 
 ### Features
 
--   Automatically discover TP-Link Kasa Devices on your network.
--   Change Device States for Plugs, Change Device State and Supports Dimming for Switches, Change Device State, and Supports Hue, Saturation, and Value (HSV), Color, and Temperature Adjustments for Bulbs that Support those options.
--   Supported Devices are listed below, Devices with an asterisks ('*') next to the specific firmware will require the Username and Password for your TP-Link Kasa Cloud Account to connect and function.
+-   Automatically discover TP-Link Kasa Devices locally only on your network.
+-   Change Device States for Plugs, Change Device States for Power Strips, Change Device State and Supports Dimming for Switches, Change Device State and Supports Hue, Saturation, and Value (HSV), Color, Color Temperature Adjustments, and Dimming for Bulbs and Light Strips that support those options.</p>*NOTE - Not All Functions Are Currently Supported, All Devices and Functions Could Be Supported By The Plug-In In The Furture.*</p>
+-   Supported Devices from the API are listed below, Devices with an asterisks ('*') next to the specific firmware will require the Username and Password for your TP-Link Kasa Cloud Account to connect and function correctly.</p>*NOTE - Not All Devices Listed Below Are Supported By This Plug-In. These Devices Are Supported By The Python-Kasa API And Could Be Supported By The Plug-In In The Future.*</p>
 <div align="center">
 <table style="border-collapse: collapse; border: 1px solid black;">
   <thead>
@@ -396,3 +408,6 @@ Automatic Discovery is possible only for some devices, some newer devices requir
   </tbody>
 </table>
 </div>
+
+### Credits
+-   Huge thanks to GadgetReactor for the [Python-Kasa API](https://github.com/python-kasa/python-kasa), Donald Patrick Seal for the [Unofficial API documentation](https://github.com/plasticrake/tplink-smarthome-api), and Maximilian Leith for [Excellent Python Implementation](https://github.com/maxileith/homebridge-appletv-enhanced).

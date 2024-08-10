@@ -1,79 +1,43 @@
+import { LogLevel } from 'homebridge';
 import type {
   Characteristic,
   Logger,
   Logging,
-  LogLevel,
   Service,
   WithUUID,
 } from 'homebridge';
 
-import { ChildProcessWithoutNullStreams, spawn, SpawnOptionsWithoutStdio } from 'child_process';
-import { writeFile } from 'fs/promises';
+import { ChildProcessWithoutNullStreams, spawn, SpawnOptionsWithoutStdio } from 'node:child_process';
+import { writeFile } from 'node:fs/promises';
 
-import type { Plug, Powerstrip } from './devices/kasaDevices.js';
-
-export type KasaDevice = Plug | Powerstrip;
-
-export function isObjectLike(
-  candidate: unknown,
-): candidate is Record<string, unknown> {
-  return (
-    (typeof candidate === 'object' && candidate !== null) ||
-    typeof candidate === 'function'
-  );
-}
-
-/**
- * Creates a function that will "batch" calls that are within the `timeout`
- *
- * The first time the function that is created is called, it will wait the `timeout` for additional calls.
- * After the `timeout` expires the result of one execution of `fn` will be resolved to all calls during the `timeout`.
- *
- * If `runNowFn` is specified it will be run synchronously without a timeout. Useful for functions that are used to set rather than get.
- *
- * @param {() => Promise<T>} fn
- * @param {number} timeout (ms)
- * @param {(arg: U) => void} [runNowFn]
- * @returns {(arg?: U) => Promise<T>}
- */
 export function deferAndCombine<T, U>(
   fn: (requestCount: number) => Promise<T>,
   timeout: number,
   runNowFn?: (arg: U) => void,
 ): (arg?: U) => Promise<T> {
-  const requests: {
-    resolve: (value: T | PromiseLike<T>) => void;
-    reject: (reason?: unknown) => void;
-  }[] = [];
-  let isWaiting = false;
+  let requests: { resolve: (value: T) => void; reject: (reason?: unknown) => void }[] = [];
+  let timer: NodeJS.Timeout | null = null;
 
-  return (arg) => {
-    if (runNowFn !== undefined && arg !== undefined) {
+  const processRequests = () => {
+    const currentRequests = requests;
+    requests = [];
+    fn(currentRequests.length)
+      .then(value => currentRequests.forEach(req => req.resolve(value)))
+      .catch(error => currentRequests.forEach(req => req.reject(error)))
+      .finally(() => timer = null);
+  };
+
+  return (arg?: U) => {
+    if (runNowFn && arg !== undefined) {
       runNowFn(arg);
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise<T>((resolve, reject) => {
       requests.push({ resolve, reject });
 
-      if (isWaiting) {
-        return;
+      if (!timer) {
+        timer = setTimeout(processRequests, timeout);
       }
-      isWaiting = true;
-
-      setTimeout(() => {
-        isWaiting = false;
-        fn(requests.length)
-          .then((value) => {
-            for (const d of requests) {
-              d.resolve(value);
-            }
-          })
-          .catch((error) => {
-            for (const d of requests) {
-              d.reject(error);
-            }
-          });
-      }, timeout);
     });
   };
 }
@@ -84,37 +48,27 @@ export function delay(ms: number): Promise<void> {
   });
 }
 
-export function getOrAddCharacteristic(
-  service: Service,
-  characteristic: WithUUID<new () => Characteristic>,
-): Characteristic {
-  if (
-    !hasCharacteristic(
-      service.characteristics.concat(service.optionalCharacteristics),
-      characteristic,
-    )
-  ) {
-    // This it to suppress warning: Characteristic not in required or optional characteristic section for service
+export function getOrAddCharacteristic(service: Service, characteristic: WithUUID<new () => Characteristic>): Characteristic {
+  const allCharacteristics = service.characteristics.concat(service.optionalCharacteristics);
+  if (!hasCharacteristic(allCharacteristics, characteristic)) {
     service.addOptionalCharacteristic(characteristic);
   }
-
-  return (
-    service.getCharacteristic(characteristic) ||
-    service.addCharacteristic(characteristic)
-  );
+  return service.getCharacteristic(characteristic) || service.addCharacteristic(characteristic);
 }
 
 export function hasCharacteristic(
   characteristics: Array<Characteristic>,
   characteristic: WithUUID<{ new (): Characteristic }>,
 ): boolean {
-  return (
-    characteristics.find(
-      (char) =>
-        // @ts-expect-error: still want to check UUID
-        char instanceof characteristic || char.UUID === characteristic.UUID,
-    ) !== undefined
+  return characteristics.some(
+    (char: Characteristic) =>
+      char instanceof characteristic ||
+      (char as WithUUID<Characteristic>).UUID === characteristic.UUID,
   );
+}
+
+export function isObjectLike(candidate: unknown): candidate is Record<string, unknown> {
+  return typeof candidate === 'object' && candidate !== null || typeof candidate === 'function';
 }
 
 export function kelvinToMired(kelvin: number): number {
@@ -126,17 +80,10 @@ export function lookup<T>(
   compareFn: undefined | ((objectProp: unknown, search: T) => boolean),
   value: T,
 ): string | undefined {
-  const compare =
-    compareFn ??
-    ((objectProp: unknown, search: T): boolean => objectProp === search);
+  const compare = compareFn ?? ((objectProp: unknown, search: T): boolean => objectProp === search);
 
   if (isObjectLike(object)) {
-    const keys = Object.keys(object);
-    for (let i = 0; i < keys.length; i += 1) {
-      if (compare(object[keys[i]], value)) {
-        return keys[i];
-      }
-    }
+    return Object.keys(object).find(key => compare(object[key], value));
   }
   return undefined;
 }
@@ -145,120 +92,99 @@ export function lookupCharacteristicNameByUUID(
   characteristic: typeof Characteristic,
   uuid: string,
 ): string | undefined {
-  const keys = Object.keys(characteristic);
-  for (let i = 0; i < keys.length; i += 1) {
-    const key = keys[i];
-    // @ts-expect-error: not sure how to make this correct in typescript
-    const c = characteristic[key];
-    if ('UUID' in c && c.UUID === uuid) {
-      return key;
-    }
-  }
-  return undefined;
+  return Object.keys(characteristic).find(key => ((characteristic as unknown as {[key: string]: {UUID: string}})[key].UUID === uuid));
 }
 
 export function miredToKelvin(mired: number): number {
   return 1e6 / mired;
 }
 
+export function prefixLogger(logger: Logger, prefix: string | (() => string)): Logging {
+  const methods: Array<'info' | 'warn' | 'error' | 'debug' | 'log'> = ['info', 'warn', 'error', 'debug', 'log'];
+  const clonedLogger: Logging = methods.reduce((acc: Logging, method) => {
+    acc[method] = (...args: unknown[]) => {
+      const prefixString = typeof prefix === 'function' ? prefix() : prefix;
+      if (method === 'log') {
+        const [level, message, ...parameters] = args;
+        logger[method](level as LogLevel, `${prefixString} ${message}`, ...parameters);
+      } else {
+        const [message, ...parameters] = args;
+        logger[method](`${prefixString} ${message}`, ...parameters);
+      }
+    };
+    return acc;
+  }, {} as Logging);
+
+  (clonedLogger as { prefix: string | (() => string) }).prefix = typeof logger.prefix === 'string' ? `${prefix} ${logger.prefix}` : prefix;
+
+  return clonedLogger;
+}
+
 export async function runCommand(
   logger: Logger,
   command: string,
-  args?: readonly string[],
+  args: readonly string[] = [],
   options?: SpawnOptionsWithoutStdio,
   hideStdout: boolean = false,
   hideStderr: boolean = false,
-): Promise<[string, string, number | null]> {
+  returnProcess: boolean = false,
+): Promise<[string, string, number | null, (ChildProcessWithoutNullStreams | null)?]> {
   let stdout: string = '';
   let stderr: string = '';
-  let redirectOutputToFile: boolean = false;
-  let outputFile: string = '';
+  let outputFile: string | null = null;
 
-  if (args) {
-    const argsBeforeRedirect = [];
-
-    for (const arg of args) {
-      if (arg.startsWith('>')) {
-        redirectOutputToFile = true;
-        outputFile = arg.substring(1).trim();
-        break;
-      } else {
-        argsBeforeRedirect.push(arg);
-      }
+  const filteredArgs = args.filter(arg => {
+    if (arg.startsWith('>')) {
+      outputFile = arg.substring(1).trim();
+      return false;
     }
+    return true;
+  });
 
-    if (redirectOutputToFile && outputFile) {
-      args = argsBeforeRedirect;
-    }
-  }
-
-  logger.debug(`Running command: ${command} ${args?.join(' ')}`);
-  const p: ChildProcessWithoutNullStreams = spawn(command, args, options);
+  logger.debug(`Running command: ${command} ${filteredArgs.join(' ')}`);
+  const p: ChildProcessWithoutNullStreams = spawn(command, filteredArgs, options);
   logger.debug(`Command PID: ${p.pid}`);
 
-  p.stdout.setEncoding('utf8');
-  p.stdout.on('data', (data: string) => {
+  p.stdout.setEncoding('utf8').on('data', data => {
     stdout += data;
     if (!hideStdout) {
       logger.info(data.trim());
     }
   });
 
-  p.stderr.setEncoding('utf8');
-  p.stderr.on('data', (data: string) => {
+  p.stderr.setEncoding('utf8').on('data', data => {
     stderr += data;
     if (!hideStderr) {
-      if (data.startsWith('WARNING')) {
-        logger.warn(data.trim());
-      } else {
-        logger.error(data.trim());
-      }
+      logger[data.startsWith('WARNING') ? 'warn' : 'error'](data.trim());
     }
   });
 
-  const exitCode: number | null = await new Promise((resolve, reject) => {
-    p.on('close', resolve);
-    p.on('error', reject);
+  if (returnProcess) {
+    logger.debug('Command started.');
+
+    const stderrReady = new Promise<void>((resolve) => {
+      p.stderr.once('data', () => {
+        resolve();
+      });
+    });
+
+    await stderrReady;
+
+    return [stdout, stderr, null, p];
+  }
+
+  const exitCode = await new Promise<number | null>((resolve, reject) => {
+    p.on('close', resolve).on('error', reject);
   });
 
-  if (redirectOutputToFile && outputFile) {
+  p.stdout.destroy();
+  p.stderr.destroy();
+  p.kill();
+
+  if (outputFile) {
     await writeFile(outputFile, stdout);
   }
 
   logger.debug('Command finished.');
   return [stdout, stderr, exitCode];
-}
-
-function cloneLogger(logger: Logging) {
-  // @ts-expect-error this doesn't work on function types
-  const clonedLogger: Buildable<Logging> = logger.info.bind(logger);
-  clonedLogger.info = logger.info;
-  clonedLogger.warn = logger.warn;
-  clonedLogger.error = logger.error;
-  clonedLogger.debug = logger.debug;
-  clonedLogger.log = logger.log;
-
-  clonedLogger.prefix = logger.prefix;
-
-  return clonedLogger as Logging;
-}
-
-export function prefixLogger(
-  logger: Logger,
-  prefix: string | (() => string),
-): Logging {
-  const newLogger = cloneLogger(logger as Logging);
-
-  const origLog = logger.log.bind(newLogger);
-
-  newLogger.log = function log(
-    level: LogLevel,
-    message: string,
-    ...parameters: unknown[]
-  ) {
-    const prefixEval = prefix instanceof Function ? prefix() : prefix;
-    origLog(level, `${prefixEval} ${message}`, ...parameters);
-  };
-
-  return newLogger;
 }

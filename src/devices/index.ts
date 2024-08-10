@@ -1,4 +1,4 @@
-import { PlatformAccessoryEvent } from 'homebridge'; // enum
+import { PlatformAccessoryEvent } from 'homebridge';
 import type {
   Categories,
   Characteristic,
@@ -8,120 +8,75 @@ import type {
   Nullable,
   PlatformAccessory,
   Service,
-  WithUUID,
 } from 'homebridge';
-import chalk from 'chalk';
 
 import AccessoryInformation from '../accessoryInformation.js';
-import type { KasaPythonConfig } from '../config.js';
 import DeviceManager from './deviceManager.js';
-import type KasaPythonPlatform from '../platform.js';
-import type { KasaPythonAccessoryContext } from '../platform.js';
 import { prefixLogger } from '../utils.js';
-import type { KasaDevice } from '../utils.js';
-
-import type { DeviceConfig } from './kasaDevices.js';
+import type KasaPythonPlatform from '../platform.js';
+import type { DeviceConfig, KasaDevice } from './kasaDevices.js';
+import type { KasaPythonAccessoryContext } from '../platform.js';
 
 export default abstract class HomekitDevice {
   readonly log: Logger;
-
-  protected deviceManager: DeviceManager;
-
+  readonly categoryName: string;
+  readonly deviceConfig: DeviceConfig;
+  protected deviceManager: DeviceManager | undefined;
   homebridgeAccessory: PlatformAccessory<KasaPythonAccessoryContext>;
 
-  readonly deviceConfig: DeviceConfig;
-
-  private lsc: (
-    serviceOrCharacteristic: Service | Characteristic | { UUID: string },
-    characteristic?: Characteristic | { UUID: string }
-  ) => string;
-
-  /**
-   * Creates an instance of HomeKitDevice.
-   */
   constructor(
     readonly platform: KasaPythonPlatform,
-    readonly config: KasaPythonConfig,
-    homebridgeAccessory:
-      | PlatformAccessory<KasaPythonAccessoryContext>
-      | undefined,
-    readonly kasaDevice: KasaDevice,
+    protected kasaDevice: KasaDevice,
     readonly category: Categories,
-    deviceConfig: DeviceConfig,
-    deviceManager?: DeviceManager,
   ) {
-    this.deviceConfig = deviceConfig;
-    this.deviceManager = deviceManager ? deviceManager : new DeviceManager(platform);
-    this.log = prefixLogger(
-      platform.log,
-      () => `${chalk.blue(`[${this.name}]`)}`,
-    );
+    this.deviceConfig = kasaDevice.device_config;
+    this.deviceManager = platform.deviceManager;
+    this.log = prefixLogger(platform.log, `[${this.name}]`);
+    this.categoryName = this.platform.getCategoryName(this.category);
+    this.homebridgeAccessory = this.initializeAccessory();
+    this.homebridgeAccessory.on(PlatformAccessoryEvent.IDENTIFY, () => this.identify());
+  }
 
-    this.lsc = this.platform.lsc.bind(this.platform);
+  private initializeAccessory(): PlatformAccessory<KasaPythonAccessoryContext> {
+    const uuid = this.platform.api.hap.uuid.generate(this.id);
+    const homebridgeAccessory = this.platform.configuredAccessories.get(uuid);
+    let accessory: PlatformAccessory<KasaPythonAccessoryContext>;
 
-    const categoryName = platform.getCategoryName(category) ?? '';
-
-    if (homebridgeAccessory === null || homebridgeAccessory === undefined) {
-      const uuid = platform.api.hap.uuid.generate(this.id);
-
-      this.log.debug(
-        `Creating new Accessory [${this.id}] [${uuid}] category: ${categoryName}`,
-      );
-
-      this.homebridgeAccessory = new platform.api.platformAccessory(
-        this.name,
-        uuid,
-        category,
-      );
-
-      this.homebridgeAccessory.context.deviceId = this.id;
-      this.platform.registerPlatformAccessory(this.homebridgeAccessory);
+    if (!homebridgeAccessory) {
+      this.log.debug(`Creating new Accessory [${this.id}] [${uuid}] category: ${this.categoryName}`);
+      accessory = new this.platform.api.platformAccessory(this.name, uuid, this.category);
+      accessory.context.deviceId = this.id;
+      this.platform.registerPlatformAccessory(accessory);
     } else {
-      this.homebridgeAccessory = homebridgeAccessory;
-
       this.log.debug(
-        `Existing Accessory found [${homebridgeAccessory.context.deviceId}] [${homebridgeAccessory.UUID}] category: ${categoryName}`,
+        `Existing Accessory found [${homebridgeAccessory.context.deviceId}] ` +
+        `[${homebridgeAccessory.UUID}] category: ${this.platform.getCategoryName(homebridgeAccessory.category)}`,
       );
-      this.homebridgeAccessory.displayName = this.name;
-      if (this.homebridgeAccessory.category !== category) {
-        this.log.warn(
-          `Correcting Accessory Category from: ${platform.getCategoryName(
-            this.homebridgeAccessory.category,
-          )} to: ${categoryName}`,
-        );
-        this.homebridgeAccessory.category = category;
-      }
-      this.homebridgeAccessory.context.deviceId = this.id;
-      this.platform.api.updatePlatformAccessories([this.homebridgeAccessory]);
+      accessory = homebridgeAccessory;
+      this.updateAccessory(accessory);
     }
 
-    const accInfo = AccessoryInformation(platform.api.hap)(
-      this.homebridgeAccessory,
-      this,
-    );
-    if (accInfo === null) {
+    const accInfo = AccessoryInformation(this.platform.api.hap)(accessory, this);
+    if (!accInfo) {
       this.log.error('Could not retrieve default AccessoryInformation');
     }
 
-    // Remove Old Services
-    this.homebridgeAccessory.services.forEach((service: Service) => {
-      if (service instanceof platform.Service.AccessoryInformation) {
-        return;
-      }
-      if (service instanceof platform.Service.Outlet) {
-        return;
-      }
-      this.log.warn(
-        `Removing stale Service: ${this.lsc(service)} uuid:[%s] subtype:[%s]`,
-        service.UUID,
-        service.subtype || '',
-      );
-      this.homebridgeAccessory.removeService(service);
-    });
+    return accessory;
+  }
 
-    this.homebridgeAccessory.on(PlatformAccessoryEvent.IDENTIFY, () => {
-      this.identify();
-    });
+  private updateAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
+    this.correctAccessoryProperty(accessory, 'displayName', this.name);
+    this.correctAccessoryProperty(accessory, 'category', this.category);
+    this.correctAccessoryProperty(accessory.context, 'deviceId', this.id);
+    this.platform.configuredAccessories.set(accessory.UUID, accessory);
+    this.platform.api.updatePlatformAccessories([accessory]);
+  }
+
+  private correctAccessoryProperty<T, K extends keyof T>(obj: T, key: K, expectedValue: T[K]): void {
+    if (obj[key] !== expectedValue) {
+      this.log.warn(`Correcting Accessory ${String(key)} from: ${String(obj[key])} to: ${String(expectedValue)}`);
+      obj[key] = expectedValue;
+    }
   }
 
   get id(): string {
@@ -141,15 +96,11 @@ export default abstract class HomekitDevice {
   }
 
   get serialNumber(): string {
-    return `${this.kasaDevice.sys_info.mac} ${this.kasaDevice.sys_info.deviceId}`;
+    return `${this.kasaDevice.sys_info.mac.replace(/:/g, '').slice(-4)}`;
   }
 
   get firmwareRevision(): string {
     return this.kasaDevice.sys_info.sw_ver;
-  }
-
-  get hardwareRevision(): string {
-    return this.kasaDevice.sys_info.hw_ver;
   }
 
   abstract identify(): void;
@@ -158,30 +109,15 @@ export default abstract class HomekitDevice {
     service: Service,
     characteristic: Characteristic,
     value: Nullable<CharacteristicValue> | Error | HapStatusError,
-  ) {
-    this.log.debug(`Updating ${this.lsc(service, characteristic)} ${value}`);
+    childDeviceAlias?: string,
+  ): void {
+    const logMessage = `Updating ${this.platform.lsc(service, characteristic)}` +
+      `${childDeviceAlias ? ` on ${childDeviceAlias}` : ''} to ${value}`;
+    this.log.debug(logMessage);
     characteristic.updateValue(value);
   }
 
-  updateChildValue(
-    service: Service,
-    characteristic: Characteristic,
-    value: Nullable<CharacteristicValue> | Error | HapStatusError,
-    childDeviceAlias: string,
-  ) {
-    const homekitState: boolean = value === 1 ? true : false;
-
-    this.log.debug(`Updating ${this.lsc(service, characteristic)} on ${childDeviceAlias} to ${homekitState}`);
-    characteristic.updateValue(homekitState);
-  }
-
-  addService(
-    serviceConstructor:
-      | typeof this.platform.Service.Outlet
-      | typeof this.platform.Service.Lightbulb,
-    name: string,
-    subType?: string,
-  ) {
+  addService(serviceConstructor: typeof this.platform.Service.Outlet, name: string, subType?: string): Service {
     const serviceName = this.platform.getServiceName(serviceConstructor);
     this.log.debug(`Creating new ${serviceName} Service on ${name}${subType ? ` [${subType}]` : ''}`);
     return this.homebridgeAccessory.addService(serviceConstructor, name, subType);
@@ -189,39 +125,5 @@ export default abstract class HomekitDevice {
 
   protected logRejection(reason: unknown): void {
     this.log.error(JSON.stringify(reason));
-  }
-
-  protected removeServiceIfExists(service: WithUUID<typeof Service>) {
-    const foundService = this.homebridgeAccessory.getService(service);
-    if (foundService !== null && foundService !== undefined) {
-      this.log.warn(
-        `Removing stale Service: ${this.lsc(service, foundService)} uuid:[%s]`,
-        foundService.UUID,
-      );
-
-      this.homebridgeAccessory.removeService(foundService);
-    }
-  }
-
-  protected removeCharacteristicIfExists(
-    service: Service,
-    characteristic: WithUUID<new () => Characteristic>,
-  ) {
-    if (
-      service.testCharacteristic(
-        characteristic as unknown as WithUUID<typeof Characteristic>,
-      )
-    ) {
-      const characteristicToRemove = service.getCharacteristic(characteristic);
-      this.log.warn(
-        `Removing stale Characteristic: ${this.lsc(
-          service,
-          characteristicToRemove,
-        )} uuid:[%s]`,
-        characteristicToRemove.UUID,
-      );
-
-      service.removeCharacteristic(characteristicToRemove);
-    }
   }
 }

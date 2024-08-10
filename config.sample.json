@@ -11,19 +11,15 @@
     "platforms": [{
         "platform": "KasaPython",
         "name": "KasaPython",
-        "loggingLevel": 3,
         "userName": "Username",
         "password": "Password",
         "powerStrip": true,
-        "discoveryPort": 0,
-        "broadcastAddress": "255.255.255.255",
-        "pollingInterval": 10,
+        "pollingInterval": 5,
         "includeMacAddresses": [],
         "excludeMacAddresses": [],
         "devices": [],
         "forceVenvRecreate": false,
         "pythonExecutable": "",
-        "timeout": 15,
         "waitTimeUpdate": 100
     }],
 

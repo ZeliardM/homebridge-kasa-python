@@ -1,39 +1,28 @@
 import type { HAP, PlatformAccessory, Service } from 'homebridge';
+
 import type HomekitDevice from './devices/index.js';
 
 export default function accessoryInformation(
   hap: HAP,
-): (
-  accessory: PlatformAccessory,
-  hkDevice: HomekitDevice
-) => Service | undefined {
-  const { Characteristic } = hap;
+): (accessory: PlatformAccessory, homekitDevice: HomekitDevice) => Service | undefined {
+  const { Characteristic, Service: { AccessoryInformation } } = hap;
 
-  return (accessory: PlatformAccessory, hkDevice: HomekitDevice) => {
-    const infoService = accessory.getService(hap.Service.AccessoryInformation);
-    if (infoService === undefined) {
-      return undefined;
-    }
+  return (accessory: PlatformAccessory, homekitDevice: HomekitDevice) => {
+    const infoService = accessory.getService(AccessoryInformation) ?? accessory.addService(AccessoryInformation);
 
-    if (!infoService.getCharacteristic(Characteristic.FirmwareRevision)) {
-      infoService.addCharacteristic(Characteristic.FirmwareRevision);
-    }
-    if (!infoService.getCharacteristic(Characteristic.HardwareRevision)) {
-      infoService.addCharacteristic(Characteristic.HardwareRevision);
-    }
+    [Characteristic.Name, Characteristic.Manufacturer, Characteristic.Model, Characteristic.SerialNumber, Characteristic.FirmwareRevision]
+      .forEach(characteristic => {
+        if (!infoService.getCharacteristic(characteristic)) {
+          infoService.addCharacteristic(characteristic);
+        }
+      });
+
     infoService
-      .setCharacteristic(Characteristic.Name, hkDevice.name)
-      .setCharacteristic(Characteristic.Manufacturer, hkDevice.manufacturer)
-      .setCharacteristic(Characteristic.Model, hkDevice.model)
-      .setCharacteristic(Characteristic.SerialNumber, hkDevice.serialNumber)
-      .setCharacteristic(
-        Characteristic.FirmwareRevision,
-        hkDevice.firmwareRevision,
-      )
-      .setCharacteristic(
-        Characteristic.HardwareRevision,
-        hkDevice.hardwareRevision,
-      );
+      .setCharacteristic(Characteristic.Name, homekitDevice.name)
+      .setCharacteristic(Characteristic.Manufacturer, homekitDevice.manufacturer)
+      .setCharacteristic(Characteristic.Model, homekitDevice.model)
+      .setCharacteristic(Characteristic.SerialNumber, homekitDevice.serialNumber)
+      .setCharacteristic(Characteristic.FirmwareRevision, homekitDevice.firmwareRevision);
 
     return infoService;
   };

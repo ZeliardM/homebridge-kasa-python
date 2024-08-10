@@ -37,27 +37,12 @@
         "description": "Enable to create a single power strip accessory with multiple outlets, used for models HS107, KP200, HS300, KP303, KP400, and EP40. Default: false",
         "default": false
       },
-      "discoveryPort": {
-        "title": "Port",
-        "type": "number",
-        "required": false,
-        "description": "Port to bind UDP socket for discovery. If port is not specified or is 0, the operating system will attempt to bind to a random port. Default: 0",
-        "placeholder": "0"
-      },
-      "broadcastAddress": {
-        "title": "Broadcast Address",
-        "type": "string",
-        "required": false,
-        "description": "Broadcast Address. If discovery is not working tweak to match your subnet, eg: 192.168.1.255",
-        "placeholder": "255.255.255.255",
-        "format": "ipv4"
-      },
       "pollingInterval": {
         "title": "Polling Interval (seconds)",
         "type": "integer",
         "required": false,
         "description": "How often to check device status in the background (seconds)",
-        "placeholder": "10"
+        "placeholder": "5"
       },
       "includeMacAddresses": {
         "title": "Include MAC Addresses",
@@ -92,12 +77,6 @@
               "required": true,
               "placeholder": "192.168.1.1",
               "format": "ipv4"
-            },
-            "port": {
-              "title": "Port",
-              "type": "string",
-              "required": false,
-              "placeholder": "9999"
             }
           }
         }
@@ -115,13 +94,6 @@
         "required": false,
         "description": "Here you can specify a path that points to a python executable. The plugin uses the systems default python as default. Setting a specific python executable here may be required if your systems default python version is too current for the plugin.",
         "placeholder": "/path/to/python3"
-      },
-      "timeout": {
-        "title": "Timeout (seconds)",
-        "type": "integer",
-        "required": false,
-        "description": "Communication Timeout (seconds)",
-        "placeholder": "15"
       },
       "waitTimeUpdate": {
         "title": "Wait Time Update (milliseconds)",
@@ -155,9 +127,7 @@
       "description": "Customize device discovery",
       "expandable": true,
       "items": [
-        "broadcastAddress",
         "pollingInterval",
-        "discoveryPort",
         {
           "key": "includeMacAddresses",
           "type": "array",
@@ -188,7 +158,7 @@
               "key": "devices",
               "type": "array",
               "buttonText": "Add Device",
-              "items": ["devices[].host", "devices[].port"]
+              "items": ["devices[].host"]
             },
             {
               "type": "help",
@@ -206,7 +176,6 @@
       "items": [
         "pythonExecutable",
         "forceVenvRecreate",
-        "timeout",
         "waitTimeUpdate"
       ]
     }

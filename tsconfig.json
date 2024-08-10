@@ -20,6 +20,10 @@
   "include": [
     "eslint.config.mjs",
     "homebridge-ui",
-    "src"
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules"
   ]
 }

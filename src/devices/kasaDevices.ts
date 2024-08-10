@@ -1,7 +1,7 @@
+export type KasaDevice = Plug | Powerstrip;
+
 interface DeviceCommonInfo {
   alias: string;
-  children?: ChildPlug[];
-  device_id: string;
   host: string;
   is_off: boolean;
   is_on: boolean;
@@ -35,15 +35,15 @@ export interface DeviceConfig {
     device_family: string;
     encryption_type: string;
   };
-  uses_http: false;
+  uses_http: boolean;
 }
 
 export interface Plug extends DeviceCommonInfo {
-  children: ChildPlug[];
+  children?: ChildPlug[];
   device_config: DeviceConfig;
 }
 
 export interface Powerstrip extends DeviceCommonInfo {
-  device_config: DeviceConfig;
   sys_info: SysInfo & { children: ChildPlug[]; child_num: number };
+  device_config: DeviceConfig;
 }

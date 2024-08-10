@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Kasa Python",
   "name": "homebridge-kasa-python",
-  "version": "1.0.2",
+  "version": "2.0.0",
   "description": "Plugin that uses Python-Kasa API to communicate with Kasa Devices.",
   "license": "MIT",
   "type": "module",
@@ -13,15 +13,15 @@
     "url": "https://github.com/ZeliardM/homebridge-kasa-python/issues"
   },
   "engines": {
-    "node": "^18.17.0 || ^20.9.0",
-    "homebridge": "^1.8.0",
+    "node": "^18.20.4 || ^20.16.0 || ^22.6.0",
+    "homebridge": "^1.8.0 || ^2.0.0-beta.0",
     "python": "^3.9.0"
   },
   "main": "dist/index.js",
   "scripts": {
     "lint": "eslint src/**/*.ts --max-warnings=0",
     "watch": "npm run build && npm link && nodemon",
-    "build": "npm ci && rimraf -I ./dist && npm run lint && tsc && cp ./src/python/*.py ./dist/python",
+    "build": "npm ci && rimraf -I ./dist && npm run lint && tsc && shx cp ./src/python/*.py ./dist/python",
     "prepublishOnly": "npm run lint && npm run build"
   },
   "keywords": [
@@ -46,17 +46,22 @@
     "requirements.txt"
   ],
   "devDependencies": {
+    "@eslint/eslintrc": "^3.1.0",
+    "@eslint/js": "^9.9.0",
+    "@stylistic/eslint-plugin": "^2.6.2",
     "@types/lodash.defaults": "^4.2.9",
-    "@types/node": "^20.12.13",
+    "@types/node": "^22.2.0",
     "@types/semver": "^7.5.8",
-    "@typescript-eslint/eslint-plugin": "^7.11.0",
-    "@typescript-eslint/parser": "^7.11.0",
-    "eslint": "^8.57.0",
-    "homebridge": "^1.8.2",
-    "nodemon": "^3.1.2",
-    "rimraf": "^5.0.7",
+    "@typescript-eslint/parser": "^8.0.1",
+    "eslint": "^9.9.0",
+    "globals": "^15.9.0",
+    "homebridge": "^2.0.0-beta.11",
+    "nodemon": "^3.1.4",
+    "rimraf": "^6.0.1",
+    "shx": "^0.3.4",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.0.1"
   },
   "homepage": "https://github.com/ZeliardM/homebridge-kasa-python#readme",
   "funding": [
@@ -70,17 +75,13 @@
     }
   ],
   "dependencies": {
-    "ajv": "^8.16.0",
+    "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "axios": "^1.7.2",
-    "chalk": "^5.3.0",
-    "child_process": "^1.0.2",
-    "fs": "^0.0.1-security",
+    "axios": "^1.7.3",
+    "get-port": "^7.1.0",
     "lodash.defaults": "^4.2.0",
-    "path": "^0.12.7",
     "semver": "^7.6.3",
     "ts-essentials": "^10.0.1",
-    "url": "^0.11.3",
     "util": "^0.12.5"
   }
 }

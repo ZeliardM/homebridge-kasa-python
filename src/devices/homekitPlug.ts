@@ -1,145 +1,140 @@
-import { Categories } from 'homebridge'; // enum
-import type { Service, PlatformAccessory, Characteristic, CharacteristicValue } from 'homebridge';
+import { Categories } from 'homebridge';
+import type { Service, Characteristic, CharacteristicValue, WithUUID } from 'homebridge';
 
 import HomekitDevice from './index.js';
-import { KasaPythonConfig } from '../config.js';
-import DeviceManager from './deviceManager.js';
-import type KasaPythonPlatform from '../platform.js';
-import type { KasaPythonAccessoryContext } from '../platform.js';
 import { deferAndCombine, getOrAddCharacteristic } from '../utils.js';
-import type { KasaDevice } from '../utils.js';
-import type { DeviceConfig, Plug } from './kasaDevices.js';
+import type KasaPythonPlatform from '../platform.js';
+import type { KasaDevice, Plug } from './kasaDevices.js';
 
 export default class HomeKitDevicePlug extends HomekitDevice {
+  private getSysInfo: () => Promise<KasaDevice | undefined>;
+  private previousKasaDevice: Plug | undefined;
+  private isUpdating: boolean = false;
+
   constructor(
     platform: KasaPythonPlatform,
-    readonly config: KasaPythonConfig,
-    homebridgeAccessory:
-      | PlatformAccessory<KasaPythonAccessoryContext>
-      | undefined,
-    readonly kasaDevice: Plug,
-    readonly deviceConfig: DeviceConfig,
-    deviceManager?: DeviceManager,
+    protected kasaDevice: Plug,
   ) {
     super(
       platform,
-      config,
-      homebridgeAccessory,
       kasaDevice,
       Categories.OUTLET,
-      deviceConfig,
-      deviceManager,
     );
-
     this.addOutletService();
 
     this.getSysInfo = deferAndCombine(async (requestCount: number) => {
       this.log.debug(`executing deferred getSysInfo count: ${requestCount}`);
-      return Promise.resolve(await this.deviceManager.getSysInfo(this));
+      if (this.deviceManager) {
+        const newKasaDevice = await this.deviceManager.getSysInfo(this) as Plug;
+        this.previousKasaDevice = this.kasaDevice;
+        this.kasaDevice = newKasaDevice;
+        return this.kasaDevice;
+      }
+      return undefined;
     }, platform.config.waitTimeUpdate);
-  }
 
-  /**
-   * Aggregates getSysInfo requests
-   *
-   * @private
-   */
-  private getSysInfo: () => Promise<KasaDevice | undefined>;
+    this.startPolling();
+  }
 
   private addOutletService() {
     const { Outlet } = this.platform.Service;
 
     const outletService: Service =
-      this.homebridgeAccessory.getService(Outlet) ??
-      this.addService(Outlet, this.name);
+      this.homebridgeAccessory.getService(Outlet) ?? this.addService(Outlet, this.name);
 
-    this.addOnCharacteristic(outletService);
-
-    this.addOutletInUseCharacteristic(outletService);
+    this.addCharacteristic(outletService, this.platform.Characteristic.On);
+    this.addCharacteristic(outletService, this.platform.Characteristic.OutletInUse);
 
     return outletService;
   }
 
-  private addOnCharacteristic(service: Service) {
-    const onCharacteristic: Characteristic = getOrAddCharacteristic(
-      service,
-      this.platform.Characteristic.On,
-    );
-
-    onCharacteristic
-      .onGet(async () => {
-        const device: void | KasaDevice | undefined = await this.getSysInfo().catch(this.logRejection.bind(this));
-        if (device) {
-          const state: number | undefined = device.sys_info.relay_state;
-          this.log.debug(`Current State of On is: ${state === 1 ? true : false} for ${this.name}`);
-          return state ?? 0;
-        }
-        return 0;
-      })
-      .onSet(async (value: CharacteristicValue) => {
-        this.log.info(`Setting On to: ${value} for ${this.name}`);
-        if (typeof value === 'boolean' && value === true) {
-          this.deviceManager.turnOn(this).catch(this.logRejection.bind(this));
-          return;
-        } else if (typeof value === 'boolean' && value === false) {
-          this.deviceManager.turnOff(this).catch(this.logRejection.bind(this));
-          return;
-        }
-        this.log.warn('setValue: Invalid On:', value);
-        throw new Error(`setValue: Invalid On: ${value}`);
-      });
-
-    let oldState: number = this.kasaDevice.sys_info.relay_state;
-
-    setInterval(async () => {
-      const device: void | KasaDevice | undefined = await this.getSysInfo().catch(this.logRejection.bind(this));
-      let newState: number | undefined;
-      if (device) {
-        newState = device.sys_info.relay_state;
-      }
-
-      if (newState !== undefined && newState !== oldState) {
-        this.updateValue(service, onCharacteristic, newState);
-        oldState = newState;
-      }
-    }, this.config.discoveryOptions.pollingInterval);
+  private addCharacteristic(
+    service: Service,
+    characteristicType: WithUUID<new () => Characteristic>,
+  ) {
+    const characteristic: Characteristic = getOrAddCharacteristic(service, characteristicType);
+    characteristic.onGet(this.handleOnGet.bind(this, characteristicType));
+    if (characteristicType === this.platform.Characteristic.On) {
+      characteristic.onSet(this.handleOnSet.bind(this));
+    }
 
     return service;
   }
 
-  private addOutletInUseCharacteristic(service: Service) {
-    const outletInUseCharacteristic: Characteristic = getOrAddCharacteristic(
-      service,
-      this.platform.Characteristic.OutletInUse,
-    );
+  private async handleOnGet(characteristicType: WithUUID<new () => Characteristic>): Promise<CharacteristicValue> {
+    try {
+      const stateValue = this.kasaDevice.sys_info.relay_state === 1;
+      const characteristicName = this.platform.getCharacteristicName(characteristicType);
 
-    outletInUseCharacteristic
-      .onGet(async () => {
-        const device: void | KasaDevice | undefined = await this.getSysInfo().catch(this.logRejection.bind(this));
-        if (device) {
-          const state: number | undefined = device.sys_info.relay_state;
-          this.log.debug(`Current State of On is: ${state === 1 ? true : false} for ${this.name}`);
-          return state ?? 0;
+      this.log.debug(`Current State of ${characteristicName} is: ${stateValue} for ${this.name}`);
+
+      return this.kasaDevice.sys_info.relay_state ?? 0;
+    } catch (error) {
+      this.log.error('Error getting device state:', error);
+    }
+    return 0;
+  }
+
+  private async handleOnSet(value: CharacteristicValue): Promise<void> {
+    this.log.info(`Setting On to: ${value} for ${this.name}`);
+    if (typeof value === 'boolean') {
+      if (this.deviceManager) {
+        try {
+          this.isUpdating = true;
+          await this.deviceManager.toggleDevice(this, value);
+          this.kasaDevice.sys_info.relay_state = value ? 1 : 0;
+          this.previousKasaDevice = this.kasaDevice;
+          const service = this.homebridgeAccessory.getService(this.platform.Service.Outlet);
+          if (service) {
+            const onCharacteristic = service.getCharacteristic(this.platform.Characteristic.On);
+            const outletInUseCharacteristic = service.getCharacteristic(this.platform.Characteristic.OutletInUse);
+            this.updateValue(service, onCharacteristic, value);
+            this.updateValue(service, outletInUseCharacteristic, value);
+          }
+          return;
+        } catch (error) {
+          this.logRejection(error);
+        } finally {
+          this.isUpdating = false;
         }
-        return 0;
-      });
+      } else {
+        throw new Error('Device manager is undefined.');
+      }
+    } else {
+      this.log.warn('setValue: Invalid On:', value);
+      throw new Error(`setValue: Invalid On: ${value}`);
+    }
+  }
 
-    let oldState: number = this.kasaDevice.sys_info.relay_state;
-
-    setInterval(async () => {
-      const device: void | KasaDevice | undefined = await this.getSysInfo().catch(this.logRejection.bind(this));
-      let newState: number | undefined;
+  private async updateState() {
+    if (this.isUpdating) {
+      return;
+    }
+    this.isUpdating = true;
+    try {
+      const device = await this.getSysInfo() as Plug;
       if (device) {
-        newState = device.sys_info.relay_state;
+        const service = this.homebridgeAccessory.getService(this.platform.Service.Outlet);
+        if (service && this.previousKasaDevice) {
+          const previousRelayState = this.previousKasaDevice.sys_info.relay_state;
+          if (previousRelayState !== device.sys_info.relay_state) {
+            this.kasaDevice.sys_info.relay_state = device.sys_info.relay_state;
+            const onCharacteristic = service.getCharacteristic(this.platform.Characteristic.On);
+            const outletInUseCharacteristic = service.getCharacteristic(this.platform.Characteristic.OutletInUse);
+            this.updateValue(service, onCharacteristic, device.sys_info.relay_state === 1);
+            this.updateValue(service, outletInUseCharacteristic, device.sys_info.relay_state === 1);
+          }
+        }
       }
+    } catch (error) {
+      this.log.error('Error updating device state:', error);
+    } finally {
+      this.isUpdating = false;
+    }
+  }
 
-      if (newState !== undefined && newState !== oldState) {
-        this.updateValue(service, outletInUseCharacteristic, newState);
-        oldState = newState;
-      }
-    }, this.config.discoveryOptions.pollingInterval);
-
-    return service;
+  private startPolling() {
+    setInterval(this.updateState.bind(this), this.platform.config.discoveryOptions.pollingInterval);
   }
 
   identify(): void {
