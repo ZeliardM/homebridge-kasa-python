@@ -44,43 +44,6 @@
         "description": "How often to check device status in the background (seconds)",
         "placeholder": "5"
       },
-      "includeMacAddresses": {
-        "title": "Include MAC Addresses",
-        "description": "Allow-list of MAC Addresses to include. If specified will ignore other devices. Supports glob-style patterns",
-        "type": "array",
-        "items": {
-          "title": "MAC Address",
-          "type": "string",
-          "required": true
-        }
-      },
-      "excludeMacAddresses": {
-        "title": "Exclude MAC Addresses",
-        "description": "Deny-list of MAC Addresses to exclude. Supports glob-style patterns",
-        "type": "array",
-        "items": {
-          "title": "MAC Address",
-          "type": "string",
-          "required": true
-        }
-      },
-      "devices": {
-        "title": "Manual List of Devices",
-        "type": "array",
-        "items": {
-          "title": "Device",
-          "type": "object",
-          "properties": {
-            "host": {
-              "title": "Host",
-              "type": "string",
-              "required": true,
-              "placeholder": "192.168.1.1",
-              "format": "ipv4"
-            }
-          }
-        }
-      },
       "forceVenvRecreate": {
         "title": "Force Venv Recreation",
         "type": "boolean",
@@ -127,45 +90,7 @@
       "description": "Customize device discovery",
       "expandable": true,
       "items": [
-        "pollingInterval",
-        {
-          "key": "includeMacAddresses",
-          "type": "array",
-          "buttonText": "Add MAC Address",
-          "items": {
-            "title": "Include MAC Address",
-            "type": "string",
-            "required": true
-          }
-        },
-        {
-          "key": "excludeMacAddresses",
-          "type": "array",
-          "buttonText": "Add MAC Address",
-          "items": {
-            "title": "Exclude MAC Address",
-            "type": "string",
-            "required": true
-          }
-        },
-        {
-          "type": "fieldset",
-          "title": "Manual Discovery",
-          "description": "If automatic discovery is not working, try this.",
-          "expandable": true,
-          "items": [
-            {
-              "key": "devices",
-              "type": "array",
-              "buttonText": "Add Device",
-              "items": ["devices[].host"]
-            },
-            {
-              "type": "help",
-              "helpvalue": "Before resorting to manually specifying devices, try setting the broadcast address and check your router/switch/firewall configuration. You must assign static IP addresses to your devices to use this configuration."
-            }
-          ]
-        }
+        "pollingInterval"
       ]
     },
     {

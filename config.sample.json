@@ -15,9 +15,6 @@
         "password": "Password",
         "powerStrip": true,
         "pollingInterval": 5,
-        "includeMacAddresses": [],
-        "excludeMacAddresses": [],
-        "devices": [],
         "forceVenvRecreate": false,
         "pythonExecutable": "",
         "waitTimeUpdate": 100

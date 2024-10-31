@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Kasa Python",
   "name": "homebridge-kasa-python",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Plugin that uses Python-Kasa API to communicate with Kasa Devices.",
   "license": "MIT",
   "type": "module",
@@ -13,7 +13,7 @@
     "url": "https://github.com/ZeliardM/homebridge-kasa-python/issues"
   },
   "engines": {
-    "node": "^18.20.4 || ^20.16.0 || ^22.6.0",
+    "node": "^18.20.4 || ^20.18.0 || ^22.10.0 || ^23.1.0",
     "homebridge": "^1.8.0 || ^2.0.0-beta.0",
     "python": "^3.9.0"
   },
@@ -47,20 +47,20 @@
   ],
   "devDependencies": {
     "@eslint/eslintrc": "^3.1.0",
-    "@eslint/js": "^9.9.0",
-    "@stylistic/eslint-plugin": "^2.6.2",
+    "@eslint/js": "^9.13.0",
+    "@stylistic/eslint-plugin": "^2.10.0",
     "@types/lodash.defaults": "^4.2.9",
-    "@types/node": "^22.2.0",
+    "@types/node": "^22.8.5",
     "@types/semver": "^7.5.8",
-    "@typescript-eslint/parser": "^8.0.1",
-    "eslint": "^9.9.0",
-    "globals": "^15.9.0",
-    "homebridge": "^2.0.0-beta.11",
-    "nodemon": "^3.1.4",
+    "@typescript-eslint/parser": "^8.12.2",
+    "eslint": "^9.13.0",
+    "globals": "^15.11.0",
+    "homebridge": "^2.0.0-beta.23",
+    "nodemon": "^3.1.7",
     "rimraf": "^6.0.1",
     "shx": "^0.3.4",
     "ts-node": "^10.9.2",
-    "typescript-eslint": "^8.0.1"
+    "typescript-eslint": "^8.12.2"
   },
   "homepage": "https://github.com/ZeliardM/homebridge-kasa-python#readme",
   "funding": [
@@ -76,12 +76,12 @@
   "dependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "axios": "^1.7.3",
+    "axios": "^1.7.7",
     "get-port": "^7.1.0",
     "lodash.defaults": "^4.2.0",
     "semver": "^7.6.3",
-    "ts-essentials": "^10.0.1",
-    "typescript": "^5.5.4",
+    "ts-essentials": "^10.0.2",
+    "typescript": "^5.6.3",
     "util": "^0.12.5"
   }
 }

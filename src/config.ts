@@ -53,9 +53,6 @@ export interface KasaPythonConfigInput {
   password?: string;
   powerStrip?: boolean;
   pollingInterval?: number;
-  includeMacAddress?: Array<string>;
-  excludeMacAddresses?: Array<string>;
-  devices?: Array<DeviceConfigInput>;
   forceVenvRecreate?: boolean;
   pythonExecutable?: string;
   waitTimeUpdate?: number;
@@ -68,9 +65,6 @@ export type KasaPythonConfig = {
   powerStrip: boolean;
   discoveryOptions: {
     pollingInterval: number;
-    includeMacAddress?: Array<string>;
-    excludeMacAddresses?: Array<string>;
-    devices?: Array<{ host: string }>;
   };
   forceVenvRecreate: boolean;
   pythonExecutable?: string;
@@ -84,9 +78,6 @@ export const defaultConfig: KasaPythonConfig = {
   powerStrip: false,
   discoveryOptions: {
     pollingInterval: 5,
-    includeMacAddress: undefined,
-    excludeMacAddresses: undefined,
-    devices: undefined,
   },
   forceVenvRecreate: false,
   pythonExecutable: undefined,
@@ -146,9 +137,6 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     waitTimeUpdate: c.waitTimeUpdate ?? defaultConfig.waitTimeUpdate,
     discoveryOptions: {
       pollingInterval: (c.discoveryOptions.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
-      includeMacAddress: c.discoveryOptions.includeMacAddress ?? defaultConfig.discoveryOptions.includeMacAddress,
-      excludeMacAddresses: c.discoveryOptions.excludeMacAddresses ?? defaultConfig.discoveryOptions.excludeMacAddresses,
-      devices: c.discoveryOptions.devices ?? defaultConfig.discoveryOptions.devices,
     },
   };
 }

@@ -1,4 +1,4 @@
-eventlet==0.36.1
+eventlet==0.37.0
 flask==3.0.3
-flask_socketio==5.3.6
-python-kasa==0.7.1
+flask_socketio==5.4.1
+python-kasa==0.7.6

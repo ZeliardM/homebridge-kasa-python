@@ -9,7 +9,7 @@ import type {
   Service,
   WithUUID,
 } from 'homebridge';
-import { Logger } from 'homebridge/lib/logger.js';
+import { Logger } from 'homebridge/dist/logger.js';
 
 import getPort from 'get-port';
 import path from 'node:path';
