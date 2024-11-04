@@ -20,13 +20,20 @@ export default class DeviceManager {
       action,
       ...(childNumber !== undefined && { child_num: childNumber }),
     };
+    this.log.debug(`Performing action '${action}' on device: ${device.name} with data: ${JSON.stringify(data)}`);
     try {
       const response = await axios.post(url, data);
       if (response.data.status !== 'success') {
         this.log.error(`Error performing action: ${response.data.message}`);
+      } else {
+        this.log.debug(`Action '${action}' performed successfully on device: ${device.name}`);
       }
     } catch (error) {
       this.log.error(`Error performing action: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`);
+      if (axios.isAxiosError(error) && error.response) {
+        this.log.error(`Response status: ${error.response.status}`);
+        this.log.error(`Response data: ${JSON.stringify(error.response.data)}`);
+      }
     }
   }
 
@@ -35,10 +42,13 @@ export default class DeviceManager {
     try {
       const response = await axios.get(`${this.apiUrl}/discover`);
       const devices = response.data;
+      this.log.debug(`Devices discovered: ${JSON.stringify(devices)}`);
       Object.keys(devices).forEach(ip => {
         const device: KasaDevice = devices[ip].device_info;
+        this.log.debug(`Processing device at IP: ${ip} with info: ${JSON.stringify(device)}`);
         if (device.alias.includes('TP-LINK_Power Strip_')) {
           device.alias = `Power Strip ${device.alias.slice(-4)}`;
+          this.log.debug(`Updated device alias to: ${device.alias}`);
         }
         device.device_config = devices[ip].device_config;
         this.platform.foundDevice(device);
@@ -48,6 +58,10 @@ export default class DeviceManager {
       this.log.error(
         `An error occurred during device discovery: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`,
       );
+      if (axios.isAxiosError(error) && error.response) {
+        this.log.error(`Response status: ${error.response.status}`);
+        this.log.error(`Response data: ${JSON.stringify(error.response.data)}`);
+      }
     }
   }
 
@@ -57,13 +71,15 @@ export default class DeviceManager {
       this.log.debug(`Requesting system info with config: ${JSON.stringify(device.deviceConfig)}`);
       const response = await axios.post(`${this.apiUrl}/getSysInfo`, { device_config: device.deviceConfig });
       const kasaDevice: KasaDevice = response.data.device_info;
+      this.log.debug(`Received system info: ${JSON.stringify(kasaDevice)}`);
       if (kasaDevice.alias.includes('TP-LINK_Power Strip_')) {
         kasaDevice.alias = `Power Strip ${kasaDevice.alias.slice(-4)}`;
+        this.log.debug(`Updated device alias to: ${kasaDevice.alias}`);
       }
       return kasaDevice;
     } catch (error) {
       this.log.error(
-        `An error occurred during device getSysInfo: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`,
+        `An error occurred during getSysInfo: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`,
       );
       if (axios.isAxiosError(error) && error.response) {
         this.log.error(`Response status: ${error.response.status}`);
@@ -75,6 +91,7 @@ export default class DeviceManager {
   async toggleDevice(device: HomekitDevice, state: boolean, child_num?: number): Promise<void> {
     const action = state ? 'turn_on' : 'turn_off';
     const childText = child_num !== undefined ? ` child ${child_num}` : '';
+    this.log.debug(`Toggling device: ${device.name}${childText} to state: ${state}`);
     try {
       await this.performDeviceAction(device, action, child_num);
       this.log.debug(`Turned ${state ? 'on' : 'off'} device: ${device.name}${childText}`);
@@ -84,6 +101,10 @@ export default class DeviceManager {
           axios.isAxiosError(error) ? error.message : 'An unknown error occurred'
         }`,
       );
+      if (axios.isAxiosError(error) && error.response) {
+        this.log.error(`Response status: ${error.response.status}`);
+        this.log.error(`Response data: ${JSON.stringify(error.response.data)}`);
+      }
     }
   }
 }

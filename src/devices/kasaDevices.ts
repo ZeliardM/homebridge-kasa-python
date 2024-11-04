@@ -1,4 +1,4 @@
-export type KasaDevice = Plug | Powerstrip;
+export type KasaDevice = Plug | Powerstrip | Switch;
 
 interface DeviceCommonInfo {
   alias: string;
@@ -47,3 +47,21 @@ export interface Powerstrip extends DeviceCommonInfo {
   sys_info: SysInfo & { children: ChildPlug[]; child_num: number };
   device_config: DeviceConfig;
 }
+
+export interface Switch extends DeviceCommonInfo {
+  device_config: DeviceConfig;
+}
+
+export const Switches = [
+  'ES20M(US)',
+  'HS200(US)',
+  'HS210(US)',
+  'HS220(US)',
+  'KP405(US)',
+  'KS200M(US)',
+  'KS205(US)',
+  'KS220M(US)',
+  'KS225(US)',
+  'KS230(US)',
+  'KS240(US)',
+];
