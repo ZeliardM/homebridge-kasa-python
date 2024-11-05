@@ -16,37 +16,62 @@ def custom_device_serializer(device):
         except TypeError:
             return False
 
-    return {attr: getattr(device, attr) for attr in dir(device)
-            if not attr.startswith("_") and not callable(getattr(device, attr))
-            and not asyncio.iscoroutine(getattr(device, attr))
-            and is_serializable(getattr(device, attr))}
+    serialized_data = {}
+    for attr in dir(device):
+        if not attr.startswith("_") and not callable(getattr(device, attr)) and not asyncio.iscoroutine(getattr(device, attr)):
+            value = getattr(device, attr)
+            if is_serializable(value):
+                serialized_data[attr] = value
+            else:
+                app.logger.debug(f"Skipping non-serializable attribute: {attr} with value: {value}")
+    app.logger.debug(f"Serialized data for device: {serialized_data}")
+    return serialized_data
 
 async def discover_devices():
     app.logger.debug('Starting device discovery...')
-    devices = await Discover.discover()
-    app.logger.debug(f'Discovered devices: {devices}')
+    try:
+        devices = await Discover.discover()
+        app.logger.debug(f'Discovered devices: {devices}')
+    except Exception as e:
+        app.logger.error(f'Error during device discovery: {str(e)}')
+        return {}
+
     all_device_info = {}
     tasks = []
     for ip, dev in devices.items():
-        app.logger.debug(f'Creating update task for device at {ip}')
+        app.logger.debug(f'Creating update task for device at {ip} with device: {dev}')
         tasks.append(update_device_info(ip, dev))
-    results = await asyncio.gather(*tasks)
+
+    try:
+        results = await asyncio.gather(*tasks)
+        app.logger.debug(f'Update tasks completed with results: {results}')
+    except Exception as e:
+        app.logger.error(f'Error during update tasks: {str(e)}')
+        return {}
+
     for ip, info in results:
         all_device_info[ip] = info
+        app.logger.debug(f'Updated device info for {ip}: {info}')
+
     app.logger.debug(f'All device info: {all_device_info}')
     return all_device_info
 
 async def update_device_info(ip, dev: Device):
     app.logger.debug(f'Updating device info for {ip}')
-    await dev.update()
-    device_info = custom_device_serializer(dev)
-    device_config = dev.config.to_dict()
-    device_cache[ip] = {
-        "device_info": device_info,
-        "device_config": device_config
-    }
-    app.logger.debug(f'Updated device info for {ip}: {device_cache[ip]}')
-    return ip, device_cache[ip]
+    try:
+        await dev.update()
+        app.logger.debug(f'Device updated for {ip}: {dev}')
+        device_info = custom_device_serializer(dev)
+        device_config = dev.config.to_dict()
+        device_cache[ip] = {
+            "device_info": device_info,
+            "device_config": device_config
+        }
+        app.logger.debug(f'Updated device info for {ip}: {device_cache[ip]}')
+        return ip, device_cache[ip]
+    except Exception as e:
+        app.logger.error(f'Error updating device info for {ip}: {str(e)}')
+        return ip, {}
 
 async def get_device_info(device_config):
     app.logger.debug(f'Getting device info for config: {device_config}')
