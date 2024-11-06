@@ -57,6 +57,8 @@ async function checkForUpgrade(storagePath: string, logger: Logging): Promise<bo
     if (await fs.stat(versionFilePath)) {
       const versionData = await fs.readFile(versionFilePath, 'utf8');
       storedVersion = JSON.parse(versionData).version;
+    } else {
+      logger.info('Version file does not exist, treating as new install or upgrade from before v2.2.0.');
     }
   } catch (error) {
     logger.error('Error reading version file:', error);
@@ -65,6 +67,7 @@ async function checkForUpgrade(storagePath: string, logger: Logging): Promise<bo
   if (storedVersion !== packageConfig.version) {
     try {
       await fs.writeFile(versionFilePath, JSON.stringify({ version: packageConfig.version }), 'utf8');
+      logger.info(`Version file updated to version ${packageConfig.version}`);
     } catch (error) {
       logger.error('Error writing version file:', error);
     }
