@@ -50,7 +50,7 @@ async function loadPackageConfig(logger: Logging): Promise<void> {
 }
 
 async function checkForUpgrade(storagePath: string, logger: Logging): Promise<boolean> {
-  const versionFilePath = path.join(storagePath, 'kasa-python-version.json');
+  const versionFilePath = path.join(storagePath, 'kasa-python', 'kasa-python-version.json');
   let storedVersion = '';
 
   try {
