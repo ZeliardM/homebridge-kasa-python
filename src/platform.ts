@@ -49,6 +49,31 @@ async function loadPackageConfig(logger: Logging): Promise<void> {
   }
 }
 
+async function checkForUpgrade(storagePath: string, logger: Logging): Promise<boolean> {
+  const versionFilePath = path.join(storagePath, 'kasa-python-version.json');
+  let storedVersion = '';
+
+  try {
+    if (await fs.stat(versionFilePath)) {
+      const versionData = await fs.readFile(versionFilePath, 'utf8');
+      storedVersion = JSON.parse(versionData).version;
+    }
+  } catch (error) {
+    logger.error('Error reading version file:', error);
+  }
+
+  if (storedVersion !== packageConfig.version) {
+    try {
+      await fs.writeFile(versionFilePath, JSON.stringify({ version: packageConfig.version }), 'utf8');
+    } catch (error) {
+      logger.error('Error writing version file:', error);
+    }
+    return true;
+  }
+
+  return false;
+}
+
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public readonly Characteristic: typeof Characteristic;
   public readonly configuredAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
@@ -62,6 +87,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private readonly homekitDevicesById: Map<string, HomekitDevice> = new Map();
   private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
   private platformInitialization: Promise<void>;
+  private isUpgrade: boolean = false;
 
   constructor(public readonly log: Logging, config: PlatformConfig, public readonly api: API) {
     this.Service = this.api.hap.Service;
@@ -96,6 +122,10 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     await loadPackageConfig(this.log);
     this.logInitializationDetails();
     await this.verifyEnvironment();
+    this.isUpgrade = await checkForUpgrade(this.storagePath, this.log);
+    if (this.isUpgrade) {
+      this.log.info('Plugin upgraded, virtual environment will be recreated.');
+    }
   }
 
   private logInitializationDetails(): void {
@@ -117,7 +147,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private async didFinishLaunching(): Promise<void> {
     this.log.debug('Did Finish Launching Event Received');
     try {
-      await this.checkPython();
+      await this.checkPython(this.isUpgrade);
       this.port = await getPort();
       this.deviceManager = new DeviceManager(this);
       await this.startKasaApi();
@@ -127,9 +157,9 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
   }
 
-  private async checkPython(): Promise<void> {
+  private async checkPython(isUpgrade: boolean): Promise<void> {
     try {
-      await new PythonChecker(this).allInOne();
+      await new PythonChecker(this).allInOne(isUpgrade);
     } catch (error) {
       this.log.error('Error checking python environment:', error);
     }

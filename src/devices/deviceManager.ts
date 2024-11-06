@@ -7,9 +7,13 @@ import type { KasaDevice } from './kasaDevices.js';
 export default class DeviceManager {
   private log: Logger;
   private apiUrl: string;
+  private username: string;
+  private password: string;
 
   constructor(private platform: KasaPythonPlatform) {
     this.log = platform.log;
+    this.username = platform.config.username;
+    this.password = platform.config.password;
     this.apiUrl = `http://127.0.0.1:${platform.port}`;
   }
 
@@ -40,7 +44,15 @@ export default class DeviceManager {
   async discoverDevices(): Promise<void> {
     this.log.debug('Discovering devices...');
     try {
-      const response = await axios.get(`${this.apiUrl}/discover`);
+      const config = {
+        ...(this.username && this.password && {
+          auth: {
+            username: this.username,
+            password: this.password,
+          },
+        }),
+      };
+      const response = await axios.get(`${this.apiUrl}/discover`, config);
       const devices = response.data;
       this.log.debug(`Devices discovered: ${JSON.stringify(devices)}`);
       Object.keys(devices).forEach(ip => {

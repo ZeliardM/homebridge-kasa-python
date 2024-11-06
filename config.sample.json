@@ -11,12 +11,11 @@
     "platforms": [{
         "platform": "KasaPython",
         "name": "KasaPython",
-        "userName": "Username",
+        "enableCredentials": true,
+        "username": "Username",
         "password": "Password",
         "powerStrip": true,
         "pollingInterval": 5,
-        "forceVenvRecreate": false,
-        "pythonExecutable": "",
         "waitTimeUpdate": 100
     }],
 

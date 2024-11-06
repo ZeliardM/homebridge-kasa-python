@@ -49,38 +49,35 @@ export interface DeviceConfigInput {
 
 export interface KasaPythonConfigInput {
   name?: string;
+  enableCredentials?: boolean;
   username?: string;
   password?: string;
   powerStrip?: boolean;
   pollingInterval?: number;
-  forceVenvRecreate?: boolean;
-  pythonExecutable?: string;
   waitTimeUpdate?: number;
 }
 
 export type KasaPythonConfig = {
   name: string;
+  enableCredentials: boolean;
   username: string;
   password: string;
   powerStrip: boolean;
   discoveryOptions: {
     pollingInterval: number;
   };
-  forceVenvRecreate: boolean;
-  pythonExecutable?: string;
   waitTimeUpdate: number;
 };
 
 export const defaultConfig: KasaPythonConfig = {
   name: 'kasa-python',
+  enableCredentials: false,
   username: '',
   password: '',
   powerStrip: false,
   discoveryOptions: {
     pollingInterval: 5,
   },
-  forceVenvRecreate: false,
-  pythonExecutable: undefined,
   waitTimeUpdate: 100,
 };
 
@@ -129,11 +126,10 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
 
   return {
     name: c.name ?? defaultConfig.name,
+    enableCredentials: c.enableCredentials ?? defaultConfig.enableCredentials,
     username: c.username ?? defaultConfig.username,
     password: c.password ?? defaultConfig.password,
     powerStrip: c.powerStrip ?? defaultConfig.powerStrip,
-    forceVenvRecreate: c.forceVenvRecreate ?? defaultConfig.forceVenvRecreate,
-    pythonExecutable: c.pythonExecutable ?? defaultConfig.pythonExecutable,
     waitTimeUpdate: c.waitTimeUpdate ?? defaultConfig.waitTimeUpdate,
     discoveryOptions: {
       pollingInterval: (c.discoveryOptions.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,

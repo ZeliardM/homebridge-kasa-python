@@ -27,10 +27,10 @@ def custom_device_serializer(device):
     app.logger.debug(f"Serialized data for device: {serialized_data}")
     return serialized_data
 
-async def discover_devices():
+async def discover_devices(username=None, password=None):
     app.logger.debug('Starting device discovery...')
     try:
-        devices = await Discover.discover()
+        devices = await Discover.discover(username=username, password=password)
         app.logger.debug(f'Discovered devices: {devices}')
     except Exception as e:
         app.logger.error(f'Error during device discovery: {str(e)}')
@@ -108,7 +108,10 @@ def run_async(func, *args):
 def discover():
     try:
         app.logger.debug('Received /discover request')
-        devices_info = run_async(discover_devices)
+        auth = request.authorization
+        username = auth.username if auth else None
+        password = auth.password if auth else None
+        devices_info = run_async(discover_devices, username, password)
         return jsonify(devices_info)
     except Exception as e:
         app.logger.error(f"Error in /discover: {str(e)}")

@@ -25,7 +25,7 @@ class PythonChecker {
   public constructor(platform: KasaPythonPlatform) {
     this.platform = platform;
     this.log = prefixLogger(this.platform.log, '[Python Check]');
-    this.pythonExecutable = this.platform.config.pythonExecutable || 'python3';
+    this.pythonExecutable = 'python3';
     this.pluginDirPath = path.join(this.platform.storagePath, 'kasa-python');
     this.venvPath = path.join(this.pluginDirPath, '.venv');
     this.venvPythonExecutable = path.join(this.venvPath, 'bin', 'python3');
@@ -33,11 +33,11 @@ class PythonChecker {
     this.venvConfigPath = path.join(this.venvPath, 'pyvenv.cfg');
   }
 
-  public async allInOne(): Promise<void> {
+  public async allInOne(isUpgrade: boolean): Promise<void> {
     this.log.debug('Starting python environment check...');
     this.ensurePluginDir();
     await this.ensurePythonVersion();
-    await this.ensureVenvCreated(this.platform.config.forceVenvRecreate);
+    await this.ensureVenvCreated(isUpgrade);
     await this.ensureVenvUsesCorrectPythonHome();
     await this.ensureVenvPipUpToDate();
     await this.ensureVenvRequirementsSatisfied();
@@ -60,8 +60,8 @@ class PythonChecker {
     }
   }
 
-  private async ensureVenvCreated(forceVenvRecreate: boolean): Promise<void> {
-    if (forceVenvRecreate || !this.isVenvCreated()) {
+  private async ensureVenvCreated(isUpgrade: boolean): Promise<void> {
+    if (isUpgrade || !this.isVenvCreated()) {
       await this.createVenv();
     }
   }

@@ -14,6 +14,13 @@
         "default": "KasaPython",
         "minLength": 1
       },
+      "enableCredentials": {
+        "title": "Enable Credentials",
+        "type": "boolean",
+        "required": false,
+        "description": "Enable to use username and password for authentication.",
+        "default": false
+      },
       "username": {
         "title": "Username",
         "type": "string",
@@ -44,20 +51,6 @@
         "description": "How often to check device status in the background (seconds)",
         "placeholder": "5"
       },
-      "forceVenvRecreate": {
-        "title": "Force Venv Recreation",
-        "type": "boolean",
-        "required": true,
-        "description": "Set this to force to recreate the virtual python environment with the next restart of the plugin.",
-        "default": false
-      },
-      "pythonExecutable": {
-        "title": "Python Executable",
-        "type": "string",
-        "required": false,
-        "description": "Here you can specify a path that points to a python executable. The plugin uses the systems default python as default. Setting a specific python executable here may be required if your systems default python version is too current for the plugin.",
-        "placeholder": "/path/to/python3"
-      },
       "waitTimeUpdate": {
         "title": "Wait Time Update (milliseconds)",
         "type": "integer",
@@ -65,12 +58,54 @@
         "description": "The time to wait to combine similar commands for a device before sending a command to a device (milliseconds). Default: 100.",
         "placeholder": "100"
       }
+    },
+    "dependencies": {
+      "enableCredentials": {
+        "oneOf": [
+          {
+            "properties": {
+              "enableCredentials": {
+                "enum": [false]
+              }
+            }
+          },
+          {
+            "properties": {
+              "enableCredentials": {
+                "enum": [true]
+              },
+              "username": {
+                "type": "string",
+                "required": false,
+                "description": "Username for the Kasa account. Required for cloud devices.",
+                "placeholder": "Username",
+                "minLength": 1
+              },
+              "password": {
+                "type": "string",
+                "required": false,
+                "description": "Password for the Kasa account. Required for cloud devices.",
+                "placeholder": "Password",
+                "minLength": 1
+              }
+            },
+            "required": ["username", "password"]
+          }
+        ]
+      }
     }
   },
   "layout": [
     "name",
-    "username",
-    "password",
+    "enableCredentials",
+    {
+      "type": "conditional",
+      "condition": "model.enableCredentials",
+      "items": [
+        "username",
+        "password"
+      ]
+    },
     {
       "type": "help",
       "helpvalue": "Username and Password will be required for specific devices only."
@@ -99,8 +134,6 @@
       "description": "Don't change these, unless you understand what you're doing.",
       "expandable": true,
       "items": [
-        "pythonExecutable",
-        "forceVenvRecreate",
         "waitTimeUpdate"
       ]
     }
