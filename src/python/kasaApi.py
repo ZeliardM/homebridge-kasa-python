@@ -31,7 +31,6 @@ async def discover_devices(username=None, password=None):
     app.logger.debug('Starting device discovery...')
     try:
         devices = await Discover.discover(username=username, password=password)
-        app.logger.debug(f'Discovered devices: {devices}')
     except Exception as e:
         app.logger.error(f'Error during device discovery: {str(e)}')
         app.logger.error(f'Traceback: {traceback.format_exc()}')
@@ -40,8 +39,9 @@ async def discover_devices(username=None, password=None):
     all_device_info = {}
     tasks = []
     for ip, dev in devices.items():
-        app.logger.debug(f'Creating update task for device at {ip} with device: {dev}')
-        tasks.append(update_device_info(ip, dev))
+        if dev.device_type:
+            app.logger.debug(f'Creating update task for device at {ip} with device: {dev}')
+            tasks.append(update_device_info(ip, dev))
 
     try:
         results = await asyncio.gather(*tasks)
