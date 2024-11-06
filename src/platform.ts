@@ -54,14 +54,15 @@ async function checkForUpgrade(storagePath: string, logger: Logging): Promise<bo
   let storedVersion = '';
 
   try {
-    if (await fs.stat(versionFilePath)) {
-      const versionData = await fs.readFile(versionFilePath, 'utf8');
-      storedVersion = JSON.parse(versionData).version;
-    } else {
-      logger.info('Version file does not exist, treating as new install or upgrade from before v2.2.0.');
-    }
+    await fs.access(versionFilePath);
+    const versionData = await fs.readFile(versionFilePath, 'utf8');
+    storedVersion = JSON.parse(versionData).version;
   } catch (error) {
-    logger.error('Error reading version file:', error);
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      logger.info('Version file does not exist, treating as new install or upgrade from version prior to v2.2.2.');
+    } else {
+      logger.error('Error reading version file:', error);
+    }
   }
 
   if (storedVersion !== packageConfig.version) {
