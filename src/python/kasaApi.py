@@ -1,4 +1,4 @@
-import asyncio, eventlet, eventlet.wsgi, json, sys
+import asyncio, eventlet, eventlet.wsgi, json, traceback, sys
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO
 from kasa import Discover, Device
@@ -34,6 +34,7 @@ async def discover_devices(username=None, password=None):
         app.logger.debug(f'Discovered devices: {devices}')
     except Exception as e:
         app.logger.error(f'Error during device discovery: {str(e)}')
+        app.logger.error(f'Traceback: {traceback.format_exc()}')
         return {}
 
     all_device_info = {}

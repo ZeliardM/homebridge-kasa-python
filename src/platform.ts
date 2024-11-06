@@ -50,7 +50,8 @@ async function loadPackageConfig(logger: Logging): Promise<void> {
 }
 
 async function checkForUpgrade(storagePath: string, logger: Logging): Promise<boolean> {
-  const versionFilePath = path.join(storagePath, 'kasa-python', 'kasa-python-version.json');
+  const versionDir = path.join(storagePath, 'kasa-python');
+  const versionFilePath = path.join(versionDir, 'kasa-python-version.json');
   let storedVersion = '';
 
   try {
@@ -59,7 +60,7 @@ async function checkForUpgrade(storagePath: string, logger: Logging): Promise<bo
     storedVersion = JSON.parse(versionData).version;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      logger.info('Version file does not exist, treating as new install or upgrade from version prior to v2.2.2.');
+      logger.info('Version file does not exist, treating as new install or upgrade from version prior to v2.2.4.');
     } else {
       logger.error('Error reading version file:', error);
     }
@@ -67,6 +68,7 @@ async function checkForUpgrade(storagePath: string, logger: Logging): Promise<bo
 
   if (storedVersion !== packageConfig.version) {
     try {
+      await fs.mkdir(versionDir, { recursive: true });
       await fs.writeFile(versionFilePath, JSON.stringify({ version: packageConfig.version }), 'utf8');
       logger.info(`Version file updated to version ${packageConfig.version}`);
     } catch (error) {
@@ -128,7 +130,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     await this.verifyEnvironment();
     this.isUpgrade = await checkForUpgrade(this.storagePath, this.log);
     if (this.isUpgrade) {
-      this.log.info('Plugin upgraded, virtual environment will be recreated.');
+      this.log.info('Plugin version changed, virtual python environment will be recreated.');
     }
   }
 
