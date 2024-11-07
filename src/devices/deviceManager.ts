@@ -24,13 +24,10 @@ export default class DeviceManager {
       action,
       ...(childNumber !== undefined && { child_num: childNumber }),
     };
-    this.log.info(`Performing action '${action}' on device: ${device.name}`);
     try {
       const response = await axios.post(url, data);
       if (response.data.status !== 'success') {
         this.log.error(`Error performing action: ${response.data.message}`);
-      } else {
-        this.log.info(`Action '${action}' performed successfully on device: ${device.name}`);
       }
     } catch (error) {
       this.log.error(`Error performing action: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`);
@@ -75,7 +72,7 @@ export default class DeviceManager {
   }
 
   async getSysInfo(device: HomekitDevice): Promise<KasaDevice | undefined> {
-    this.log.info(`Getting system info for device: ${device.name}`);
+    this.log.debug(`Getting system info for device: ${device.name}`);
     try {
       const response = await axios.post(`${this.apiUrl}/getSysInfo`, { device_config: device.deviceConfig });
       const kasaDevice: KasaDevice = response.data.device_info;
@@ -97,10 +94,8 @@ export default class DeviceManager {
   async toggleDevice(device: HomekitDevice, state: boolean, child_num?: number): Promise<void> {
     const action = state ? 'turn_on' : 'turn_off';
     const childText = child_num !== undefined ? ` child ${child_num}` : '';
-    this.log.info(`Toggling device: ${device.name}${childText} to state: ${state}`);
     try {
       await this.performDeviceAction(device, action, child_num);
-      this.log.info(`Turned ${state ? 'on' : 'off'} device: ${device.name}${childText}`);
     } catch (error) {
       this.log.error(
         `An error occurred turning ${state ? 'on' : 'off'} device ${device.name}${childText}: ${
