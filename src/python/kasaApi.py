@@ -50,6 +50,7 @@ async def discover_devices(username=None, password=None):
             except Exception as e:
                 app.logger.error(f'Error processing device at {ip}: {str(e)}')
                 app.logger.error(f'Traceback: {traceback.format_exc()}')
+                continue
     except Exception as e:
         app.logger.error(f'Error iterating through devices: {str(e)}')
         app.logger.error(f'Traceback: {traceback.format_exc()}')
