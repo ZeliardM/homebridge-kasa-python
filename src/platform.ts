@@ -60,7 +60,7 @@ async function checkForUpgrade(storagePath: string, logger: Logging): Promise<bo
     storedVersion = JSON.parse(versionData).version;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      logger.info('Version file does not exist, treating as new install or upgrade from version prior to v2.2.4.');
+      logger.info('Version file does not exist, treating as new install or version change.');
     } else {
       logger.error('Error reading version file:', error);
     }
@@ -151,7 +151,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   private async didFinishLaunching(): Promise<void> {
-    this.log.debug('Did Finish Launching Event Received');
     try {
       await this.checkPython(this.isUpgrade);
       this.port = await getPort();
@@ -174,19 +173,16 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private async startKasaApi(): Promise<void> {
     const scriptPath = `${this.storagePath}/node_modules/homebridge-kasa-python/dist/python/kasaApi.py`;
     try {
-      const [, stderr, , process] = await runCommand(
+      const [, , , process] = await runCommand(
         this.log,
         this.venvPythonExecutable,
         [scriptPath, this.port.toString()],
         undefined,
-        false,
-        false,
+        true,
+        true,
         true,
       );
       this.kasaProcess = process;
-      if (stderr) {
-        this.log.debug(`kasaApi.py process started: ${stderr}`);
-      }
     } catch (error) {
       if (error instanceof Error) {
         this.log.error(`Error starting kasaApi.py process: ${error.message}`);
@@ -200,7 +196,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     if (this.kasaProcess) {
       this.kasaProcess.kill();
       this.kasaProcess = null;
-      this.log.debug('kasaApi.py process terminated');
     }
   }
 
@@ -238,7 +233,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   registerPlatformAccessory(platformAccessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
-    this.log.debug(`registerPlatformAccessory([${platformAccessory.displayName}])`);
     this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [platformAccessory]);
   }
 

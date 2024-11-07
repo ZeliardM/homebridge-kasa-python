@@ -1,4 +1,4 @@
-import asyncio, eventlet, eventlet.wsgi, json, traceback, sys
+import asyncio, eventlet, eventlet.wsgi, json, sys
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO
 from kasa import Discover, Device
@@ -22,91 +22,56 @@ def custom_device_serializer(device):
             value = getattr(device, attr)
             if is_serializable(value):
                 serialized_data[attr] = value
-            else:
-                app.logger.debug(f"Skipping non-serializable attribute: {attr} with value: {value}")
-    app.logger.debug(f"Serialized data for device: {serialized_data}")
     return serialized_data
 
 async def discover_devices(username=None, password=None):
-    app.logger.debug('Starting device discovery...')
     try:
         devices = await Discover.discover(username=username, password=password)
-    except Exception as e:
-        app.logger.error(f'Error during device discovery: {str(e)}')
-        app.logger.error(f'Traceback: {traceback.format_exc()}')
+    except Exception:
         return {}
 
     all_device_info = {}
     tasks = []
 
-    try:
-        for ip, dev in devices.items():
-            try:
-                if hasattr(dev, 'device_type'):
-                    app.logger.debug(f'Creating update task for device at {ip} with device: {dev}')
-                    tasks.append(update_device_info(ip, dev))
-                else:
-                    app.logger.debug(f'Device at {ip} does not have a device_type: {dev}')
-            except KeyError as e:
-                app.logger.debug(f'Device at {ip} is missing key: {str(e)}')
-                continue
-            except Exception as e:
-                app.logger.error(f'Error processing device at {ip}: {str(e)}')
-                app.logger.error(f'Traceback: {traceback.format_exc()}')
-                continue
-    except Exception as e:
-        app.logger.error(f'Error iterating through devices: {str(e)}')
-        app.logger.error(f'Traceback: {traceback.format_exc()}')
+    for ip, dev in devices.items():
+        try:
+            if hasattr(dev, 'device_type'):
+                tasks.append(update_device_info(ip, dev))
+        except KeyError:
+            continue
 
     try:
         results = await asyncio.gather(*tasks)
-        app.logger.debug(f'Update tasks completed with results: {results}')
-    except Exception as e:
-        app.logger.error(f'Error during update tasks: {str(e)}')
-        app.logger.error(f'Traceback: {traceback.format_exc()}')
+    except Exception:
         return {}
 
     for ip, info in results:
-        try:
-            all_device_info[ip] = info
-            app.logger.debug(f'Updated device info for {ip}: {info}')
-        except Exception as e:
-            app.logger.error(f'Error updating device info for {ip}: {str(e)}')
-            app.logger.error(f'Traceback: {traceback.format_exc()}')
+        all_device_info[ip] = info
 
-    app.logger.debug(f'All device info: {all_device_info}')
     return all_device_info
 
 async def update_device_info(ip, dev: Device):
-    app.logger.debug(f'Updating device info for {ip}')
     try:
         await dev.update()
-        app.logger.debug(f'Device updated for {ip}: {dev}')
         device_info = custom_device_serializer(dev)
         device_config = dev.config.to_dict()
         device_cache[ip] = {
             "device_info": device_info,
             "device_config": device_config
         }
-        app.logger.debug(f'Updated device info for {ip}: {device_cache[ip]}')
         return ip, device_cache[ip]
-    except Exception as e:
-        app.logger.error(f'Error updating device info for {ip}: {str(e)}')
-        app.logger.error(f'Traceback: {traceback.format_exc()}')
+    except Exception:
         return ip, {}
 
 async def get_device_info(device_config):
-    app.logger.debug(f'Getting device info for config: {device_config}')
     dev = await Device.connect(config=Device.Config.from_dict(device_config))
     try:
         device_info = custom_device_serializer(dev)
-        app.logger.debug(f'Device info: {device_info}')
         return {"device_info": device_info}
     finally:
         await dev.disconnect()
 
 async def control_device(device_config, action, child_num=None):
-    app.logger.debug(f'Controlling device with config: {device_config}, action: {action}, child_num: {child_num}')
     kasa_device = await Device.connect(config=Device.Config.from_dict(device_config))
     try:
         if child_num is not None:
@@ -114,10 +79,8 @@ async def control_device(device_config, action, child_num=None):
             await getattr(child, action)()
         else:
             await getattr(kasa_device, action)()
-        app.logger.debug(f'Action {action} performed successfully')
         return {"status": "success", f"is_{action.split('_')[1]}": True}
     except Exception as e:
-        app.logger.error(f'Error performing action {action}: {str(e)}')
         return {"status": "error", "message": str(e)}
     finally:
         await kasa_device.disconnect()
@@ -128,42 +91,27 @@ def run_async(func, *args):
 
 @app.route('/discover', methods=['GET'])
 def discover():
-    try:
-        app.logger.debug('Received /discover request')
-        auth = request.authorization
-        username = auth.username if auth else None
-        password = auth.password if auth else None
-        devices_info = run_async(discover_devices, username, password)
-        return jsonify(devices_info)
-    except Exception as e:
-        app.logger.error(f"Error in /discover: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+    auth = request.authorization
+    username = auth.username if auth else None
+    password = auth.password if auth else None
+    devices_info = run_async(discover_devices, username, password)
+    return jsonify(devices_info)
 
 @app.route('/getSysInfo', methods=['POST'])
 def get_sys_info_route():
-    try:
-        data = request.json
-        app.logger.debug(f"Received /getSysInfo request with data: {data}")
-        device_config = data['device_config']
-        device_info = run_async(get_device_info, device_config)
-        return jsonify(device_info)
-    except Exception as e:
-        app.logger.error(f"Error in /getSysInfo: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+    data = request.json
+    device_config = data['device_config']
+    device_info = run_async(get_device_info, device_config)
+    return jsonify(device_info)
 
 @app.route('/controlDevice', methods=['POST'])
 def control_device_route():
-    try:
-        data = request.json
-        app.logger.debug(f"Received /controlDevice request with data: {data}")
-        device_config = data['device_config']
-        action = data['action']
-        child_num = data.get('child_num')
-        result = run_async(control_device, device_config, action, child_num)
-        return jsonify(result)
-    except Exception as e:
-        app.logger.error(f"Error in /controlDevice: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+    data = request.json
+    device_config = data['device_config']
+    action = data['action']
+    child_num = data.get('child_num')
+    result = run_async(control_device, device_config, action, child_num)
+    return jsonify(result)
 
 if __name__ == '__main__':
     port = int(sys.argv[1])

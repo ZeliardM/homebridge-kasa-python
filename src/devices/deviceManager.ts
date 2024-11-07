@@ -24,13 +24,13 @@ export default class DeviceManager {
       action,
       ...(childNumber !== undefined && { child_num: childNumber }),
     };
-    this.log.debug(`Performing action '${action}' on device: ${device.name} with data: ${JSON.stringify(data)}`);
+    this.log.info(`Performing action '${action}' on device: ${device.name}`);
     try {
       const response = await axios.post(url, data);
       if (response.data.status !== 'success') {
         this.log.error(`Error performing action: ${response.data.message}`);
       } else {
-        this.log.debug(`Action '${action}' performed successfully on device: ${device.name}`);
+        this.log.info(`Action '${action}' performed successfully on device: ${device.name}`);
       }
     } catch (error) {
       this.log.error(`Error performing action: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`);
@@ -42,7 +42,7 @@ export default class DeviceManager {
   }
 
   async discoverDevices(): Promise<void> {
-    this.log.debug('Discovering devices...');
+    this.log.info('Discovering devices...');
     try {
       const config = {
         ...(this.username && this.password && {
@@ -54,18 +54,15 @@ export default class DeviceManager {
       };
       const response = await axios.get(`${this.apiUrl}/discover`, config);
       const devices = response.data;
-      this.log.debug(`Devices discovered: ${JSON.stringify(devices)}`);
+      this.log.info(`Devices discovered: ${Object.keys(devices).length}`);
       Object.keys(devices).forEach(ip => {
         const device: KasaDevice = devices[ip].device_info;
-        this.log.debug(`Processing device at IP: ${ip} with info: ${JSON.stringify(device)}`);
         if (device.alias.includes('TP-LINK_Power Strip_')) {
           device.alias = `Power Strip ${device.alias.slice(-4)}`;
-          this.log.debug(`Updated device alias to: ${device.alias}`);
         }
         device.device_config = devices[ip].device_config;
         this.platform.foundDevice(device);
       });
-      this.log.debug(`Discovered ${Object.keys(devices).length} devices.`);
     } catch (error) {
       this.log.error(
         `An error occurred during device discovery: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`,
@@ -78,15 +75,12 @@ export default class DeviceManager {
   }
 
   async getSysInfo(device: HomekitDevice): Promise<KasaDevice | undefined> {
-    this.log.debug(`Getting system info for device: ${device.name}`);
+    this.log.info(`Getting system info for device: ${device.name}`);
     try {
-      this.log.debug(`Requesting system info with config: ${JSON.stringify(device.deviceConfig)}`);
       const response = await axios.post(`${this.apiUrl}/getSysInfo`, { device_config: device.deviceConfig });
       const kasaDevice: KasaDevice = response.data.device_info;
-      this.log.debug(`Received system info: ${JSON.stringify(kasaDevice)}`);
       if (kasaDevice.alias.includes('TP-LINK_Power Strip_')) {
         kasaDevice.alias = `Power Strip ${kasaDevice.alias.slice(-4)}`;
-        this.log.debug(`Updated device alias to: ${kasaDevice.alias}`);
       }
       return kasaDevice;
     } catch (error) {
@@ -103,10 +97,10 @@ export default class DeviceManager {
   async toggleDevice(device: HomekitDevice, state: boolean, child_num?: number): Promise<void> {
     const action = state ? 'turn_on' : 'turn_off';
     const childText = child_num !== undefined ? ` child ${child_num}` : '';
-    this.log.debug(`Toggling device: ${device.name}${childText} to state: ${state}`);
+    this.log.info(`Toggling device: ${device.name}${childText} to state: ${state}`);
     try {
       await this.performDeviceAction(device, action, child_num);
-      this.log.debug(`Turned ${state ? 'on' : 'off'} device: ${device.name}${childText}`);
+      this.log.info(`Turned ${state ? 'on' : 'off'} device: ${device.name}${childText}`);
     } catch (error) {
       this.log.error(
         `An error occurred turning ${state ? 'on' : 'off'} device ${device.name}${childText}: ${
