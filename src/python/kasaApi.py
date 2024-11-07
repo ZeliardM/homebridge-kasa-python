@@ -47,6 +47,9 @@ async def discover_devices(username=None, password=None):
                     tasks.append(update_device_info(ip, dev))
                 else:
                     app.logger.debug(f'Device at {ip} does not have a device_type: {dev}')
+            except KeyError as e:
+                app.logger.debug(f'Device at {ip} is missing key: {str(e)}')
+                continue
             except Exception as e:
                 app.logger.error(f'Error processing device at {ip}: {str(e)}')
                 app.logger.error(f'Traceback: {traceback.format_exc()}')
