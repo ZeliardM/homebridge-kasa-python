@@ -31,7 +31,6 @@ async def discover_devices(username=None, password=None):
     app.logger.debug('Starting device discovery...')
     try:
         devices = await Discover.discover(username=username, password=password)
-        app.logger.debug(f'Discovered devices: {devices}')
     except Exception as e:
         app.logger.error(f'Error during device discovery: {str(e)}')
         app.logger.error(f'Traceback: {traceback.format_exc()}')
