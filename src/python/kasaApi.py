@@ -8,6 +8,14 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 device_cache = {}
 
+UNSUPPORTED_TYPES = {
+    'SMART.IPCAMERA',
+    'IOT.SMARTBULB',
+    'SMART.KASAHUB',
+    'SMART.TAPOBULB',
+    'SMART.TAPOHUB'
+}
+
 def custom_device_serializer(device):
     def is_serializable(value):
         try:
@@ -24,18 +32,25 @@ def custom_device_serializer(device):
                 serialized_data[attr] = value
     return serialized_data
 
-async def discover_devices(username=None, password=None):
-    try:
-        devices = await Discover.discover(username=username, password=password)
-    except Exception:
-        return {}
+async def discover_devices(username=None, password=None, additional_networks=None):
+    devices = {}
+    if additional_networks:
+        additional_networks = [f"{'.'.join(network.split('.')[:-1])}.255" for network in additional_networks]
+    networks = ["255.255.255.255"] + (additional_networks or [])
+    
+    for network in networks:
+        try:
+            discovered_devices = await Discover.discover(target=network, username=username, password=password)
+            devices.update(discovered_devices)
+        except Exception as e:
+            app.logger.error(f"Error discovering devices on network {network}: {str(e)}")
 
     all_device_info = {}
     tasks = []
 
     for ip, dev in devices.items():
         try:
-            if hasattr(dev, 'device_type') and dev.sys_info['mic_type'] == "IOT.SMARTPLUGSWITCH":
+            if hasattr(dev, 'device_type') and dev.sys_info['mic_type'] not in UNSUPPORTED_TYPES:
                 tasks.append(update_device_info(ip, dev))
         except KeyError:
             continue
@@ -89,12 +104,13 @@ def run_async(func, *args):
     loop = asyncio.get_event_loop()
     return loop.run_until_complete(func(*args))
 
-@app.route('/discover', methods=['GET'])
+@app.route('/discover', methods=['POST'])
 def discover():
     auth = request.authorization
     username = auth.username if auth else None
     password = auth.password if auth else None
-    devices_info = run_async(discover_devices, username, password)
+    additional_networks = request.json.get('additionalNetworks', [])
+    devices_info = run_async(discover_devices, username, password, additional_networks)
     return jsonify(devices_info)
 
 @app.route('/getSysInfo', methods=['POST'])

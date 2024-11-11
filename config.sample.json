@@ -16,7 +16,11 @@
         "password": "Password",
         "powerStrip": true,
         "pollingInterval": 5,
-        "waitTimeUpdate": 100
+        "waitTimeUpdate": 100,
+        "additionalNetworks": [
+            "192.168.1.0",
+            "192.168.2.0"
+        ]
     }],
 
     "accessories": []

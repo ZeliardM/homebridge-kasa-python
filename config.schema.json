@@ -51,6 +51,18 @@
         "description": "How often to check device status in the background (seconds)",
         "placeholder": "5"
       },
+      "additionalNetworks": {
+        "title": "Additional Networks",
+        "type": "array",
+        "buttonText": "Add Network",
+        "items": {
+          "title": "Network",
+          "type": "string",
+          "required": true
+        },
+        "required": false,
+        "description": "List of additional networks to discover devices on. Format: 192.168.1.0"
+      },
       "waitTimeUpdate": {
         "title": "Wait Time Update (milliseconds)",
         "type": "integer",
@@ -125,7 +137,17 @@
       "description": "Customize device discovery",
       "expandable": true,
       "items": [
-        "pollingInterval"
+        "pollingInterval",
+        {
+          "key": "additionalNetworks",
+          "type": "array",
+          "buttonText": "Add Network",
+          "items": {
+            "title": "Network",
+            "type": "string",
+            "required": true
+          }
+        }
       ]
     },
     {

@@ -9,12 +9,14 @@ export default class DeviceManager {
   private apiUrl: string;
   private username: string;
   private password: string;
+  private additionalNetworks: string[];
 
   constructor(private platform: KasaPythonPlatform) {
     this.log = platform.log;
     this.username = platform.config.username;
     this.password = platform.config.password;
     this.apiUrl = `http://127.0.0.1:${platform.port}`;
+    this.additionalNetworks = platform.config.discoveryOptions.additionalNetworks;
   }
 
   private async performDeviceAction(device: HomekitDevice, action: string, childNumber?: number): Promise<void> {
@@ -49,7 +51,9 @@ export default class DeviceManager {
           },
         }),
       };
-      const response = await axios.get(`${this.apiUrl}/discover`, config);
+      const response = await axios.post(`${this.apiUrl}/discover`, {
+        additionalNetworks: this.additionalNetworks,
+      }, config);
       const devices = response.data;
       this.log.info(`Devices discovered: ${Object.keys(devices).length}`);
       Object.keys(devices).forEach(ip => {
