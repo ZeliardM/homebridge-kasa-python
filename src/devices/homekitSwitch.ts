@@ -28,6 +28,7 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
         const newKasaDevice = await this.deviceManager.getSysInfo(this) as Switch;
         this.previousKasaDevice = this.kasaDevice;
         this.kasaDevice = newKasaDevice;
+        this.kasaDevice.alias = this.previousKasaDevice.alias;
         return this.kasaDevice;
       }
       return undefined;
