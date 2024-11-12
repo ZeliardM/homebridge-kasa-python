@@ -51,17 +51,17 @@
         "description": "How often to check device status in the background (seconds)",
         "placeholder": "5"
       },
-      "additionalNetworks": {
-        "title": "Additional Networks",
+      "additionalBroadcasts": {
+        "title": "Additional Broadcast Addresses",
         "type": "array",
-        "buttonText": "Add Network",
+        "buttonText": "Add Broadcast Address",
         "items": {
-          "title": "Network",
+          "title": "Broadcast Address",
           "type": "string",
           "required": true
         },
         "required": false,
-        "description": "List of additional networks to discover devices on. Format: 192.168.1.0"
+        "description": "List of additional broadcast addresses to discover devices on. Format: 192.168.1.255"
       },
       "waitTimeUpdate": {
         "title": "Wait Time Update (milliseconds)",
@@ -139,11 +139,11 @@
       "items": [
         "pollingInterval",
         {
-          "key": "additionalNetworks",
+          "key": "additionalBroadcasts",
           "type": "array",
-          "buttonText": "Add Network",
+          "buttonText": "Add Broadcast Address",
           "items": {
-            "title": "Network",
+            "title": "Broadcast Address",
             "type": "string",
             "required": true
           }

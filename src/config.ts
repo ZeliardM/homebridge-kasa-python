@@ -54,8 +54,8 @@ export interface KasaPythonConfigInput {
   password?: string;
   powerStrip?: boolean;
   pollingInterval?: number;
+  additionalBroadcasts?: string[];
   waitTimeUpdate?: number;
-  additionalNetworks?: string[];
 }
 
 export type KasaPythonConfig = {
@@ -66,7 +66,7 @@ export type KasaPythonConfig = {
   powerStrip: boolean;
   discoveryOptions: {
     pollingInterval: number;
-    additionalNetworks: string[];
+    additionalBroadcasts: string[];
   };
   waitTimeUpdate: number;
 };
@@ -79,7 +79,7 @@ export const defaultConfig: KasaPythonConfig = {
   powerStrip: false,
   discoveryOptions: {
     pollingInterval: 5,
-    additionalNetworks: [],
+    additionalBroadcasts: [],
   },
   waitTimeUpdate: 100,
 };
@@ -136,7 +136,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     waitTimeUpdate: c.waitTimeUpdate ?? defaultConfig.waitTimeUpdate,
     discoveryOptions: {
       pollingInterval: (c.discoveryOptions.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
-      additionalNetworks: c.discoveryOptions.additionalNetworks ?? defaultConfig.discoveryOptions.additionalNetworks,
+      additionalBroadcasts: c.discoveryOptions.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
     },
   };
 }
