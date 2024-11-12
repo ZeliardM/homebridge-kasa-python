@@ -88,6 +88,12 @@ async def update_device_info(ip, dev: Device):
 async def get_device_info(device_config):
     dev = await Device.connect(config=Device.Config.from_dict(device_config))
     try:
+        await dev.update()
+        if not dev.alias:
+            app.logger.warning(f"Alias not found for device {dev.host}. Reconnecting and updating...")
+            await dev.disconnect()
+            dev = await Device.connect(config=Device.Config.from_dict(device_config))
+            await dev.update()
         device_info = custom_device_serializer(dev)
         return {"device_info": device_info}
     finally:

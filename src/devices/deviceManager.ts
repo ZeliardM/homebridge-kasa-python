@@ -83,8 +83,19 @@ export default class DeviceManager {
     try {
       const response = await axios.post(`${this.apiUrl}/getSysInfo`, { device_config: device.deviceConfig });
       const kasaDevice: KasaDevice = response.data.device_info;
-      if (kasaDevice.alias.includes('TP-LINK_Power Strip_')) {
-        kasaDevice.alias = `Power Strip ${kasaDevice.alias.slice(-4)}`;
+      if (kasaDevice.alias) {
+        const aliasMappings: { [key: string]: string } = {
+          'TP-LINK_Power Strip_': 'Power Strip',
+          'TP-LINK_Smart Plug_': 'Smart Plug',
+          'TP-LINK_Smart Bulb_': 'Smart Bulb',
+        };
+
+        for (const [pattern, replacement] of Object.entries(aliasMappings)) {
+          if (kasaDevice.alias.includes(pattern)) {
+            kasaDevice.alias = `${replacement} ${kasaDevice.alias.slice(-4)}`;
+            break;
+          }
+        }
       }
       return kasaDevice;
     } catch (error) {
