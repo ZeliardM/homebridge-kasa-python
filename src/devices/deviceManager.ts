@@ -53,6 +53,10 @@ export default class DeviceManager {
           },
         }),
       };
+      this.log.debug(
+        `Sending discovery request with additionalBroadcasts: ${JSON.stringify(this.additionalBroadcasts)}, ` +
+        `and manualDevices: ${JSON.stringify(this.manualDevices)}`,
+      );
       const response = await axios.post(`${this.apiUrl}/discover`, {
         additionalBroadcasts: this.additionalBroadcasts,
         manualDevices: this.manualDevices,
@@ -61,8 +65,19 @@ export default class DeviceManager {
       this.log.info(`Devices discovered: ${Object.keys(devices).length}`);
       Object.keys(devices).forEach(ip => {
         const device: KasaDevice = devices[ip].device_info;
-        if (device.alias.includes('TP-LINK_Power Strip_')) {
-          device.alias = `Power Strip ${device.alias.slice(-4)}`;
+        if (device.alias) {
+          const aliasMappings: { [key: string]: string } = {
+            'TP-LINK_Power Strip_': 'Power Strip',
+            'TP-LINK_Smart Plug_': 'Smart Plug',
+            'TP-LINK_Smart Bulb_': 'Smart Bulb',
+          };
+
+          for (const [pattern, replacement] of Object.entries(aliasMappings)) {
+            if (device.alias.includes(pattern)) {
+              device.alias = `${replacement} ${device.alias.slice(-4)}`;
+              break;
+            }
+          }
         }
         device.device_config = devices[ip].device_config;
         this.platform.foundDevice(device);

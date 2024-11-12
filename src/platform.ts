@@ -125,12 +125,16 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   async initializePlatform(): Promise<void> {
-    await loadPackageConfig(this.log);
-    this.logInitializationDetails();
-    await this.verifyEnvironment();
-    this.isUpgrade = await checkForUpgrade(this.storagePath, this.log);
-    if (this.isUpgrade) {
-      this.log.info('Plugin version changed, virtual python environment will be recreated.');
+    try {
+      await loadPackageConfig(this.log);
+      this.logInitializationDetails();
+      await this.verifyEnvironment();
+      this.isUpgrade = await checkForUpgrade(this.storagePath, this.log);
+      if (this.isUpgrade) {
+        this.log.info('Plugin version changed, virtual python environment will be recreated.');
+      }
+    } catch (error) {
+      this.log.error('Error during platform initialization:', error);
     }
   }
 
@@ -142,11 +146,16 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   private async verifyEnvironment(): Promise<void> {
-    if (!satisfies(process.version, packageConfig.engines.node)) {
-      this.log.error(`Error: not using minimum node version ${packageConfig.engines.node}`);
-    }
-    if (this.api.versionGreaterOrEqual && !this.api.versionGreaterOrEqual('1.8.4')) {
-      throw new Error(`homebridge-kasa-python requires homebridge >= 1.8.4. Currently running: ${this.api.serverVersion}`);
+    try {
+      if (!satisfies(process.version, packageConfig.engines.node)) {
+        this.log.error(`Error: not using minimum node version ${packageConfig.engines.node}`);
+      }
+      if (this.api.versionGreaterOrEqual && !this.api.versionGreaterOrEqual('1.8.4')) {
+        throw new Error(`homebridge-kasa-python requires homebridge >= 1.8.4. Currently running: ${this.api.serverVersion}`);
+      }
+    } catch (error) {
+      this.log.error('Error verifying environment:', error);
+      throw error;
     }
   }
 
@@ -167,6 +176,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       await new PythonChecker(this).allInOne(isUpgrade);
     } catch (error) {
       this.log.error('Error checking python environment:', error);
+      throw error;
     }
   }
 
@@ -189,6 +199,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       } else {
         this.log.error('An unknown error occurred during startup');
       }
+      throw error;
     }
   }
 

@@ -38,17 +38,24 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
     
     for broadcast in broadcasts:
         try:
+            app.logger.info(f"Discovering devices on broadcast: {broadcast}")
             discovered_devices = await Discover.discover(target=broadcast, username=username, password=password)
+            discovered_devices = {ip: dev for ip, dev in discovered_devices.items() if hasattr(dev, 'device_type')}
             devices.update(discovered_devices)
+            app.logger.info(f"Discovered {len(discovered_devices)} devices on broadcast {broadcast}")
         except Exception as e:
             app.logger.error(f"Error discovering devices on broadcast {broadcast}: {str(e)}")
 
     if manual_devices:
         for device in manual_devices:
             try:
+                app.logger.info(f"Discovering manual device: {device['host']}")
                 discovered_device = await Discover.discover_single(host=device['host'], username=username, password=password)
-                if discovered_device:
+                if discovered_device and hasattr(discovered_device, 'device_type'):
                     devices[device['host']] = discovered_device
+                    app.logger.info(f"Discovered manual device: {device['host']}")
+                else:
+                    app.logger.warning(f"Manual device not found or missing device_type: {device['host']}")
             except Exception as e:
                 app.logger.error(f"Error discovering manual device {device['host']}: {str(e)}")
 
@@ -64,7 +71,8 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
 
     try:
         results = await asyncio.gather(*tasks)
-    except Exception:
+    except Exception as e:
+        app.logger.error(f"Error updating device info: {str(e)}")
         return {}
 
     for ip, info in results:
@@ -82,7 +90,8 @@ async def update_device_info(ip, dev: Device):
             "device_config": device_config
         }
         return ip, device_cache[ip]
-    except Exception:
+    except Exception as e:
+        app.logger.error(f"Error updating device info for {ip}: {str(e)}")
         return ip, {}
 
 async def get_device_info(device_config):
@@ -124,7 +133,9 @@ def discover():
     password = auth.password if auth else None
     additional_broadcasts = request.json.get('additionalBroadcasts', [])
     manual_devices = request.json.get('manualDevices', [])
+    app.logger.info(f"Starting device discovery with additionalBroadcasts: {additional_broadcasts} and manualDevices: {manual_devices}")
     devices_info = run_async(discover_devices, username, password, additional_broadcasts, manual_devices)
+    app.logger.info(f"Device discovery completed with {len(devices_info)} devices found")
     return jsonify(devices_info)
 
 @app.route('/getSysInfo', methods=['POST'])
