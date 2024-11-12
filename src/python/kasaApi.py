@@ -32,7 +32,7 @@ def custom_device_serializer(device):
                 serialized_data[attr] = value
     return serialized_data
 
-async def discover_devices(username=None, password=None, additional_broadcasts=None):
+async def discover_devices(username=None, password=None, additional_broadcasts=None, manual_devices=None):
     devices = {}
     broadcasts = ["255.255.255.255"] + (additional_broadcasts or [])
     
@@ -42,6 +42,15 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
             devices.update(discovered_devices)
         except Exception as e:
             app.logger.error(f"Error discovering devices on broadcast {broadcast}: {str(e)}")
+
+    if manual_devices:
+        for device in manual_devices:
+            try:
+                discovered_device = await Discover.discover_single(host=device['host'], username=username, password=password)
+                if discovered_device:
+                    devices[device['host']] = discovered_device
+            except Exception as e:
+                app.logger.error(f"Error discovering manual device {device['host']}: {str(e)}")
 
     all_device_info = {}
     tasks = []
@@ -108,7 +117,8 @@ def discover():
     username = auth.username if auth else None
     password = auth.password if auth else None
     additional_broadcasts = request.json.get('additionalBroadcasts', [])
-    devices_info = run_async(discover_devices, username, password, additional_broadcasts)
+    manual_devices = request.json.get('manualDevices', [])
+    devices_info = run_async(discover_devices, username, password, additional_broadcasts, manual_devices)
     return jsonify(devices_info)
 
 @app.route('/getSysInfo', methods=['POST'])

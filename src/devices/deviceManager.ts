@@ -10,6 +10,7 @@ export default class DeviceManager {
   private username: string;
   private password: string;
   private additionalBroadcasts: string[];
+  private manualDevices: { host: string }[];
 
   constructor(private platform: KasaPythonPlatform) {
     this.log = platform.log;
@@ -17,6 +18,7 @@ export default class DeviceManager {
     this.password = platform.config.password;
     this.apiUrl = `http://127.0.0.1:${platform.port}`;
     this.additionalBroadcasts = platform.config.discoveryOptions.additionalBroadcasts;
+    this.manualDevices = platform.config.discoveryOptions.manualDevices;
   }
 
   private async performDeviceAction(device: HomekitDevice, action: string, childNumber?: number): Promise<void> {
@@ -53,6 +55,7 @@ export default class DeviceManager {
       };
       const response = await axios.post(`${this.apiUrl}/discover`, {
         additionalBroadcasts: this.additionalBroadcasts,
+        manualDevices: this.manualDevices,
       }, config);
       const devices = response.data;
       this.log.info(`Devices discovered: ${Object.keys(devices).length}`);

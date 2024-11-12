@@ -17,8 +17,17 @@
         "powerStrip": true,
         "pollingInterval": 5,
         "waitTimeUpdate": 100,
-        "additionalNetworks": [
-            "192.168.1.255"
+        "additionalBroadcasts": [
+            "192.168.1.255",
+            "192.168.2.255"
+        ],
+        "manualDevices": [
+            {
+                "host": "192.168.1.100"
+            },
+            {
+                "host": "192.168.1.101"
+            }
         ]
     }],
 

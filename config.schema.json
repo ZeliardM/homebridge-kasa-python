@@ -63,6 +63,23 @@
         "required": false,
         "description": "List of additional broadcast addresses to discover devices on. Format: 192.168.1.255"
       },
+      "manualDevices": {
+        "title": "Manual List Of Devices",
+        "type": "array",
+        "items": {
+          "title": "Device",
+          "type": "object",
+          "required": ["host"],
+          "properties": {
+            "host": {
+              "title": "Host",
+              "type": "string"
+            }
+          }
+        },
+        "required": false,
+        "description": "List of devices to manually add. Format: 192.168.1.100"
+      },
       "waitTimeUpdate": {
         "title": "Wait Time Update (milliseconds)",
         "type": "integer",
@@ -139,14 +156,40 @@
       "items": [
         "pollingInterval",
         {
-          "key": "additionalBroadcasts",
-          "type": "array",
-          "buttonText": "Add Broadcast Address",
-          "items": {
-            "title": "Broadcast Address",
-            "type": "string",
-            "required": true
-          }
+          "type": "fieldset",
+          "title": "Additional Broadcasts",
+          "description": "Specify additional broadcast addresses for device discovery.",
+          "expandable": true,
+          "items": [
+            {
+              "key": "additionalBroadcasts",
+              "type": "array",
+              "buttonText": "Add Broadcast Address",
+              "items": {
+                "title": "Broadcast Address",
+                "type": "string",
+                "required": true
+              }
+            }
+          ]
+        },
+        {
+          "type": "fieldset",
+          "title": "Manual Devices",
+          "description": "If automatic discovery is not working, try this.",
+          "expandable": true,
+          "items": [
+            {
+              "key": "manualDevices",
+              "type": "array",
+              "buttonText": "Add Device",
+              "items": ["manualDevices[].host"]
+            },
+            {
+              "type": "help",
+              "helpvalue": "Before resorting to manually specifying devices. Try setting the broadcast address and check your router/switch/firewall configuration. You must assign static IP addresses to your devices to use this configuration."
+            }
+          ]
         }
       ]
     },

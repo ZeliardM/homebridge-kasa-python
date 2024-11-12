@@ -44,7 +44,6 @@ export class ConfigParseError extends Error {
 
 export interface DeviceConfigInput {
   host: string;
-  port?: number;
 }
 
 export interface KasaPythonConfigInput {
@@ -55,6 +54,7 @@ export interface KasaPythonConfigInput {
   powerStrip?: boolean;
   pollingInterval?: number;
   additionalBroadcasts?: string[];
+  manualDevices?: DeviceConfigInput[];
   waitTimeUpdate?: number;
 }
 
@@ -67,6 +67,7 @@ export type KasaPythonConfig = {
   discoveryOptions: {
     pollingInterval: number;
     additionalBroadcasts: string[];
+    manualDevices: DeviceConfigInput[];
   };
   waitTimeUpdate: number;
 };
@@ -80,6 +81,7 @@ export const defaultConfig: KasaPythonConfig = {
   discoveryOptions: {
     pollingInterval: 5,
     additionalBroadcasts: [],
+    manualDevices: [],
   },
   waitTimeUpdate: 100,
 };
@@ -137,6 +139,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     discoveryOptions: {
       pollingInterval: (c.discoveryOptions.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
       additionalBroadcasts: c.discoveryOptions.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
+      manualDevices: c.discoveryOptions.manualDevices ?? defaultConfig.discoveryOptions.manualDevices,
     },
   };
 }
