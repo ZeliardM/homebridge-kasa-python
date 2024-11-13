@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Kasa Python",
   "name": "homebridge-kasa-python",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "Plugin that uses Python-Kasa API to communicate with Kasa Devices.",
   "license": "MIT",
   "type": "module",
