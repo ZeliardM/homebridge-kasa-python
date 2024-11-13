@@ -94,7 +94,6 @@ export default class DeviceManager {
   }
 
   async getSysInfo(device: HomekitDevice): Promise<KasaDevice | undefined> {
-    this.log.debug(`Getting system info for device: ${device.name}`);
     try {
       const response = await axios.post(`${this.apiUrl}/getSysInfo`, { device_config: device.deviceConfig });
       const kasaDevice: KasaDevice = response.data.device_info;
