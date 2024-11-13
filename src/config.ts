@@ -42,10 +42,6 @@ export class ConfigParseError extends Error {
   }
 }
 
-export interface DeviceConfigInput {
-  host: string;
-}
-
 export interface KasaPythonConfigInput {
   name?: string;
   enableCredentials?: boolean;
@@ -54,7 +50,7 @@ export interface KasaPythonConfigInput {
   powerStrip?: boolean;
   pollingInterval?: number;
   additionalBroadcasts?: string[];
-  manualDevices?: DeviceConfigInput[];
+  manualDevices?: string[];
   waitTimeUpdate?: number;
 }
 
@@ -67,7 +63,7 @@ export type KasaPythonConfig = {
   discoveryOptions: {
     pollingInterval: number;
     additionalBroadcasts: string[];
-    manualDevices: DeviceConfigInput[];
+    manualDevices: string[];
   };
   waitTimeUpdate: number;
 };
@@ -127,7 +123,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     throw new ConfigParseError('Error parsing config');
   }
 
-  const c = { ...defaultConfig, ...config };
+  const c = { ...defaultConfig, ...config } as KasaPythonConfigInput;
 
   return {
     name: c.name ?? defaultConfig.name,
@@ -137,9 +133,9 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     powerStrip: c.powerStrip ?? defaultConfig.powerStrip,
     waitTimeUpdate: c.waitTimeUpdate ?? defaultConfig.waitTimeUpdate,
     discoveryOptions: {
-      pollingInterval: (c.discoveryOptions.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
-      additionalBroadcasts: c.discoveryOptions.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
-      manualDevices: c.discoveryOptions.manualDevices ?? defaultConfig.discoveryOptions.manualDevices,
+      pollingInterval: (c.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
+      additionalBroadcasts: c.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
+      manualDevices: c.manualDevices ?? defaultConfig.discoveryOptions.manualDevices,
     },
   };
 }

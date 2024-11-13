@@ -38,26 +38,20 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
     
     for broadcast in broadcasts:
         try:
-            app.logger.info(f"Discovering devices on broadcast: {broadcast}")
             discovered_devices = await Discover.discover(target=broadcast, username=username, password=password)
             discovered_devices = {ip: dev for ip, dev in discovered_devices.items() if hasattr(dev, 'device_type')}
             devices.update(discovered_devices)
-            app.logger.info(f"Discovered {len(discovered_devices)} devices on broadcast {broadcast}")
         except Exception as e:
             app.logger.error(f"Error discovering devices on broadcast {broadcast}: {str(e)}")
 
     if manual_devices:
         for device in manual_devices:
             try:
-                app.logger.info(f"Discovering manual device: {device['host']}")
-                discovered_device = await Discover.discover_single(host=device['host'], username=username, password=password)
+                discovered_device = await Discover.discover_single(host=device, username=username, password=password)
                 if discovered_device and hasattr(discovered_device, 'device_type'):
-                    devices[device['host']] = discovered_device
-                    app.logger.info(f"Discovered manual device: {device['host']}")
-                else:
-                    app.logger.warning(f"Manual device not found or missing device_type: {device['host']}")
+                    devices[device] = discovered_device
             except Exception as e:
-                app.logger.error(f"Error discovering manual device {device['host']}: {str(e)}")
+                app.logger.error(f"Error discovering manual device {device}: {str(e)}")
 
     all_device_info = {}
     tasks = []

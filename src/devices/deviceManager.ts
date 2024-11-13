@@ -10,7 +10,7 @@ export default class DeviceManager {
   private username: string;
   private password: string;
   private additionalBroadcasts: string[];
-  private manualDevices: { host: string }[];
+  private manualDevices: string [];
 
   constructor(private platform: KasaPythonPlatform) {
     this.log = platform.log;

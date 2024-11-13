@@ -67,15 +67,9 @@
         "title": "Manual List Of Devices",
         "type": "array",
         "items": {
-          "title": "Device",
-          "type": "object",
-          "required": ["host"],
-          "properties": {
-            "host": {
-              "title": "Host",
-              "type": "string"
-            }
-          }
+          "title": "Manual Device",
+          "type": "string",
+          "required": true
         },
         "required": false,
         "description": "List of devices to manually add. Format: 192.168.1.100"
@@ -182,8 +176,12 @@
             {
               "key": "manualDevices",
               "type": "array",
-              "buttonText": "Add Device",
-              "items": ["manualDevices[].host"]
+              "buttonText": "Add Manual Device",
+              "items": {
+                "title": "Manual Device",
+                "type": "string",
+                "required": true
+              }
             },
             {
               "type": "help",
