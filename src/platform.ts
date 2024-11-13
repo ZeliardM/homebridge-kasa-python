@@ -188,8 +188,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         this.venvPythonExecutable,
         [scriptPath, this.port.toString()],
         undefined,
-        false,
-        false,
+        true,
+        true,
         true,
       );
       this.kasaProcess = process;
