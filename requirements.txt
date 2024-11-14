@@ -1,4 +1,6 @@
 eventlet==0.37.0
 flask==3.0.3
 flask_socketio==5.4.1
+loguru==0.7.2
+requests==2.32.3
 python-kasa==0.7.7

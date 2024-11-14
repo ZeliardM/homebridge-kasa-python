@@ -128,6 +128,7 @@ export async function runCommand(
   hideStdout: boolean = false,
   hideStderr: boolean = false,
   returnProcess: boolean = false,
+  envVars: Record<string, string> = {},
 ): Promise<[string, string, number | null, (ChildProcessWithoutNullStreams | null)?]> {
   let stdout: string = '';
   let stderr: string = '';
@@ -142,7 +143,10 @@ export async function runCommand(
   });
 
   logger.debug(`Running command: ${command} ${filteredArgs.join(' ')}`);
-  const p: ChildProcessWithoutNullStreams = spawn(command, filteredArgs, options);
+  const p: ChildProcessWithoutNullStreams = spawn(command, filteredArgs, {
+    ...options,
+    env: { ...process.env, ...envVars },
+  });
   logger.debug(`Command PID: ${p.pid}`);
 
   p.stdout.setEncoding('utf8').on('data', data => {
