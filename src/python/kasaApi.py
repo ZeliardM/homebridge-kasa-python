@@ -83,7 +83,8 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
 
     for ip, dev in devices.items():
         try:
-            if hasattr(dev, 'device_type') and dev.sys_info['mic_type'] not in UNSUPPORTED_TYPES:
+            dev_type = dev.sys_info.get("mic_type") or dev.sys_info.get("type")
+            if hasattr(dev, 'device_type') and (dev_type and dev_type not in UNSUPPORTED_TYPES):
                 tasks.append(update_device_info(ip, dev))
         except KeyError:
             continue
