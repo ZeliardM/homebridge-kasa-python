@@ -67,7 +67,16 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
 
     if manual_devices:
         for host in manual_devices:
-            await discover_manual_device(host, username, password, devices)
+            try:
+                app.logger.debug(f"Discovering manual device: {host}")
+                discovered_device = await Discover.discover_single(host=host, username=username, password=password)
+                if discovered_device and hasattr(discovered_device, 'device_type'):
+                    devices[host] = discovered_device
+                    app.logger.debug(f"Discovered manual device: {host}")
+                else:
+                    app.logger.warning(f"Manual device not found or missing device_type: {host}")
+            except Exception as e:
+                app.logger.error(f"Error discovering manual device {host}: {str(e)}")
 
     all_device_info = {}
     tasks = []
@@ -90,25 +99,6 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
 
     app.logger.debug(f"Device discovery completed with {len(all_device_info)} devices found")
     return all_device_info
-
-async def discover_manual_device(host, username, password, devices, retries=3, timeout=5):
-    for attempt in range(retries):
-        try:
-            app.logger.debug(f"Discovering manual device: {host} (Attempt {attempt + 1}/{retries})")
-            discovered_device = await Discover.discover_single(host=host, username=username, password=password, discovery_timeout=timeout)
-            if discovered_device and hasattr(discovered_device, 'device_type'):
-                devices[host] = discovered_device
-                app.logger.debug(f"Discovered manual device: {host}")
-                return
-            else:
-                app.logger.warning(f"Manual device not found or missing device_type: {host}")
-        except Exception as e:
-            app.logger.error(f"Error discovering manual device {host}: {str(e)}")
-            if attempt < retries - 1:
-                app.logger.debug(f"Retrying discovery for manual device: {host}")
-                await asyncio.sleep(1)
-            else:
-                app.logger.error(f"Failed to discover manual device {host} after {retries} attempts")
 
 async def update_device_info(ip, dev: Device):
     app.logger.debug(f"Updating device info for {ip}")
