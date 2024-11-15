@@ -59,8 +59,12 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
         try:
             app.logger.debug(f"Discovering devices on broadcast: {broadcast}")
             discovered_devices = await Discover.discover(target=broadcast, username=username, password=password)
-            discovered_devices = {ip: dev for ip, dev in discovered_devices.items() if hasattr(dev, 'device_type')}
-            devices.update(discovered_devices)
+            for ip, dev in discovered_devices.items():
+                if hasattr(dev, 'device_type'):
+                    devices[ip] = dev
+                    app.logger.debug(f"Added device {ip} from broadcast {broadcast} to devices list")
+                else:
+                    app.logger.debug(f"Device {ip} from broadcast {broadcast} does not have a device_type and was not added")
             app.logger.debug(f"Discovered {len(discovered_devices)} devices on broadcast {broadcast}")
         except Exception as e:
             app.logger.error(f"Error discovering devices on broadcast {broadcast}: {str(e)}")
@@ -70,11 +74,14 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
             try:
                 app.logger.debug(f"Discovering manual device: {host}")
                 discovered_device = await Discover.discover_single(host=host, username=username, password=password)
-                if discovered_device and hasattr(discovered_device, 'device_type'):
-                    devices[host] = discovered_device
-                    app.logger.debug(f"Discovered manual device: {host}")
+                if discovered_device:
+                    if hasattr(discovered_device, 'device_type'):
+                        devices[host] = discovered_device
+                        app.logger.debug(f"Discovered manual device: {host}")
+                    else:
+                        app.logger.warning(f"Manual device {host} is missing device_type and was not added")
                 else:
-                    app.logger.warning(f"Manual device not found or missing device_type: {host}")
+                    app.logger.warning(f"Manual device {host} not found and was not added")
             except Exception as e:
                 app.logger.error(f"Error discovering manual device {host}: {str(e)}")
 
@@ -86,7 +93,11 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
             dev_type = dev.sys_info.get("mic_type") or dev.sys_info.get("type")
             if hasattr(dev, 'device_type') and (dev_type and dev_type not in UNSUPPORTED_TYPES):
                 tasks.append(update_device_info(ip, dev))
+                app.logger.debug(f"Device {ip} with type {dev_type} added to update tasks")
+            else:
+                app.logger.debug(f"Device {ip} with type {dev_type} is unsupported and was not added to update tasks")
         except KeyError:
+            app.logger.debug(f"Device {ip} has missing keys in sys_info and was not added to update tasks")
             continue
 
     try:
