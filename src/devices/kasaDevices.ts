@@ -13,7 +13,8 @@ export interface SysInfo {
   hw_ver: string;
   model: string;
   deviceId: string;
-  mic_type: string;
+  mic_type?: string;
+  type?: string;
   mac: string;
   led_off: number;
   relay_state: number;
@@ -64,4 +65,97 @@ export const Switches = [
   'KS225(US)',
   'KS230(US)',
   'KS240(US)',
+  'S500D(US)',
+  'S505(US)',
+  'S505D(US)',
+];
+
+export const Plugs = [
+  'EP10(US)',
+  'EP25(US)',
+  'HS100(UK)',
+  'HS100(US)',
+  'HS103(US)',
+  'HS105(US)',
+  'HS110(EU)',
+  'HS110(US)',
+  'KP100(US)',
+  'KP105(UK)',
+  'KP115(EU)',
+  'KP115(US)',
+  'KP125(US)',
+  'KP125M(US)',
+  'KP401(US)',
+  'P100',
+  'P110(EU)',
+  'P110(UK)',
+  'P115(EU)',
+  'P125M(US)',
+  'P135(US)',
+  'TP15(US)',
+];
+
+export const PowerStrips = [
+  'EP40(US)',
+  'HS107(US)',
+  'HS300(US)',
+  'KP200(US)',
+  'KP303(UK)',
+  'KP303(US)',
+  'KP400(US)',
+  'P300(EU)',
+  'P304M(UK)',
+  'TP25(US)',
+];
+
+export const Bulbs = [
+  'KL110(US)',
+  'KL120(US)',
+  'KL125(US)',
+  'KL130(EU)',
+  'KL130(US)',
+  'KL135(US)',
+  'KL50(US)',
+  'KL60(UN)',
+  'KL60(US)',
+  'LB110(US)',
+  'L510B(EU)',
+  'L510E(US)',
+  'L530E(EU)',
+  'L530E(US)',
+];
+
+export const LightStrips = [
+  'KL400L5(US)',
+  'KL420L5(US)',
+  'KL430(UN)',
+  'KL430(US)',
+  'L900-10(EU)',
+  'L900-10(US)',
+  'L900-5(EU)',
+  'L920-5(EU)',
+  'L920-5(US)',
+  'L930-5(US)',
+];
+
+export const Hubs = [
+  'KH100(EU)',
+  'KH100(UK)',
+  'H100(EU)',
+];
+
+export const HubConnectedDevices = [
+  'KE100(EU)',
+  'KE100(UK)',
+  'S200B(EU)',
+  'S200B(US)',
+  'S200D(EU)',
+  'T100(EU)',
+  'T110(EU)',
+  'T110(US)',
+  'T300(EU)',
+  'T310(EU)',
+  'T310(US)',
+  'T315(EU)',
+  'T315(US)',
 ];
