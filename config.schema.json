@@ -37,13 +37,6 @@
         "placeholder": "Password",
         "minLength": 1
       },
-      "powerStrip": {
-        "title": "Create Multi-Outlet Devices as a Power Strip",
-        "type": "boolean",
-        "required": false,
-        "description": "Enable to create a single power strip accessory with multiple outlets, used for models HS107, KP200, HS300, KP303, KP400, and EP40. Default: false",
-        "default": false
-      },
       "pollingInterval": {
         "title": "Polling Interval (seconds)",
         "type": "integer",
@@ -66,13 +59,29 @@
       "manualDevices": {
         "title": "Manual List Of Devices",
         "type": "array",
+        "buttonText": "Add Manual Device",
         "items": {
           "title": "Manual Device",
-          "type": "string",
-          "required": true
+          "type": "object",
+          "required": ["host", "alias", "breakoutChildDevices"],
+          "properties": {
+            "host": {
+              "type": "string",
+              "title": "Host"
+            },
+            "alias": {
+              "type": "string",
+              "title": "Alias"
+            },
+            "breakoutChildDevices": {
+              "type": "boolean",
+              "title": "Breakout Child Devices",
+              "default": false
+            }
+          }
         },
         "required": false,
-        "description": "List of devices to manually add. Format: 192.168.1.100"
+        "description": "List of devices to manually add."
       },
       "waitTimeUpdate": {
         "title": "Wait Time Update (milliseconds)",
@@ -135,15 +144,6 @@
     },
     {
       "type": "fieldset",
-      "title": "HomeKit (Optional)",
-      "description": "Customize how devices are exposed in HomeKit",
-      "expandable": true,
-      "items": [
-        "powerStrip"
-      ]
-    },
-    {
-      "type": "fieldset",
       "title": "Device Discovery (Optional)",
       "description": "Customize device discovery",
       "expandable": true,
@@ -177,11 +177,9 @@
               "key": "manualDevices",
               "type": "array",
               "buttonText": "Add Manual Device",
-              "items": {
-                "title": "Manual Device",
-                "type": "string",
-                "required": true
-              }
+              "items": [
+                "manualDevices[].host", "manualDevices[].alias", "manualDevices[].breakoutChildDevices"
+              ]
             },
             {
               "type": "help",

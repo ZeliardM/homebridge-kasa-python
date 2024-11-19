@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { isObjectLike } from './utils.js';
+import type { ConfigDevice } from './devices/kasaDevices.js';
 
 let schemaCache: KasaPythonConfig;
 
@@ -47,10 +48,9 @@ export interface KasaPythonConfigInput {
   enableCredentials?: boolean;
   username?: string;
   password?: string;
-  powerStrip?: boolean;
   pollingInterval?: number;
   additionalBroadcasts?: string[];
-  manualDevices?: string[];
+  manualDevices?: ConfigDevice[];
   waitTimeUpdate?: number;
 }
 
@@ -59,11 +59,10 @@ export type KasaPythonConfig = {
   enableCredentials: boolean;
   username: string;
   password: string;
-  powerStrip: boolean;
   discoveryOptions: {
     pollingInterval: number;
     additionalBroadcasts: string[];
-    manualDevices: string[];
+    manualDevices: ConfigDevice[];
   };
   waitTimeUpdate: number;
 };
@@ -73,7 +72,6 @@ export const defaultConfig: KasaPythonConfig = {
   enableCredentials: false,
   username: '',
   password: '',
-  powerStrip: false,
   discoveryOptions: {
     pollingInterval: 5,
     additionalBroadcasts: [],
@@ -130,12 +128,15 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     enableCredentials: c.enableCredentials ?? defaultConfig.enableCredentials,
     username: c.username ?? defaultConfig.username,
     password: c.password ?? defaultConfig.password,
-    powerStrip: c.powerStrip ?? defaultConfig.powerStrip,
     waitTimeUpdate: c.waitTimeUpdate ?? defaultConfig.waitTimeUpdate,
     discoveryOptions: {
       pollingInterval: (c.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
       additionalBroadcasts: c.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
-      manualDevices: c.manualDevices ?? defaultConfig.discoveryOptions.manualDevices,
+      manualDevices: c.manualDevices?.map(device => ({
+        host: device.host,
+        alias: device.alias,
+        breakoutChildDevices: device.breakoutChildDevices ?? false,
+      })) ?? defaultConfig.discoveryOptions.manualDevices,
     },
   };
 }

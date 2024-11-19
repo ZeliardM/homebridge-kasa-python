@@ -39,6 +39,12 @@ export interface DeviceConfig {
   uses_http: boolean;
 }
 
+export interface ConfigDevice {
+  host: string;
+  alias: string;
+  breakoutChildDevices: boolean;
+}
+
 export interface Plug extends DeviceCommonInfo {
   children?: ChildPlug[];
   device_config: DeviceConfig;
@@ -86,7 +92,7 @@ export const Plugs = [
   'KP125(US)',
   'KP125M(US)',
   'KP401(US)',
-  'P100',
+  'P100(US)',
   'P110(EU)',
   'P110(UK)',
   'P115(EU)',

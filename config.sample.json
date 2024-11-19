@@ -1,31 +1,37 @@
 {
     "bridge": {
-        "name": "Homebridge",
-        "username": "11:22:33:AA:BB:CC",
-        "port": 51999,
-        "pin": "001-02-003"
+      "name": "Homebridge",
+      "username": "11:22:33:AA:BB:CC",
+      "port": 51999,
+      "pin": "001-02-003"
     },
-
     "description": "This is an example configuration file.",
-
-    "platforms": [{
+    "platforms": [
+      {
         "platform": "KasaPython",
         "name": "KasaPython",
         "enableCredentials": true,
         "username": "Username",
         "password": "Password",
-        "powerStrip": true,
         "pollingInterval": 5,
         "waitTimeUpdate": 100,
         "additionalBroadcasts": [
-            "192.168.1.255",
-            "192.168.2.255"
+          "192.168.1.255",
+          "192.168.2.255"
         ],
         "manualDevices": [
-            "192.168.1.100",
-            "192.168.1.101"
+          {
+            "host": "192.168.1.100",
+            "alias": "Living Room Plug",
+            "breakoutChildDevices": false
+          },
+          {
+            "host": "192.168.1.101",
+            "alias": "Bedroom Plug",
+            "breakoutChildDevices": true
+          }
         ]
-    }],
-
+      }
+    ],
     "accessories": []
 }

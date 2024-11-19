@@ -1,8 +1,10 @@
-import type { Logger } from 'homebridge';
+import type { Logger, PlatformConfig } from 'homebridge';
 import axios from 'axios';
+import path from 'node:path';
+import { promises as fs } from 'node:fs';
 import HomekitDevice from './index.js';
 import KasaPythonPlatform from '../platform.js';
-import type { KasaDevice } from './kasaDevices.js';
+import type { ConfigDevice, DeviceConfig, KasaDevice } from './kasaDevices.js';
 
 export default class DeviceManager {
   private log: Logger;
@@ -10,7 +12,7 @@ export default class DeviceManager {
   private username: string;
   private password: string;
   private additionalBroadcasts: string[];
-  private manualDevices: string [];
+  private manualDevices: string[];
 
   constructor(private platform: KasaPythonPlatform) {
     this.log = platform.log;
@@ -18,28 +20,7 @@ export default class DeviceManager {
     this.password = platform.config.password;
     this.apiUrl = `http://127.0.0.1:${platform.port}`;
     this.additionalBroadcasts = platform.config.discoveryOptions.additionalBroadcasts;
-    this.manualDevices = platform.config.discoveryOptions.manualDevices;
-  }
-
-  private async performDeviceAction(device: HomekitDevice, action: string, childNumber?: number): Promise<void> {
-    const url = `${this.apiUrl}/controlDevice`;
-    const data = {
-      device_config: device.deviceConfig,
-      action,
-      ...(childNumber !== undefined && { child_num: childNumber }),
-    };
-    try {
-      const response = await axios.post(url, data);
-      if (response.data.status !== 'success') {
-        this.log.error(`Error performing action: ${response.data.message}`);
-      }
-    } catch (error) {
-      this.log.error(`Error performing action: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`);
-      if (axios.isAxiosError(error) && error.response) {
-        this.log.error(`Response status: ${error.response.status}`);
-        this.log.error(`Response data: ${JSON.stringify(error.response.data)}`);
-      }
-    }
+    this.manualDevices = platform.config.discoveryOptions.manualDevices.map((device: ConfigDevice) => device.host);
   }
 
   async discoverDevices(): Promise<void> {
@@ -63,6 +44,27 @@ export default class DeviceManager {
       }, config);
       const devices = response.data;
       this.log.info(`Devices discovered: ${Object.keys(devices).length}`);
+
+      const configPath = path.join(this.platform.storagePath, 'config.json');
+      let fileConfig;
+      try {
+        const configData = await fs.readFile(configPath, 'utf8');
+        fileConfig = JSON.parse(configData);
+      } catch (error) {
+        this.log.error('Error reading config file:', error);
+        return;
+      }
+
+      const platformConfig = fileConfig.platforms.find((platformConfig: PlatformConfig) => platformConfig.platform === 'KasaPython');
+      if (!platformConfig) {
+        this.log.error('KasaPython configuration not found in config file.');
+        return;
+      }
+
+      if (!platformConfig.manualDevices) {
+        platformConfig.manualDevices = [];
+      }
+
       Object.keys(devices).forEach(ip => {
         const device: KasaDevice = devices[ip].device_info;
         if (device.alias) {
@@ -80,8 +82,30 @@ export default class DeviceManager {
           }
         }
         device.device_config = devices[ip].device_config;
+
+        if (device.sys_info.child_num !== undefined) {
+          const existingDevice = platformConfig.manualDevices.find((d: DeviceConfig) => d.host === device.host);
+          if (existingDevice) {
+            this.log.debug(`Device ${device.alias} already exists in config, skipping.`);
+          } else {
+            platformConfig.manualDevices.push({
+              host: device.host,
+              alias: device.alias,
+              breakoutChildDevices: false,
+            });
+            this.log.debug(`Device ${device.alias} added to config file.`);
+          }
+        }
+
         this.platform.foundDevice(device);
       });
+
+      try {
+        await fs.writeFile(configPath, JSON.stringify(fileConfig, null, 2), 'utf8');
+        this.log.debug('Config file updated with discovered devices.');
+      } catch (error) {
+        this.log.error('Error writing config file:', error);
+      }
     } catch (error) {
       this.log.error(
         `An error occurred during device discovery: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`,
@@ -134,6 +158,27 @@ export default class DeviceManager {
           axios.isAxiosError(error) ? error.message : 'An unknown error occurred'
         }`,
       );
+      if (axios.isAxiosError(error) && error.response) {
+        this.log.error(`Response status: ${error.response.status}`);
+        this.log.error(`Response data: ${JSON.stringify(error.response.data)}`);
+      }
+    }
+  }
+
+  private async performDeviceAction(device: HomekitDevice, action: string, childNumber?: number): Promise<void> {
+    const url = `${this.apiUrl}/controlDevice`;
+    const data = {
+      device_config: device.deviceConfig,
+      action,
+      ...(childNumber !== undefined && { child_num: childNumber }),
+    };
+    try {
+      const response = await axios.post(url, data);
+      if (response.data.status !== 'success') {
+        this.log.error(`Error performing action: ${response.data.message}`);
+      }
+    } catch (error) {
+      this.log.error(`Error performing action: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`);
       if (axios.isAxiosError(error) && error.response) {
         this.log.error(`Response status: ${error.response.status}`);
         this.log.error(`Response data: ${JSON.stringify(error.response.data)}`);
