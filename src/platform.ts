@@ -292,6 +292,19 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
   }
 
+  public unregisterUnusedAccessories(): void {
+    const homekitDeviceIds = new Set(this.homekitDevicesById.keys());
+
+    this.configuredAccessories.forEach((accessory, uuid) => {
+      const deviceId = accessory.context.deviceId;
+      if (deviceId && !homekitDeviceIds.has(deviceId)) {
+        this.log.info(`Unregistering unused accessory: [${accessory.displayName}] UUID: ${uuid}`);
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        this.configuredAccessories.delete(uuid);
+      }
+    });
+  }
+
   public lsc(
     serviceOrCharacteristic: Service | Characteristic | { UUID: string },
     characteristic?: Characteristic | { UUID: string },

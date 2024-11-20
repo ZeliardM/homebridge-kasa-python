@@ -106,6 +106,7 @@ export default class DeviceManager {
       } catch (error) {
         this.log.error('Error writing config file:', error);
       }
+      this.platform.unregisterUnusedAccessories();
     } catch (error) {
       this.log.error(
         `An error occurred during device discovery: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`,
