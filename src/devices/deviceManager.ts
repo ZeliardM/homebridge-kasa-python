@@ -4,7 +4,7 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import HomekitDevice from './index.js';
 import KasaPythonPlatform from '../platform.js';
-import type { ConfigDevice, DeviceConfig, KasaDevice } from './kasaDevices.js';
+import type { ConfigDevice, KasaDevice } from './kasaDevices.js';
 
 export default class DeviceManager {
   private log: Logger;
@@ -20,7 +20,16 @@ export default class DeviceManager {
     this.password = platform.config.password;
     this.apiUrl = `http://127.0.0.1:${platform.port}`;
     this.additionalBroadcasts = platform.config.discoveryOptions.additionalBroadcasts;
-    this.manualDevices = platform.config.discoveryOptions.manualDevices.map((device: ConfigDevice) => device.host);
+    this.manualDevices = this.convertManualDevices(platform.config.discoveryOptions.manualDevices).map(device => device.host);
+  }
+
+  private convertManualDevices(manualDevices: (string | ConfigDevice)[]): ConfigDevice[] {
+    return manualDevices.map(device => {
+      if (typeof device === 'string') {
+        return { host: device, alias: device, breakoutChildDevices: false };
+      }
+      return device;
+    });
   }
 
   async discoverDevices(): Promise<void> {
@@ -65,6 +74,11 @@ export default class DeviceManager {
         platformConfig.manualDevices = [];
       }
 
+      if (platformConfig.manualDevices.length > 0 && typeof platformConfig.manualDevices[0] === 'string') {
+        platformConfig.manualDevices = this.convertManualDevices(platformConfig.manualDevices);
+        this.platform.log.debug('Converted manualDevices to new format.');
+      }
+
       Object.keys(devices).forEach(ip => {
         const device: KasaDevice = devices[ip].device_info;
         if (device.alias) {
@@ -83,18 +97,18 @@ export default class DeviceManager {
         }
         device.device_config = devices[ip].device_config;
 
-        if (device.sys_info.child_num !== undefined) {
-          const existingDevice = platformConfig.manualDevices.find((d: DeviceConfig) => d.host === device.host);
-          if (existingDevice) {
-            this.log.debug(`Device ${device.alias} already exists in config, skipping.`);
-          } else {
-            platformConfig.manualDevices.push({
-              host: device.host,
-              alias: device.alias,
-              breakoutChildDevices: false,
-            });
-            this.log.debug(`Device ${device.alias} added to config file.`);
-          }
+        const existingDevice = platformConfig.manualDevices.find((d: ConfigDevice) => d.host === device.host);
+        if (existingDevice) {
+          existingDevice.host = device.host;
+          existingDevice.alias = device.alias;
+          this.platform.log.debug(`Device ${device.alias} already exists in config, updated host and alias.`);
+        } else if (device.sys_info.child_num !== undefined) {
+          platformConfig.manualDevices.push({
+            host: device.host,
+            alias: device.alias,
+            breakoutChildDevices: false,
+          });
+          this.platform.log.debug(`Device ${device.alias} added to config file.`);
         }
 
         this.platform.foundDevice(device);
