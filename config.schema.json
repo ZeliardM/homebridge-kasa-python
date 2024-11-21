@@ -63,7 +63,7 @@
         "items": {
           "title": "Manual Device",
           "type": "object",
-          "required": ["host", "alias"],
+          "required": ["host"],
           "properties": {
             "host": {
               "type": "string",
@@ -71,7 +71,8 @@
             },
             "alias": {
               "type": "string",
-              "title": "Alias"
+              "title": "Alias",
+              "readonly": true
             },
             "breakoutChildDevices": {
               "type": "boolean",
