@@ -17,7 +17,7 @@
   <a href="https://www.npmjs.com/package/homebridge-kasa-python"><img src="https://badgen.net/npm/dm/homebridge-kasa-python" alt="npm downloads monthly"></a>
   <a href="https://www.paypal.me/ZeliardM/USD/"><img src="https://badgen.net/badge/donate/paypal/E69138" alt="donate"></a>
   <a href="https://github.com/sponsors/ZeliardM"><img src="https://badgen.net/badge/donate/github/E69138" alt="donate"></a>
-  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue" alt="PyPI pyversions"></a>
+  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-blue" alt="PyPI pyversions"></a>
   <a href="https://github.com/homebridge/homebridge/wiki/Verified-Plugins"><img src="https://badgen.net/badge/homebridge/verified/purple" alt="homebridge verified"></a>
 </p>
 
@@ -55,7 +55,7 @@ Automatic Discovery is possible only for some devices, some newer devices requir
   </thead>
   <tbody>
     <tr>
-      <td align="center" rowspan="23" style="border: 1px solid black; padding: 8px;">Plugs</td>
+      <td align="center" rowspan="24" style="border: 1px solid black; padding: 8px;">Plugs</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">EP10</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.2</td>
@@ -146,9 +146,12 @@ Automatic Discovery is possible only for some devices, some newer devices requir
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.6</td>
     </tr>
     <tr>
-      <td align="center" style="border: 1px solid black; padding: 8px;">KP125M</td>
-      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KP125M</td>
+      <td align="center" rowspan="2"style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.1.3*</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.2.3*</td>
     </tr>
     <tr>
       <td align="center" style="border: 1px solid black; padding: 8px;">KP401</td>
@@ -156,10 +159,15 @@ Automatic Discovery is possible only for some devices, some newer devices requir
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.0</td>
     </tr>
     <tr>
-      <td align="center" rowspan="13" style="border: 1px solid black; padding: 8px;">Power Strips</td>
+      <td align="center" rowspan="15" style="border: 1px solid black; padding: 8px;">Power Strips</td>
       <td align="center" rowspan="1" style="border: 1px solid black; padding: 8px;">EP40</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.2</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="1" style="border: 1px solid black; padding: 8px;">EP40M</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.1.0*</td>
     </tr>
     <tr>
       <td align="center" style="border: 1px solid black; padding: 8px;">HS107</td>
@@ -187,13 +195,16 @@ Automatic Discovery is possible only for some devices, some newer devices requir
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.3</td>
     </tr>
     <tr>
-      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KP303</td>
+      <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">KP303</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (UK)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.3</td>
     </tr>
     <tr>
-      <td align="center" style="border: 1px solid black; padding: 8px;">2.0 (US)</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">2.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.3</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.9</td>
     </tr>
     <tr>
       <td align="center" rowspan="4" style="border: 1px solid black; padding: 8px;">KP400</td>
@@ -212,24 +223,38 @@ Automatic Discovery is possible only for some devices, some newer devices requir
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.4</td>
     </tr>
     <tr>
-      <td align="center" rowspan="19" style="border: 1px solid black; padding: 8px;">Wall Switches</td>
-      <td align="center" style="border: 1px solid black; padding: 8px;">ES20M</td>
-      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" rowspan="27" style="border: 1px solid black; padding: 8px;">Wall Switches</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">ES20M</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.8</td>
     </tr>
     <tr>
-      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">HS200</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.11</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="4" style="border: 1px solid black; padding: 8px;">HS200</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">2.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.5.7</td>
     </tr>
     <tr>
-      <td align="center" style="border: 1px solid black; padding: 8px;">5.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">3.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.1.5</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">5.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.2</td>
     </tr>
     <tr>
-      <td align="center" style="border: 1px solid black; padding: 8px;">HS210</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.11</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">HS210</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.5.8</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">2.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.1.5</td>
     </tr>
     <tr>
       <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">HS220</td>
@@ -253,12 +278,18 @@ Automatic Discovery is possible only for some devices, some newer devices requir
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.6</td>
     </tr>
     <tr>
-      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KS200M</td>
-      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" rowspan="4" style="border: 1px solid black; padding: 8px;">KS200M</td>
+      <td align="center" rowspan="4" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.8</td>
     </tr>
     <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.10</td>
+    </tr>
+    <tr>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.11</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.12</td>
     </tr>
     <tr>
       <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KS205</td>
@@ -267,6 +298,11 @@ Automatic Discovery is possible only for some devices, some newer devices requir
     </tr>
     <tr>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.1.0*</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">KS220</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.13</td>
     </tr>
     <tr>
       <td align="center" style="border: 1px solid black; padding: 8px;">KS220M</td>
@@ -287,15 +323,18 @@ Automatic Discovery is possible only for some devices, some newer devices requir
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.14</td>
     </tr>
     <tr>
-      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KS240</td>
-      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">KS240</td>
+      <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.4*</td>
     </tr>
     <tr>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.5*</td>
     </tr>
     <tr>
-      <td align="center" rowspan="13" style="border: 1px solid black; padding: 8px;">Bulbs</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.7*</td>
+    </tr>
+    <tr>
+      <td align="center" rowspan="14" style="border: 1px solid black; padding: 8px;">Bulbs</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">KL110</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.8.11</td>
@@ -331,9 +370,12 @@ Automatic Discovery is possible only for some devices, some newer devices requir
       <td align="center" style="border: 1px solid black; padding: 8px;">1.8.11</td>
     </tr>
     <tr>
-      <td align="center" style="border: 1px solid black; padding: 8px;">KL135</td>
-      <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KL135</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.6</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.15</td>
     </tr>
     <tr>
       <td align="center" style="border: 1px solid black; padding: 8px;">KL50</td>
@@ -388,8 +430,15 @@ Automatic Discovery is possible only for some devices, some newer devices requir
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.11</td>
     </tr>
     <tr>
-      <td align="center" rowspan="1" style="border: 1px solid black; padding: 8px;">Hubs</td>
-      <td align="center" style="border: 1px solid black; padding: 8px;">KH100</td>
+      <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">Hubs</td>
+      <td align="center" rowspan="3" style="border: 1px solid black; padding: 8px;">KH100</td>
+      <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (EU)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.2.3*</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.5.12*</td>
+    </tr>
+    <tr>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (UK)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.5.6*</td>
     </tr>
