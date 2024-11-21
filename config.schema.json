@@ -178,7 +178,14 @@
               "type": "array",
               "buttonText": "Add Manual Device",
               "items": [
-                "manualDevices[].host", "manualDevices[].alias", "manualDevices[].breakoutChildDevices"
+                "manualDevices[].host", "manualDevices[].alias",
+                {
+                  "type": "conditional",
+                  "condition": "model.manualDevices[].breakoutChildDevices !== undefined",
+                  "items": [
+                    "manualDevices[].breakoutChildDevices"
+                  ]
+                }
               ]
             },
             {
