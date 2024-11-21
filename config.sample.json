@@ -22,14 +22,18 @@
         "manualDevices": [
           {
             "host": "192.168.1.100",
-            "alias": "Living Room Plug",
+            "alias": "Living Room Power Strip",
             "breakoutChildDevices": false
           },
           {
             "host": "192.168.1.101",
-            "alias": "Bedroom Plug",
+            "alias": "Bedroom Power Strip",
             "breakoutChildDevices": true
-          }
+          },
+          {
+            "host": "192.168.1.102",
+            "alias": "Kitchen Plug"
+        }
         ]
       }
     ],

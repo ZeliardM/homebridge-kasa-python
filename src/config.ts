@@ -50,7 +50,7 @@ export interface KasaPythonConfigInput {
   password?: string;
   pollingInterval?: number;
   additionalBroadcasts?: string[];
-  manualDevices?: ConfigDevice[];
+  manualDevices?: (string | ConfigDevice)[];
   waitTimeUpdate?: number;
 }
 
@@ -94,6 +94,16 @@ function loadSchema() {
   return schemaCache;
 }
 
+function convertManualDevices(manualDevices: (string | ConfigDevice)[]): ConfigDevice[] {
+  const convertedDevices = manualDevices.map(device => {
+    if (typeof device === 'string') {
+      return { host: device, alias: device };
+    }
+    return device;
+  });
+  return convertedDevices;
+}
+
 export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
   const ajv = new Ajv({ allErrors: true, strict: 'log' });
   addFormats(ajv);
@@ -132,11 +142,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     discoveryOptions: {
       pollingInterval: (c.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
       additionalBroadcasts: c.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
-      manualDevices: c.manualDevices?.map(device => ({
-        host: device.host,
-        alias: device.alias,
-        breakoutChildDevices: device.breakoutChildDevices ?? false,
-      })) ?? defaultConfig.discoveryOptions.manualDevices,
+      manualDevices: c.manualDevices ? convertManualDevices(c.manualDevices) : defaultConfig.discoveryOptions.manualDevices,
     },
   };
 }

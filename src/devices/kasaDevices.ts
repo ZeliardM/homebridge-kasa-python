@@ -42,7 +42,7 @@ export interface DeviceConfig {
 export interface ConfigDevice {
   host: string;
   alias: string;
-  breakoutChildDevices: boolean;
+  breakoutChildDevices?: boolean;
 }
 
 export interface Plug extends DeviceCommonInfo {
