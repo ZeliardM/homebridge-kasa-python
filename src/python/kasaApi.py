@@ -1,4 +1,4 @@
-import asyncio, eventlet, eventlet.wsgi, json, os, requests, sys
+import asyncio, eventlet, eventlet.wsgi, json, os, requests, sys, traceback
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO
 from kasa import Credentials, Discover, Device, UnsupportedDeviceException
@@ -54,14 +54,38 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
     broadcasts = ["255.255.255.255"] + (additional_broadcasts or [])
     creds = Credentials(username, password) if username and password else None
     
-    def on_unsupported(ip, dev):
-        app.logger.warning(f"Unsupported device found: {ip} - {dev}")
+    def on_unsupported(ip):
+        app.logger.warning(f"Unsupported device found: {ip}")
 
     for broadcast in broadcasts:
         try:
-            app.logger.debug(f"Discovering devices on broadcast: {broadcast}")
-            discovered_devices = await Discover.discover(target=broadcast, credentials=creds, on_unsupported=on_unsupported)
+            app.logger.debug(f"Starting discovery on broadcast: {broadcast}")
+            if creds is not None:
+                app.logger.debug(f"Using credentials for discovery on broadcast: {broadcast}")
+                try:
+                    discovered_devices = await Discover.discover(
+                        target=broadcast,
+                        credentials=creds,
+                        on_unsupported=lambda device: on_unsupported(device.host)
+                    )
+                except Exception as e:
+                    app.logger.error(f"Error during discovery with credentials on broadcast {broadcast}: {str(e)}", exc_info=True)
+                    app.logger.debug(f"Exception details: {traceback.format_exc()}")
+                    continue
+            else:
+                app.logger.debug(f"Discovering without credentials on broadcast: {broadcast}")
+                try:
+                    discovered_devices = await Discover.discover(
+                        target=broadcast,
+                        on_unsupported=lambda device: on_unsupported(device.host)
+                    )
+                except Exception as e:
+                    app.logger.error(f"Error during discovery without credentials on broadcast {broadcast}: {str(e)}", exc_info=True)
+                    app.logger.debug(f"Exception details: {traceback.format_exc()}")
+                    continue
+
             for ip, dev in discovered_devices.items():
+                app.logger.debug(f"Processing device {ip}")
                 if hasattr(dev, 'device_type'):
                     devices[ip] = dev
                     app.logger.debug(f"Added device {ip} with device type {dev.device_type} from broadcast {broadcast} to devices list")
@@ -69,7 +93,8 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
                     app.logger.debug(f"Device {ip} from broadcast {broadcast} does not have a device_type and was not added")
             app.logger.debug(f"Discovered {len(discovered_devices)} devices on broadcast {broadcast}")
         except Exception as e:
-            app.logger.error(f"Error discovering devices on broadcast {broadcast}: {str(e)}")
+            app.logger.error(f"Error processing broadcast {broadcast}: {str(e)}", exc_info=True)
+            app.logger.debug(f"Exception details: {traceback.format_exc()}")
 
     if manual_devices:
         for host in manual_devices:
