@@ -102,9 +102,9 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
                 app.logger.debug(f"Manual device {host} already exists in devices, skipping.")
                 continue
             try:
-                if username is not None and password is not None:
+                if creds is not None:
                     app.logger.debug(f"Discovering manual device with credentials: {host}")
-                    discovered_device = await Discover.discover_single(host=host, username=username, password=password)
+                    discovered_device = await Discover.discover_single(host=host, credentials=creds)
                 else:
                     app.logger.debug(f"Discovering manual device without credentials: {host}")
                     discovered_device = await Discover.discover_single(host=host)
