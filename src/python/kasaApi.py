@@ -86,7 +86,8 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
 
             for ip, dev in discovered_devices.items():
                 app.logger.debug(f"Processing device {ip}")
-                if hasattr(dev, 'device_type'):
+                device_type = getattr(dev, 'device_type', None)
+                if device_type:
                     devices[ip] = dev
                     app.logger.debug(f"Added device {ip} with device type {dev.device_type} from broadcast {broadcast} to devices list")
                 else:
@@ -109,9 +110,10 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
                     app.logger.debug(f"Discovering manual device without credentials: {host}")
                     discovered_device = await Discover.discover_single(host=host)
                 if discovered_device:
-                    if hasattr(discovered_device, 'device_type'):
+                    device_type = getattr(dev, 'device_type', None)
+                    if device_type:
                         devices[host] = discovered_device
-                        app.logger.debug(f"Discovered manual device: {host}")
+                        app.logger.debug(f"Discovered manual device: {host} with device type {dev.device_type}")
                     else:
                         app.logger.warning(f"Manual device {host} is missing device_type and was not added")
                 else:
