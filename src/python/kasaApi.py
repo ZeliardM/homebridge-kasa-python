@@ -1,7 +1,7 @@
 import asyncio, eventlet, eventlet.wsgi, json, os, requests, sys, traceback
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO
-from kasa import Discover, Device, UnsupportedDeviceException
+from kasa import Credentials, Discover, Device, UnsupportedDeviceException
 from loguru import logger
 
 app = Flask(__name__)
@@ -52,6 +52,7 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
     app.logger.debug("Starting device discovery")
     devices = {}
     broadcasts = ["255.255.255.255"] + (additional_broadcasts or [])
+    creds = Credentials(username, password) if username and password else None
     
     def on_unsupported(ip):
         app.logger.warning(f"Unsupported device found: {ip}")
@@ -59,13 +60,12 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
     for broadcast in broadcasts:
         try:
             app.logger.debug(f"Starting discovery on broadcast: {broadcast}")
-            if username is not None and password is not None:
+            if creds is not None:
                 app.logger.debug(f"Using credentials for discovery on broadcast: {broadcast}")
                 try:
                     discovered_devices = await Discover.discover(
                         target=broadcast,
-                        username=username,
-                        password=password,
+                        credentials=creds,
                         on_unsupported=lambda device: on_unsupported(device.host)
                     )
                 except Exception as e:
