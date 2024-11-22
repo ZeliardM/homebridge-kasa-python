@@ -206,8 +206,8 @@ def run_async(func, *args):
 @app.route('/discover', methods=['POST'])
 def discover():
     auth = request.authorization
-    username = f"'{auth.username}'" if auth else None
-    password = f"'{auth.password}'" if auth else None
+    username = f'{auth.username}' if auth else None
+    password = f'{auth.password}' if auth else None
     additional_broadcasts = request.json.get('additionalBroadcasts', [])
     manual_devices = request.json.get('manualDevices', [])
     app.logger.debug(f"Starting device discovery with additionalBroadcasts: {additional_broadcasts} and manualDevices: {manual_devices}")
