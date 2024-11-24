@@ -17,7 +17,7 @@
   <a href="https://www.npmjs.com/package/homebridge-kasa-python"><img src="https://badgen.net/npm/dm/homebridge-kasa-python" alt="npm downloads monthly"></a>
   <a href="https://www.paypal.me/ZeliardM/USD/"><img src="https://badgen.net/badge/donate/paypal/E69138" alt="donate"></a>
   <a href="https://github.com/sponsors/ZeliardM"><img src="https://badgen.net/badge/donate/github/E69138" alt="donate"></a>
-  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-blue" alt="PyPI pyversions"></a>
+  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue" alt="PyPI pyversions"></a>
   <a href="https://github.com/homebridge/homebridge/wiki/Verified-Plugins"><img src="https://badgen.net/badge/homebridge/verified/purple" alt="homebridge verified"></a>
 </p>
 
@@ -249,7 +249,7 @@ Automatic Discovery is possible only for some devices, some newer devices requir
     </tr>
     <tr>
       <td align="center" style="border: 1px solid black; padding: 8px;">5.26 (US)</td>
-      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.3</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.3*</td>
     </tr>
     <tr>
       <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">HS210</td>
