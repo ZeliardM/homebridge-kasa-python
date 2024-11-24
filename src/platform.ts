@@ -208,11 +208,28 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   private async didFinishLaunching(): Promise<void> {
+    let discovered_devices: Record<string, KasaDevice> = {};
     try {
       await this.checkPython(this.isUpgrade);
       this.port = await getPort();
       this.deviceManager = new DeviceManager(this);
       await this.startKasaApi();
+      await delay(5000);
+      if (this.deviceManager) {
+        discovered_devices = await this.deviceManager.discoverDevices();
+      } else {
+        this.log.error('Device manager is undefined.');
+      }
+      if (Object.keys(discovered_devices).length > 0) {
+        Object.keys(discovered_devices).forEach(ip => {
+          const device: KasaDevice = discovered_devices[ip];
+          this.foundDevice(device);
+        });
+      } else {
+        this.log.error('No devices found.');
+      }
+
+      this.unregisterUnusedAccessories();
     } catch (error) {
       this.log.error('An error occurred during startup:', error);
     }
@@ -248,15 +265,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
             LOGGING_SERVER_URL: loggingServerUrl,
           },
         );
-        await delay(5000);
 
         this.kasaProcess = process;
-
-        if (this.deviceManager) {
-          await this.deviceManager.discoverDevices();
-        } else {
-          this.log.error('Device manager is undefined.');
-        }
       } catch (error) {
         if (error instanceof Error) {
           this.log.error(`Error starting kasaApi.py process: ${error.message}`);
@@ -292,7 +302,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
   }
 
-  public unregisterUnusedAccessories(): void {
+  private unregisterUnusedAccessories(): void {
     const homekitDeviceIds = new Set(this.homekitDevicesById.keys());
 
     this.configuredAccessories.forEach((accessory, uuid) => {
@@ -351,7 +361,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.configuredAccessories.set(accessory.UUID, accessory);
   }
 
-  foundDevice(device: KasaDevice): void {
+  private foundDevice(device: KasaDevice): void {
     const deviceTypeKey = device.sys_info.mic_type ? 'mic_type' : 'type';
     const deviceType = device.sys_info[deviceTypeKey];
     const { sys_info: { deviceId }, alias: deviceAlias, host: deviceHost } = device;

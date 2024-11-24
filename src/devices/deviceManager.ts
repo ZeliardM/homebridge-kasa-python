@@ -68,7 +68,7 @@ export default class DeviceManager {
     }
   }
 
-  async discoverDevices(): Promise<void> {
+  async discoverDevices(): Promise<Record<string, KasaDevice>> {
     this.log.info('Discovering devices...');
     try {
       const config = {
@@ -96,7 +96,7 @@ export default class DeviceManager {
       const platformConfig = fileConfig.platforms.find((platformConfig: PlatformConfig) => platformConfig.platform === 'KasaPython');
       if (!platformConfig) {
         this.log.error('KasaPython configuration not found in config file.');
-        return;
+        return {};
       }
 
       if (!platformConfig.manualDevices) {
@@ -120,12 +120,7 @@ export default class DeviceManager {
 
       this.platform.config = parseConfig(platformConfig);
 
-      Object.keys(processedDevices).forEach(ip => {
-        const device: KasaDevice = processedDevices[ip];
-        this.platform.foundDevice(device);
-      });
-
-      this.platform.unregisterUnusedAccessories();
+      return processedDevices;
     } catch (error) {
       this.log.error(
         `An error occurred during device discovery: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`,
@@ -134,6 +129,7 @@ export default class DeviceManager {
         this.log.error(`Response status: ${error.response.status}`);
         this.log.error(`Response data: ${JSON.stringify(error.response.data)}`);
       }
+      return {};
     }
   }
 

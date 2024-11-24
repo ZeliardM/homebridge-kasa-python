@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Kasa Python",
   "name": "homebridge-kasa-python",
-  "version": "2.5.16",
+  "version": "2.6.0",
   "description": "Plugin that uses Python-Kasa API to communicate with Kasa Devices.",
   "license": "MIT",
   "type": "module",
@@ -15,7 +15,7 @@
   "engines": {
     "node": "^18.20.5 || ^20.18.1 || ^22.11.0 || ^23.3.0",
     "homebridge": "^1.8.0 || ^2.0.0-beta.0",
-    "python": "^3.11.0"
+    "python": "^3.9.0"
   },
   "main": "dist/index.js",
   "scripts": {

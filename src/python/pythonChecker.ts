@@ -9,7 +9,7 @@ import type KasaPythonPlatform from '../platform.js';
 import { delay, prefixLogger, runCommand } from '../utils.js';
 
 const __dirname: string = path.dirname(fileURLToPath(import.meta.url));
-const SUPPORTED_PYTHON_VERSIONS: string[] = ['3.11', '3.12', '3.13'];
+const SUPPORTED_PYTHON_VERSIONS: string[] = ['3.9', '3.10', '3.11', '3.12', '3.13'];
 
 class PythonChecker {
   private readonly log: Logger;
