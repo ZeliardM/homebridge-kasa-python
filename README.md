@@ -223,7 +223,7 @@ Automatic Discovery is possible only for some devices, some newer devices requir
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.4</td>
     </tr>
     <tr>
-      <td align="center" rowspan="27" style="border: 1px solid black; padding: 8px;">Wall Switches</td>
+      <td align="center" rowspan="28" style="border: 1px solid black; padding: 8px;">Wall Switches</td>
       <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">ES20M</td>
       <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.8</td>
@@ -232,7 +232,7 @@ Automatic Discovery is possible only for some devices, some newer devices requir
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.11</td>
     </tr>
     <tr>
-      <td align="center" rowspan="4" style="border: 1px solid black; padding: 8px;">HS200</td>
+      <td align="center" rowspan="5" style="border: 1px solid black; padding: 8px;">HS200</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">2.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.5.7</td>
     </tr>
@@ -246,6 +246,10 @@ Automatic Discovery is possible only for some devices, some newer devices requir
     </tr>
     <tr>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.11</td>
+    </tr>
+    <tr>
+      <td align="center" style="border: 1px solid black; padding: 8px;">5.26 (US)</td>
+      <td align="center" style="border: 1px solid black; padding: 8px;">1.0.3</td>
     </tr>
     <tr>
       <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">HS210</td>
@@ -460,4 +464,4 @@ Automatic Discovery is possible only for some devices, some newer devices requir
 </div>
 
 ### Credits
--   Huge thanks to GadgetReactor for the [Python-Kasa API](https://github.com/python-kasa/python-kasa), Donald Patrick Seal for the [Unofficial API documentation](https://github.com/plasticrake/tplink-smarthome-api), and Maximilian Leith for [Excellent Python Implementation](https://github.com/maxileith/homebridge-appletv-enhanced).
+-   Huge thanks to rytilahti and all the developers at python-kasa for the [Python-Kasa API](https://github.com/python-kasa/python-kasa), plasticrake for the [Unofficial API documentation](https://github.com/plasticrake/tplink-smarthome-api), and maxileith for [Excellent Python Implementation](https://github.com/maxileith/homebridge-appletv-enhanced).
