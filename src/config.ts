@@ -94,7 +94,11 @@ function loadSchema() {
   return schemaCache;
 }
 
-function convertManualDevices(manualDevices: (string | ConfigDevice)[]): ConfigDevice[] {
+function convertManualDevices(manualDevices: (string | ConfigDevice)[] | undefined | null): ConfigDevice[] {
+  if (!manualDevices || manualDevices.length === 0) {
+    return [];
+  }
+
   const convertedDevices = manualDevices.map(device => {
     if (typeof device === 'string') {
       return { host: device, alias: device };
