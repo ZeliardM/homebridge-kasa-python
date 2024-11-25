@@ -103,9 +103,17 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
                 discovered_device = await Discover.discover_single(
                     host=host,
                     credentials=creds,
-                    on_discovered=on_discovered,
                     on_unsupported=on_unsupported
                 )
+                try:
+                    await discovered_device.update()
+                    app.logger.debug(f"Discovered device: {discovered_device.host}")
+                except UnsupportedDeviceException as e:
+                    app.logger.warning(f"Unsupported device found during discovery: {discovered_device.host} - {str(e)}")
+                    continue
+                except Exception as e:
+                    app.logger.error(f"Error updating device during discovery: {discovered_device.host} - {str(e)}")
+                    continue
             except UnsupportedDeviceException as e:
                 app.logger.warning(f"Unsupported device found during manual discovery: {host} - {str(e)}")
                 continue
