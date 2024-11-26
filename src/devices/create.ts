@@ -7,11 +7,11 @@ import type KasaPythonPlatform from '../platform.js';
 import type { KasaDevice, Plug, Powerstrip, Switch } from './kasaDevices.js';
 
 function isPlug(device: KasaDevice): device is Plug {
-  return 'children' in device && Array.isArray(device.children) && device.children.length === 0;
+  return 'child_num' in device.sys_info && device.sys_info.child_num === 0;
 }
 
 function isPowerStrip(device: KasaDevice): device is Powerstrip {
-  return device.sys_info.child_num !== undefined && device.sys_info.child_num > 1 && Array.isArray(device.sys_info.children);
+  return device.sys_info.children !== undefined && device.sys_info.child_num > 0 && Array.isArray(device.sys_info.children);
 }
 
 function isSwitch(device: KasaDevice): device is Switch {

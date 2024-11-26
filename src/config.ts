@@ -101,9 +101,13 @@ function convertManualDevices(manualDevices: (string | ConfigDevice)[] | undefin
 
   const convertedDevices = manualDevices.map(device => {
     if (typeof device === 'string') {
-      return { host: device, alias: device };
+      return { host: device, alias: 'Will Be Filled By Plug-In Automatically' };
+    } else {
+      if ('breakoutChildDevices' in device) {
+        delete device.breakoutChildDevices;
+      }
+      return device;
     }
-    return device;
   });
   return convertedDevices;
 }

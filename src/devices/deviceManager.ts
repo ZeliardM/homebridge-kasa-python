@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs';
 import HomekitDevice from './index.js';
 import KasaPythonPlatform from '../platform.js';
 import { parseConfig } from '../config.js';
-import type { ConfigDevice, KasaDevice } from './kasaDevices.js';
+import type { ConfigDevice, KasaDevice, SysInfo } from './kasaDevices.js';
 
 export default class DeviceManager {
   private log: Logger;
@@ -27,14 +27,26 @@ export default class DeviceManager {
   private convertManualDevices(manualDevices: (string | ConfigDevice)[]): ConfigDevice[] {
     return manualDevices.map(device => {
       if (typeof device === 'string') {
-        return { host: device, alias: device };
+        return { host: device, alias: 'Will Be Filled By Plug-In Automatically' };
+      } else {
+        if ('breakoutChildDevices' in device) {
+          delete device.breakoutChildDevices;
+        }
+        return device;
       }
-      return device;
     });
   }
 
-  private updateDeviceAlias(device: KasaDevice): void {
-    if (device.alias) {
+  private updateDeviceAlias(device: KasaDevice | SysInfo): void {
+    if ('sys_info' in device) {
+      this.updateAliasForSysInfo(device.sys_info);
+    } else {
+      this.updateAliasForSysInfo(device);
+    }
+  }
+
+  private updateAliasForSysInfo(sysInfo: SysInfo): void {
+    if (sysInfo.alias) {
       const aliasMappings: { [key: string]: string } = {
         'TP-LINK_Power Strip_': 'Power Strip',
         'TP-LINK_Smart Plug_': 'Smart Plug',
@@ -42,8 +54,8 @@ export default class DeviceManager {
       };
 
       for (const [pattern, replacement] of Object.entries(aliasMappings)) {
-        if (device.alias.includes(pattern)) {
-          device.alias = `${replacement} ${device.alias.slice(-4)}`;
+        if (sysInfo.alias.includes(pattern)) {
+          sysInfo.alias = `${replacement} ${sysInfo.alias.slice(-4)}`;
           break;
         }
       }
@@ -103,15 +115,24 @@ export default class DeviceManager {
         platformConfig.manualDevices = [];
       }
 
-      if (platformConfig.manualDevices.length > 0 && typeof platformConfig.manualDevices[0] === 'string') {
+      if (
+        platformConfig.manualDevices.length > 0 &&
+        (typeof platformConfig.manualDevices[0] === 'string' ||
+          platformConfig.manualDevices.some((device: ConfigDevice) => typeof device !== 'string' && 'breakoutChildDevices' in device))
+      ) {
         platformConfig.manualDevices = this.convertManualDevices(platformConfig.manualDevices);
       }
 
       const processedDevices: { [key: string]: KasaDevice } = {};
 
       Object.keys(devices).forEach(ip => {
-        const device: KasaDevice = devices[ip].device_info;
-        device.device_config = devices[ip].device_config;
+        const deviceInfo = devices[ip].device_info;
+        const deviceConfig = devices[ip].device_config;
+
+        const device: KasaDevice = {
+          sys_info: deviceInfo,
+          device_config: deviceConfig,
+        };
         this.processDevice(device, platformConfig);
         processedDevices[ip] = device;
       });
@@ -136,29 +157,19 @@ export default class DeviceManager {
   private processDevice(device: KasaDevice, platformConfig: PlatformConfig): void {
     this.updateDeviceAlias(device);
 
-    const existingDevice = platformConfig.manualDevices.find((d: ConfigDevice) => d.host === device.host);
+    const existingDevice = platformConfig.manualDevices.find((d: ConfigDevice) => d.host === device.sys_info.host);
     if (existingDevice) {
-      existingDevice.host = device.host;
-      existingDevice.alias = device.alias;
-
-      if (device.sys_info.child_num !== undefined && existingDevice.breakoutChildDevices === undefined) {
-        existingDevice.breakoutChildDevices = false;
-      }
-    } else if (device.sys_info.child_num !== undefined) {
-      platformConfig.manualDevices.push({
-        host: device.host,
-        alias: device.alias,
-        breakoutChildDevices: false,
-      });
+      existingDevice.host = device.sys_info.host;
+      existingDevice.alias = device.sys_info.alias;
     }
   }
 
-  async getSysInfo(device: HomekitDevice): Promise<KasaDevice | undefined> {
+  async getSysInfo(device: HomekitDevice): Promise<SysInfo | undefined> {
     try {
       const response = await axios.post(`${this.apiUrl}/getSysInfo`, { device_config: device.deviceConfig });
-      const kasaDevice: KasaDevice = response.data.device_info;
-      this.updateDeviceAlias(kasaDevice);
-      return kasaDevice;
+      const sysInfo: SysInfo = response.data.device_info;
+      this.updateDeviceAlias(sysInfo);
+      return sysInfo;
     } catch (error) {
       this.log.error(
         `An error occurred during getSysInfo: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`,

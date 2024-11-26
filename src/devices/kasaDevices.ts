@@ -1,40 +1,38 @@
 export type KasaDevice = Plug | Powerstrip | Switch;
 
-interface DeviceCommonInfo {
+export interface SysInfo {
   alias: string;
+  children?: ChildDevice[];
+  child_num: number;
+  device_id: string;
+  device_type: string;
   host: string;
+  hw_ver: string;
   is_off: boolean;
   is_on: boolean;
-  sys_info: SysInfo;
-}
-
-export interface SysInfo {
-  sw_ver: string;
-  hw_ver: string;
-  model: string;
-  deviceId: string;
-  mic_type?: string;
-  type?: string;
   mac: string;
-  led_off: number;
-  relay_state: number;
-  err_code: number;
-  children?: ChildPlug[];
-  child_num?: number;
+  model: string;
+  state?: boolean;
+  sw_ver: string;
 }
 
-export interface ChildPlug {
+export interface ChildDevice {
   id: string;
-  state: number;
+  state: boolean;
   alias: string;
 }
 
 export interface DeviceConfig {
   host: string;
   timeout: number;
+  credentials?: {
+    username: string;
+    password: string;
+  };
   connection_type: {
     device_family: string;
     encryption_type: string;
+    https: boolean;
   };
   uses_http: boolean;
 }
@@ -42,39 +40,22 @@ export interface DeviceConfig {
 export interface ConfigDevice {
   host: string;
   alias: string;
-  breakoutChildDevices?: boolean;
 }
 
-export interface Plug extends DeviceCommonInfo {
-  children?: ChildPlug[];
+export interface Plug {
+  sys_info: SysInfo;
   device_config: DeviceConfig;
 }
 
-export interface Powerstrip extends DeviceCommonInfo {
-  sys_info: SysInfo & { children: ChildPlug[]; child_num: number };
+export interface Powerstrip {
+  sys_info: SysInfo;
   device_config: DeviceConfig;
 }
 
-export interface Switch extends DeviceCommonInfo {
+export interface Switch {
+  sys_info: SysInfo;
   device_config: DeviceConfig;
 }
-
-export const Switches = [
-  'ES20M(US)',
-  'HS200(US)',
-  'HS210(US)',
-  'HS220(US)',
-  'KP405(US)',
-  'KS200M(US)',
-  'KS205(US)',
-  'KS220M(US)',
-  'KS225(US)',
-  'KS230(US)',
-  'KS240(US)',
-  'S500D(US)',
-  'S505(US)',
-  'S505D(US)',
-];
 
 export const Plugs = [
   'EP10(US)',
@@ -95,6 +76,7 @@ export const Plugs = [
   'P100(US)',
   'P110(EU)',
   'P110(UK)',
+  'P110M(AU)',
   'P115(EU)',
   'P125M(US)',
   'P135(US)',
@@ -103,6 +85,7 @@ export const Plugs = [
 
 export const PowerStrips = [
   'EP40(US)',
+  'EP40M(US)',
   'HS107(US)',
   'HS300(US)',
   'KP200(US)',
@@ -112,6 +95,24 @@ export const PowerStrips = [
   'P300(EU)',
   'P304M(UK)',
   'TP25(US)',
+];
+
+export const Switches = [
+  'ES20M(US)',
+  'HS200(US)',
+  'HS210(US)',
+  'HS220(US)',
+  'KP405(US)',
+  'KS200M(US)',
+  'KS205(US)',
+  'KS220(US)',
+  'KS220M(US)',
+  'KS225(US)',
+  'KS230(US)',
+  'KS240(US)',
+  'S500D(US)',
+  'S505(US)',
+  'S505D(US)',
 ];
 
 export const Bulbs = [
@@ -129,6 +130,7 @@ export const Bulbs = [
   'L510E(US)',
   'L530E(EU)',
   'L530E(US)',
+  'L630(EU)',
 ];
 
 export const LightStrips = [
@@ -148,6 +150,8 @@ export const Hubs = [
   'KH100(EU)',
   'KH100(UK)',
   'H100(EU)',
+  'H200(EU)',
+  'H200(US)',
 ];
 
 export const HubConnectedDevices = [
@@ -164,4 +168,9 @@ export const HubConnectedDevices = [
   'T310(US)',
   'T315(EU)',
   'T315(US)',
+];
+
+export const Cameras = [
+  'C210(EU)',
+  'TC65',
 ];

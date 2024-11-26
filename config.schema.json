@@ -77,13 +77,6 @@
               "condition": {
                 "functionBody": "return model.manualDevices && model.manualDevices[arrayIndices] && model.manualDevices[arrayIndices].host && model.manualDevices[arrayIndices].host !== '';"
               }
-            },
-            "breakoutChildDevices": {
-              "type": "boolean",
-              "title": "Breakout Child Devices",
-              "condition": {
-                "functionBody": "return model.manualDevices && model.manualDevices[arrayIndices] && model.manualDevices[arrayIndices].alias && model.manualDevices[arrayIndices].alias !== 'Will Be Filled By Plug-In Automatically' && model.manualDevices[arrayIndices].breakoutChildDevices !== undefined;"
-              }
             }
           }
         },
@@ -185,7 +178,7 @@
               "type": "array",
               "buttonText": "Add Manual Device",
               "items": [
-                "manualDevices[].host", "manualDevices[].alias", "manualDevices[].breakoutChildDevices"
+                "manualDevices[].host", "manualDevices[].alias"
               ]
             },
             {

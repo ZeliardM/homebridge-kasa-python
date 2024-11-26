@@ -1,4 +1,4 @@
-import asyncio, eventlet, eventlet.wsgi, json, os, requests, sys, traceback
+import asyncio, eventlet, eventlet.wsgi, os, requests, sys
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO
 from kasa import Credentials, Discover, Device, UnsupportedDeviceException
@@ -33,29 +33,61 @@ UNSUPPORTED_TYPES = {
 
 def custom_device_serializer(device: Device):
     app.logger.debug(f"Serializing device: {device.host}")
-    def is_serializable(value):
-        try:
-            json.dumps(value)
-            return True
-        except TypeError:
-            return False
 
-    serialized_data = {}
-    for attr in dir(device):
-        if not attr.startswith("_") and not callable(getattr(device, attr)) and not asyncio.iscoroutine(getattr(device, attr)):
-            value = getattr(device, attr)
-            if is_serializable(value):
-                serialized_data[attr] = value
-    return serialized_data
+    child_num = len(device.children) if device.children else 0
+
+    sys_info = {
+        "alias": device.alias,
+        "child_num": child_num,
+        "device_id": device.sys_info.get("deviceId") or device.sys_info.get("device_id"),
+        "device_type": device.config.connection_type.device_family.value,
+        "host": device.host,
+        "hw_ver": device.hw_info["hw_ver"],
+        "is_off": device.is_off,
+        "is_on": device.is_on,
+        "mac": device.hw_info["mac"],
+        "model": device.model if "(" in device.model else device._discovery_info.get("device_model"),
+        "sw_ver": device.sys_info.get("sw_ver") or device.sys_info.get("fw_ver")
+    }
+
+    if child_num > 0:
+        sys_info["children"] = [
+            {
+                "id": child.device_id.split("_", 1)[1],
+                "state": child.features["state"].value,
+                "alias": child.alias
+            } for child in device.children
+        ]
+    else:
+        sys_info["state"] = device.features["state"].value
+
+    device_config = {
+        "host": device.config.host,
+        "timeout": device.config.timeout,
+        "connection_type": {
+            "device_family": device.config.connection_type.device_family.value,
+            "encryption_type": device.config.connection_type.encryption_type.value,
+            "https": device.config.connection_type.https
+        },
+        "uses_http": device.config.uses_http
+    }
+
+    if device.config.credentials:
+        device_config["credentials"] = {
+            "username": device.config.credentials.username,
+            "password": device.config.credentials.password
+        }
+
+    return {
+        "sys_info": sys_info,
+        "device_config": device_config
+    }
 
 async def discover_devices(username=None, password=None, additional_broadcasts=None, manual_devices=None):
     app.logger.debug("Starting device discovery")
     devices = {}
     broadcasts = ["255.255.255.255"] + (additional_broadcasts or [])
     creds = Credentials(username, password) if username and password else None
-    
-    def on_unsupported(device: Device):
-        app.logger.warning(f"Unsupported device found: {device.host}")
 
     async def on_discovered(device: Device):
         try:
@@ -63,70 +95,37 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
             app.logger.debug(f"Discovered device: {device.host}")
         except UnsupportedDeviceException as e:
             app.logger.warning(f"Unsupported device found during discovery: {device.host} - {str(e)}")
-            return
         except Exception as e:
             app.logger.error(f"Error updating device during discovery: {device.host} - {str(e)}")
-            return
 
-    for broadcast in broadcasts:
+    async def discover_on_broadcast(broadcast):
         try:
             app.logger.debug(f"Starting discovery on broadcast: {broadcast}")
-            try:
-                discovered_devices = await Discover.discover(
-                    target=broadcast,
-                    credentials=creds,
-                    on_discovered=on_discovered,
-                    on_unsupported=on_unsupported
-                )
-            except UnsupportedDeviceException as e:
-                app.logger.warning(f"Unsupported device found during discovery on broadcast {broadcast}: {str(e)}")
-                continue
-            except Exception as e:
-                app.logger.error(f"Error during discovery on broadcast {broadcast}: {str(e)}")
-                continue
-
+            discovered_devices = await Discover.discover(target=broadcast, credentials=creds, on_discovered=on_discovered)
             for ip, dev in discovered_devices.items():
                 devices[ip] = dev
                 app.logger.debug(f"Added device {ip} from broadcast {broadcast} to devices list")
             app.logger.debug(f"Discovered {len(discovered_devices)} devices on broadcast {broadcast}")
         except Exception as e:
-            app.logger.error(f"Error processing broadcast {broadcast}: {str(e)}")
-            continue
+            app.logger.error(f"Error processing broadcast {broadcast}: {str(e)}", exc_info=True)
 
-    if manual_devices:
-        for host in manual_devices:
-            if host in devices:
-                app.logger.debug(f"Manual device {host} already exists in devices, skipping.")
-                continue
-            try:
-                app.logger.debug(f"Discovering manual device: {host}")
-                discovered_device = await Discover.discover_single(
-                    host=host,
-                    credentials=creds,
-                    on_unsupported=on_unsupported
-                )
-                try:
-                    await discovered_device.update()
-                    app.logger.debug(f"Discovered device: {discovered_device.host}")
-                except UnsupportedDeviceException as e:
-                    app.logger.warning(f"Unsupported device found during discovery: {discovered_device.host} - {str(e)}")
-                    continue
-                except Exception as e:
-                    app.logger.error(f"Error updating device during discovery: {discovered_device.host} - {str(e)}")
-                    continue
-            except UnsupportedDeviceException as e:
-                app.logger.warning(f"Unsupported device found during manual discovery: {host} - {str(e)}")
-                continue
-            except Exception as e:
-                app.logger.error(f"Error discovering manual device {host}: {str(e)}")
-                continue
+    async def discover_manual_device(host):
+        if host in devices:
+            app.logger.debug(f"Manual device {host} already exists in devices, skipping.")
+            return
+        try:
+            app.logger.debug(f"Discovering manual device: {host}")
+            discovered_device = await Discover.discover_single(host=host, credentials=creds)
+            await discovered_device.update()
+            devices[host] = discovered_device
+            app.logger.debug(f"Discovered manual device: {host} with device type {discovered_device.device_type}")
+        except UnsupportedDeviceException as e:
+            app.logger.warning(f"Unsupported device found during manual discovery: {host} - {str(e)}")
+        except Exception as e:
+            app.logger.error(f"Error discovering manual device {host}: {str(e)}", exc_info=True)
 
-            if discovered_device:
-                devices[host] = discovered_device
-                app.logger.debug(f"Added manual device {host} to devices list")
-                app.logger.debug(f"Discovered manual device: {host}")
-            else:
-                app.logger.warning(f"Manual device {host} not found")
+    await asyncio.gather(*(discover_on_broadcast(broadcast) for broadcast in broadcasts))
+    await asyncio.gather(*(discover_manual_device(host) for host in manual_devices))
 
     all_device_info = {}
     tasks = []
@@ -142,7 +141,6 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
                 app.logger.debug(f"Device {ip} with type {dev_type} is unsupported and was not added to update tasks")
         except Exception as e:
             app.logger.error(f"Error adding device {ip} to update tasks: {str(e)}")
-            continue
 
     try:
         results = await asyncio.gather(*tasks)
@@ -159,8 +157,9 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
 async def update_device_info(ip, dev: Device):
     app.logger.debug(f"Updating device info for {ip}")
     try:
-        device_info = custom_device_serializer(dev)
-        device_config = dev.config.to_dict()
+        device = custom_device_serializer(dev)
+        device_info = device["sys_info"]
+        device_config = device["device_config"]
         device_cache[ip] = {
             "device_info": device_info,
             "device_config": device_config
@@ -181,7 +180,8 @@ async def get_device_info(device_config):
             await dev.disconnect()
             dev = await Device.connect(config=Device.Config.from_dict(device_config))
             await dev.update()
-        device_info = custom_device_serializer(dev)
+        device = custom_device_serializer(dev)
+        device_info = device["sys_info"]
         return {"device_info": device_info}
     except Exception as e:
         app.logger.error(f"Error getting device info: {str(e)}")
@@ -216,15 +216,19 @@ def run_async(func, *args):
 
 @app.route('/discover', methods=['POST'])
 def discover():
-    auth = request.authorization
-    username = f'{auth.username}' if auth else None
-    password = f'{auth.password}' if auth else None
-    additional_broadcasts = request.json.get('additionalBroadcasts', [])
-    manual_devices = request.json.get('manualDevices', [])
-    app.logger.debug(f"Starting device discovery with additionalBroadcasts: {additional_broadcasts} and manualDevices: {manual_devices}")
-    devices_info = run_async(discover_devices, username, password, additional_broadcasts, manual_devices)
-    app.logger.debug(f"Device discovery completed with {len(devices_info)} devices found")
-    return jsonify(devices_info)
+    try:
+        auth = request.authorization
+        username = f'{auth.username}' if auth else None
+        password = f'{auth.password}' if auth else None
+        additional_broadcasts = request.json.get('additionalBroadcasts', [])
+        manual_devices = request.json.get('manualDevices', [])
+        app.logger.debug(f"Starting device discovery with additionalBroadcasts: {additional_broadcasts} and manualDevices: {manual_devices}")
+        devices_info = run_async(discover_devices, username, password, additional_broadcasts, manual_devices)
+        app.logger.debug(f"Device discovery completed with {len(devices_info)} devices found")
+        return jsonify(devices_info)
+    except Exception as e:
+        app.logger.error(f"An error occurred during device discovery: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/getSysInfo', methods=['POST'])
 def get_sys_info_route():

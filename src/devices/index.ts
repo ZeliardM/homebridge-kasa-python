@@ -80,11 +80,11 @@ export default abstract class HomekitDevice {
   }
 
   get id(): string {
-    return this.kasaDevice.sys_info.deviceId;
+    return this.kasaDevice.sys_info.device_id;
   }
 
   get name(): string {
-    return this.kasaDevice.alias;
+    return this.kasaDevice.sys_info.alias;
   }
 
   get manufacturer(): string {
@@ -96,7 +96,7 @@ export default abstract class HomekitDevice {
   }
 
   get serialNumber(): string {
-    return `${this.kasaDevice.sys_info.mac.replace(/:/g, '').slice(-4)}`;
+    return this.kasaDevice.sys_info.mac;
   }
 
   get firmwareRevision(): string {

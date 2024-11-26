@@ -362,9 +362,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   private foundDevice(device: KasaDevice): void {
-    const deviceTypeKey = device.sys_info.mic_type ? 'mic_type' : 'type';
-    const deviceType = device.sys_info[deviceTypeKey];
-    const { sys_info: { deviceId }, alias: deviceAlias, host: deviceHost } = device;
+    const { sys_info: { alias: deviceAlias, device_id: deviceId, device_type: deviceType, host: deviceHost } } = device;
     if (!deviceId) {
       this.log.error('Missing deviceId:', deviceHost);
       return;

@@ -4,7 +4,7 @@ import type { Service, Characteristic, CharacteristicValue, WithUUID } from 'hom
 import HomekitDevice from './index.js';
 import { deferAndCombine, getOrAddCharacteristic } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { ChildPlug, KasaDevice, Powerstrip } from './kasaDevices.js';
+import type { ChildDevice, KasaDevice, Powerstrip, SysInfo } from './kasaDevices.js';
 
 export default class HomeKitDevicePowerStrip extends HomekitDevice {
   private getSysInfo: () => Promise<KasaDevice | undefined>;
@@ -20,16 +20,16 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
       kasaDevice,
       Categories.OUTLET,
     );
-    this.kasaDevice.sys_info.children.forEach((child: ChildPlug, index: number) => {
+    this.kasaDevice.sys_info.children?.forEach((child: ChildDevice, index: number) => {
       this.addOutletService(child, index);
     });
 
     this.getSysInfo = deferAndCombine(async (requestCount: number) => {
       this.log.debug(`executing deferred getSysInfo count: ${requestCount}`);
       if (this.deviceManager) {
-        const newKasaDevice = await this.deviceManager.getSysInfo(this) as Powerstrip;
+        const newSysInfo = await this.deviceManager.getSysInfo(this) as SysInfo;
         this.previousKasaDevice = this.kasaDevice;
-        this.kasaDevice = newKasaDevice;
+        this.kasaDevice.sys_info = newSysInfo;
         return this.kasaDevice;
       }
       return undefined;
@@ -38,7 +38,7 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
     this.startPolling();
   }
 
-  private addOutletService(child: ChildPlug, index: number) {
+  private addOutletService(child: ChildDevice, index: number) {
     const { Outlet } = this.platform.Service;
     const outletService: Service =
       this.homebridgeAccessory.getServiceById(Outlet, `outlet-${index + 1}`) ??
@@ -53,7 +53,7 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
   private addCharacteristic(
     service: Service,
     characteristicType: WithUUID<new () => Characteristic>,
-    child: ChildPlug,
+    child: ChildDevice,
   ) {
     const characteristic: Characteristic = getOrAddCharacteristic(service, characteristicType);
     characteristic.onGet(this.handleOnGet.bind(this, child, characteristicType));
@@ -63,27 +63,27 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
     return service;
   }
 
-  private async handleOnGet(child: ChildPlug, characteristicType: WithUUID<new () => Characteristic>): Promise<CharacteristicValue> {
+  private async handleOnGet(child: ChildDevice, characteristicType: WithUUID<new () => Characteristic>): Promise<CharacteristicValue> {
     try {
-      const childInfo = this.kasaDevice.sys_info.children.find((c: ChildPlug) => c.id === child.id);
+      const childInfo = this.kasaDevice.sys_info.children?.find((c: ChildDevice) => c.id === child.id);
       if (!childInfo) {
         this.log.warn(`Child with id ${child.id} not found`);
-        return 0;
+        return false;
       }
 
-      const stateValue = childInfo.state === 1;
+      const stateValue = childInfo.state;
       const characteristicName = this.platform.getCharacteristicName(characteristicType);
 
       this.log.debug(`Current State of ${characteristicName} is: ${stateValue} for ${child.alias}`);
 
-      return childInfo.state ?? 0;
+      return childInfo.state;
     } catch (error) {
       this.log.error('Error getting device state:', error);
     }
     return 0;
   }
 
-  private async handleOnSet(child: ChildPlug, value: CharacteristicValue): Promise<void> {
+  private async handleOnSet(child: ChildDevice, value: CharacteristicValue): Promise<void> {
     this.log.info(`Setting On to: ${value} for ${child.alias}`);
     if (typeof value === 'boolean') {
       if (this.deviceManager) {
@@ -91,9 +91,9 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
         try {
           this.isUpdating = true;
           await this.deviceManager.toggleDevice(this, value, childNumber);
-          const kasaChild = this.kasaDevice.sys_info.children.find((c: ChildPlug) => c.id === child.id);
+          const kasaChild = this.kasaDevice.sys_info.children?.find((c: ChildDevice) => c.id === child.id);
           if (kasaChild) {
-            kasaChild.state = value ? 1 : 0;
+            kasaChild.state = value;
           }
           this.previousKasaDevice = this.kasaDevice;
           const service = this.homebridgeAccessory.getServiceById(this.platform.Service.Outlet, `outlet-${childNumber + 1}`);
@@ -126,18 +126,18 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
     try {
       const device = await this.getSysInfo() as Powerstrip;
       if (device) {
-        device.sys_info.children.forEach(async (child: ChildPlug) => {
+        device.sys_info.children?.forEach(async (child: ChildDevice) => {
           const childNumber = parseInt(child.id.slice(-1), 10);
           const service = this.homebridgeAccessory.getServiceById(this.platform.Service.Outlet, `outlet-${childNumber + 1}`);
           if (service && this.previousKasaDevice) {
-            const previousKasaChild = this.previousKasaDevice.sys_info.children.find(c => c.id === child.id);
-            const kasaChild = this.kasaDevice.sys_info.children.find(c => c.id === child.id);
+            const previousKasaChild = this.previousKasaDevice.sys_info.children?.find(c => c.id === child.id);
+            const kasaChild = this.kasaDevice.sys_info.children?.find(c => c.id === child.id);
             if (previousKasaChild && kasaChild && previousKasaChild.state !== child.state) {
               kasaChild.state = child.state;
               const onCharacteristic = service.getCharacteristic(this.platform.Characteristic.On);
               const outletInUseCharacteristic = service.getCharacteristic(this.platform.Characteristic.OutletInUse);
-              this.updateValue(service, onCharacteristic, child.state === 1, child.alias);
-              this.updateValue(service, outletInUseCharacteristic, child.state === 1, child.alias);
+              this.updateValue(service, onCharacteristic, child.state, child.alias);
+              this.updateValue(service, outletInUseCharacteristic, child.state, child.alias);
             }
           }
         });

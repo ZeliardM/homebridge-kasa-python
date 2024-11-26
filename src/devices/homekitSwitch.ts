@@ -4,7 +4,7 @@ import type { Service, Characteristic, CharacteristicValue, WithUUID } from 'hom
 import HomekitDevice from './index.js';
 import { deferAndCombine, getOrAddCharacteristic } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { KasaDevice, Switch } from './kasaDevices.js';
+import type { KasaDevice, Switch, SysInfo } from './kasaDevices.js';
 
 export default class HomeKitDeviceSwitch extends HomekitDevice {
   private getSysInfo: () => Promise<KasaDevice | undefined>;
@@ -25,9 +25,9 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
     this.getSysInfo = deferAndCombine(async (requestCount: number) => {
       this.log.debug(`executing deferred getSysInfo count: ${requestCount}`);
       if (this.deviceManager) {
-        const newKasaDevice = await this.deviceManager.getSysInfo(this) as Switch;
+        const newSysInfo = await this.deviceManager.getSysInfo(this) as SysInfo;
         this.previousKasaDevice = this.kasaDevice;
-        this.kasaDevice = newKasaDevice;
+        this.kasaDevice.sys_info = newSysInfo;
         return this.kasaDevice;
       }
       return undefined;
@@ -62,12 +62,12 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
 
   private async handleOnGet(characteristicType: WithUUID<new () => Characteristic>): Promise<CharacteristicValue> {
     try {
-      const stateValue = this.kasaDevice.sys_info.relay_state === 1;
+      const stateValue = this.kasaDevice.sys_info.state;
       const characteristicName = this.platform.getCharacteristicName(characteristicType);
 
       this.log.debug(`Current State of ${characteristicName} is: ${stateValue} for ${this.name}`);
 
-      return this.kasaDevice.sys_info.relay_state ?? 0;
+      return this.kasaDevice.sys_info.state ?? false;
     } catch (error) {
       this.log.error('Error getting device state:', error);
     }
@@ -81,7 +81,7 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
         try {
           this.isUpdating = true;
           await this.deviceManager.toggleDevice(this, value);
-          this.kasaDevice.sys_info.relay_state = value ? 1 : 0;
+          this.kasaDevice.sys_info.state = value;
           this.previousKasaDevice = this.kasaDevice;
           const service = this.homebridgeAccessory.getService(this.platform.Service.Switch);
           if (service) {
@@ -113,11 +113,11 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
       if (device) {
         const service = this.homebridgeAccessory.getService(this.platform.Service.Switch);
         if (service && this.previousKasaDevice) {
-          const previousRelayState = this.previousKasaDevice.sys_info.relay_state;
-          if (previousRelayState !== device.sys_info.relay_state) {
-            this.kasaDevice.sys_info.relay_state = device.sys_info.relay_state;
+          const previousRelayState = this.previousKasaDevice.sys_info.state;
+          if (previousRelayState !== device.sys_info.state) {
+            this.kasaDevice.sys_info.state = device.sys_info.state;
             const onCharacteristic = service.getCharacteristic(this.platform.Characteristic.On);
-            this.updateValue(service, onCharacteristic, device.sys_info.relay_state === 1);
+            this.updateValue(service, onCharacteristic, device.sys_info.state ?? false);
           }
         }
       }
