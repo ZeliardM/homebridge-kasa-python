@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs';
 import HomekitDevice from './index.js';
 import KasaPythonPlatform from '../platform.js';
 import { parseConfig } from '../config.js';
-import type { ConfigDevice, KasaDevice, SysInfo } from './kasaDevices.js';
+import type { ConfigDevice, DeviceConfig, KasaDevice, SysInfo } from './kasaDevices.js';
 
 export default class DeviceManager {
   private log: Logger;
@@ -107,7 +107,7 @@ export default class DeviceManager {
         additionalBroadcasts: this.additionalBroadcasts,
         manualDevices: this.manualDevices,
       }, config);
-      const devices = response.data;
+      const devices: Record<string, { device_info: SysInfo; device_config: DeviceConfig }> = response.data;
       this.log.info(`Devices discovered: ${Object.keys(devices).length}`);
 
       const configPath = path.join(this.platform.storagePath, 'config.json');
@@ -119,9 +119,20 @@ export default class DeviceManager {
         return {};
       }
 
-      if (!platformConfig.manualDevices) {
+      const hasChildDevices = Object.values(devices).some(device => device.device_info.child_num > 0);
+
+      if (!platformConfig.manualDevices && hasChildDevices) {
         platformConfig.manualDevices = [];
       }
+
+      platformConfig.manualDevices = platformConfig.manualDevices.filter((device: string | ConfigDevice) => {
+        if (typeof device === 'string') {
+          return true;
+        } else if (!device.host) {
+          return false;
+        }
+        return true;
+      });
 
       if (
         platformConfig.manualDevices.length > 0 &&
@@ -144,6 +155,10 @@ export default class DeviceManager {
         this.processDevice(device, platformConfig);
         processedDevices[ip] = device;
       });
+
+      if (!platformConfig.manualDevices || platformConfig.manualDevices.length === 0) {
+        delete platformConfig.manualDevices;
+      }
 
       await this.writeConfigFile(configPath, fileConfig);
 
