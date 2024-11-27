@@ -123,24 +123,23 @@ export default class DeviceManager {
       }
       this.log.debug('KasaPython configuration found in config file');
 
-      const hasChildDevices = Object.values(devices).some(device => device.device_info.child_num > 0);
-      this.log.debug(`Devices with child devices: ${hasChildDevices}`);
-
-      if (!platformConfig.manualDevices && hasChildDevices) {
+      if (!platformConfig.manualDevices) {
         this.log.debug('Initializing manualDevices as an empty array');
         platformConfig.manualDevices = [];
       }
 
-      this.log.debug('Filtering manualDevices to remove entries without a host');
-      platformConfig.manualDevices = platformConfig.manualDevices.filter((device: string | ConfigDevice) => {
-        if (typeof device === 'string') {
+      if (platformConfig.manualDevices.length > 0) {
+        this.log.debug('Filtering manualDevices to remove entries without a host');
+        platformConfig.manualDevices = platformConfig.manualDevices.filter((device: string | ConfigDevice) => {
+          if (typeof device === 'string') {
+            return true;
+          } else if (!device.host) {
+            this.log.warn(`Removing manual device without host: ${JSON.stringify(device)}`);
+            return false;
+          }
           return true;
-        } else if (!device.host) {
-          this.log.warn(`Removing manual device without host: ${JSON.stringify(device)}`);
-          return false;
-        }
-        return true;
-      });
+        });
+      }
 
       if (
         platformConfig.manualDevices.length > 0 &&
