@@ -107,28 +107,36 @@ export default class DeviceManager {
         additionalBroadcasts: this.additionalBroadcasts,
         manualDevices: this.manualDevices,
       }, config);
+      this.log.debug('Discovery request sent successfully');
       const devices: Record<string, { device_info: SysInfo; device_config: DeviceConfig }> = response.data;
       this.log.info(`Devices discovered: ${Object.keys(devices).length}`);
 
       const configPath = path.join(this.platform.storagePath, 'config.json');
+      this.log.debug(`Reading config file from path: ${configPath}`);
       const fileConfig = await this.readConfigFile(configPath);
+      this.log.debug('Config file read successfully');
 
       const platformConfig = fileConfig.platforms.find((platformConfig: PlatformConfig) => platformConfig.platform === 'KasaPython');
       if (!platformConfig) {
         this.log.error('KasaPython configuration not found in config file.');
         return {};
       }
+      this.log.debug('KasaPython configuration found in config file');
 
       const hasChildDevices = Object.values(devices).some(device => device.device_info.child_num > 0);
+      this.log.debug(`Devices with child devices: ${hasChildDevices}`);
 
       if (!platformConfig.manualDevices && hasChildDevices) {
+        this.log.debug('Initializing manualDevices as an empty array');
         platformConfig.manualDevices = [];
       }
 
+      this.log.debug('Filtering manualDevices to remove entries without a host');
       platformConfig.manualDevices = platformConfig.manualDevices.filter((device: string | ConfigDevice) => {
         if (typeof device === 'string') {
           return true;
         } else if (!device.host) {
+          this.log.warn(`Removing manual device without host: ${JSON.stringify(device)}`);
           return false;
         }
         return true;
@@ -139,10 +147,12 @@ export default class DeviceManager {
         (typeof platformConfig.manualDevices[0] === 'string' ||
           platformConfig.manualDevices.some((device: ConfigDevice) => typeof device !== 'string' && 'breakoutChildDevices' in device))
       ) {
+        this.log.debug('Converting manualDevices');
         platformConfig.manualDevices = this.convertManualDevices(platformConfig.manualDevices);
       }
 
       const processedDevices: { [key: string]: KasaDevice } = {};
+      this.log.debug('Processing discovered devices');
 
       Object.keys(devices).forEach(ip => {
         const deviceInfo = devices[ip].device_info;
@@ -154,15 +164,20 @@ export default class DeviceManager {
         };
         this.processDevice(device, platformConfig);
         processedDevices[ip] = device;
+        this.log.debug(`Processed device with IP: ${ip}`);
       });
 
       if (!platformConfig.manualDevices || platformConfig.manualDevices.length === 0) {
+        this.log.debug('Removing manualDevices from config as it is empty or undefined');
         delete platformConfig.manualDevices;
       }
 
+      this.log.debug('Writing updated config file');
       await this.writeConfigFile(configPath, fileConfig);
+      this.log.debug('Config file written successfully');
 
       this.platform.config = parseConfig(platformConfig);
+      this.log.debug('Platform config updated');
 
       return processedDevices;
     } catch (error) {
