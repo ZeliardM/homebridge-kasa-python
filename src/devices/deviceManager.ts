@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs';
 import HomekitDevice from './index.js';
 import KasaPythonPlatform from '../platform.js';
 import { parseConfig } from '../config.js';
-import type { ConfigDevice, DeviceConfig, KasaDevice, SysInfo } from './kasaDevices.js';
+import type { ConfigDevice, DeviceConfig, DiscoveryInfo, KasaDevice, SysInfo } from './kasaDevices.js';
 
 export default class DeviceManager {
   private log: Logger;
@@ -62,14 +62,6 @@ export default class DeviceManager {
     }
   }
 
-  private updateDeviceModel(sysInfo: SysInfo, device: HomekitDevice): void {
-    if ('model' in sysInfo) {
-      if (!sysInfo.model.includes('(')) {
-        sysInfo.model = `${device.model}`;
-      }
-    }
-  }
-
   private async readConfigFile(configPath: string): Promise<PlatformConfig> {
     try {
       const configData = await fs.readFile(configPath, 'utf8');
@@ -108,7 +100,7 @@ export default class DeviceManager {
         manualDevices: this.manualDevices,
       }, config);
       this.log.debug('Discovery request sent successfully');
-      const devices: Record<string, { device_info: SysInfo; device_config: DeviceConfig }> = response.data;
+      const devices: Record<string, { sys_info: SysInfo; disc_info: DiscoveryInfo; device_config: DeviceConfig }> = response.data;
       this.log.info(`Devices discovered: ${Object.keys(devices).length}`);
 
       const configPath = path.join(this.platform.storagePath, 'config.json');
@@ -154,11 +146,13 @@ export default class DeviceManager {
       this.log.debug('Processing discovered devices');
 
       Object.keys(devices).forEach(ip => {
-        const deviceInfo = devices[ip].device_info;
+        const deviceInfo = devices[ip].sys_info;
+        const discoveryInfo = devices[ip].disc_info;
         const deviceConfig = devices[ip].device_config;
 
         const device: KasaDevice = {
           sys_info: deviceInfo,
+          disc_info: discoveryInfo,
           device_config: deviceConfig,
         };
         this.processDevice(device, platformConfig);
@@ -204,9 +198,8 @@ export default class DeviceManager {
   async getSysInfo(device: HomekitDevice): Promise<SysInfo | undefined> {
     try {
       const response = await axios.post(`${this.apiUrl}/getSysInfo`, { device_config: device.deviceConfig });
-      const sysInfo: SysInfo = response.data.device_info;
+      const sysInfo: SysInfo = response.data.sys_info;
       this.updateDeviceAlias(sysInfo);
-      this.updateDeviceModel(sysInfo, device);
       return sysInfo;
     } catch (error) {
       this.log.error(

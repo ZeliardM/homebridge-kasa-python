@@ -46,7 +46,6 @@ def custom_device_serializer(device: Device):
         "is_off": device.is_off,
         "is_on": device.is_on,
         "mac": device.hw_info["mac"],
-        "model": device.model if "(" in device.model else (device._discovery_info.get("device_model") or device.model),
         "sw_ver": device.sys_info.get("sw_ver") or device.sys_info.get("fw_ver")
     }
 
@@ -81,6 +80,16 @@ def custom_device_serializer(device: Device):
     return {
         "sys_info": sys_info,
         "device_config": device_config
+    }
+
+def custom_discovery_serializer(device: Device):
+    app.logger.debug(f"Serializing device for discovery: {device.host}")
+    disc_info = {
+        "model": device._discovery_info.get("model")
+    }
+
+    return {
+        "disc_info": disc_info
     }
 
 async def discover_devices(username=None, password=None, additional_broadcasts=None, manual_devices=None):
@@ -158,10 +167,13 @@ async def update_device_info(ip, dev: Device):
     app.logger.debug(f"Updating device info for {ip}")
     try:
         device = custom_device_serializer(dev)
-        device_info = device["sys_info"]
+        sys_info = device["sys_info"]
         device_config = device["device_config"]
+        device = custom_discovery_serializer(dev)
+        disc_info = device["disc_info"]
         device_cache[ip] = {
-            "device_info": device_info,
+            "sys_info": sys_info,
+            "disc_info": disc_info,
             "device_config": device_config
         }
         app.logger.debug(f"Updated device info for {ip}")
@@ -170,8 +182,8 @@ async def update_device_info(ip, dev: Device):
         app.logger.error(f"Error updating device info for {ip}: {str(e)}")
         return ip, {}
 
-async def get_device_info(device_config):
-    app.logger.debug(f"Getting device info for device: {device_config['host']}")
+async def get_sys_info(device_config):
+    app.logger.debug(f"Getting sys info for device: {device_config['host']}")
     dev = await Device.connect(config=Device.Config.from_dict(device_config))
     try:
         if not dev.alias:
@@ -179,10 +191,10 @@ async def get_device_info(device_config):
             await dev.disconnect()
             dev = await Device.connect(config=Device.Config.from_dict(device_config))
         device = custom_device_serializer(dev)
-        device_info = device["sys_info"]
-        return {"device_info": device_info}
+        sys_info = device["sys_info"]
+        return {"sys_info": sys_info}
     except Exception as e:
-        app.logger.error(f"Error getting device info: {str(e)}")
+        app.logger.error(f"Error getting sys info: {str(e)}")
         return {}
     finally:
         await dev.disconnect()
@@ -235,8 +247,8 @@ def get_sys_info_route():
     credentials = device_config.get('credentials')
     device_config.update({'credentials': Credentials(username=credentials['username'], password=credentials['password'])} if credentials else {})
     app.logger.debug(f"Getting system info for device: {device_config['host']}")
-    device_info = run_async(get_device_info, device_config)
-    return jsonify(device_info)
+    sys_info = run_async(get_sys_info, device_config)
+    return jsonify(sys_info)
 
 @app.route('/controlDevice', methods=['POST'])
 def control_device_route():

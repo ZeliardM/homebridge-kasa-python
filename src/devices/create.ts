@@ -15,7 +15,7 @@ function isPowerStrip(device: KasaDevice): device is Powerstrip {
 }
 
 function isSwitch(device: KasaDevice): device is Switch {
-  return Switches.includes(device.sys_info.model);
+  return Switches.includes(device.disc_info.model);
 }
 
 export default function create(

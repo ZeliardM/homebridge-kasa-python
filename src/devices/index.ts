@@ -92,7 +92,7 @@ export default abstract class HomekitDevice {
   }
 
   get model(): string {
-    return this.kasaDevice.sys_info.model;
+    return this.kasaDevice.disc_info.model;
   }
 
   get serialNumber(): string {

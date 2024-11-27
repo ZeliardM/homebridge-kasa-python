@@ -11,9 +11,12 @@ export interface SysInfo {
   is_off: boolean;
   is_on: boolean;
   mac: string;
-  model: string;
   state?: boolean;
   sw_ver: string;
+}
+
+export interface DiscoveryInfo {
+  model: string;
 }
 
 export interface ChildDevice {
@@ -44,16 +47,19 @@ export interface ConfigDevice {
 
 export interface Plug {
   sys_info: SysInfo;
+  disc_info: DiscoveryInfo;
   device_config: DeviceConfig;
 }
 
 export interface Powerstrip {
   sys_info: SysInfo;
+  disc_info: DiscoveryInfo;
   device_config: DeviceConfig;
 }
 
 export interface Switch {
   sys_info: SysInfo;
+  disc_info: DiscoveryInfo;
   device_config: DeviceConfig;
 }
 
