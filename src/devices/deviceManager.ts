@@ -62,6 +62,14 @@ export default class DeviceManager {
     }
   }
 
+  private updateDeviceModel(sysInfo: SysInfo, device: HomekitDevice): void {
+    if ('model' in sysInfo) {
+      if (!sysInfo.model.includes('(')) {
+        sysInfo.model = `${device.model}`;
+      }
+    }
+  }
+
   private async readConfigFile(configPath: string): Promise<PlatformConfig> {
     try {
       const configData = await fs.readFile(configPath, 'utf8');
@@ -169,6 +177,7 @@ export default class DeviceManager {
       const response = await axios.post(`${this.apiUrl}/getSysInfo`, { device_config: device.deviceConfig });
       const sysInfo: SysInfo = response.data.device_info;
       this.updateDeviceAlias(sysInfo);
+      this.updateDeviceModel(sysInfo, device);
       return sysInfo;
     } catch (error) {
       this.log.error(

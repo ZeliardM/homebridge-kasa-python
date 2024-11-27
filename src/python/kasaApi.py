@@ -46,7 +46,7 @@ def custom_device_serializer(device: Device):
         "is_off": device.is_off,
         "is_on": device.is_on,
         "mac": device.hw_info["mac"],
-        "model": device.model if "(" in device.model else device._discovery_info.get("device_model"),
+        "model": device.model if "(" in device.model else (device._discovery_info.get("device_model") or device.model),
         "sw_ver": device.sys_info.get("sw_ver") or device.sys_info.get("fw_ver")
     }
 
@@ -174,12 +174,10 @@ async def get_device_info(device_config):
     app.logger.debug(f"Getting device info for device: {device_config['host']}")
     dev = await Device.connect(config=Device.Config.from_dict(device_config))
     try:
-        await dev.update()
         if not dev.alias:
             app.logger.warning(f"Alias not found for device {dev.host}. Reconnecting and updating...")
             await dev.disconnect()
             dev = await Device.connect(config=Device.Config.from_dict(device_config))
-            await dev.update()
         device = custom_device_serializer(dev)
         device_info = device["sys_info"]
         return {"device_info": device_info}
