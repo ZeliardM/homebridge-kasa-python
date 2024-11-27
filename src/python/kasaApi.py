@@ -234,6 +234,8 @@ def discover():
 def get_sys_info_route():
     data = request.json
     device_config = data['device_config']
+    credentials = device_config.get('credentials')
+    device_config.update({'credentials': Credentials(username=credentials['username'], password=credentials['password'])} if credentials else {})
     app.logger.debug(f"Getting system info for device: {device_config['host']}")
     device_info = run_async(get_device_info, device_config)
     return jsonify(device_info)
@@ -242,6 +244,8 @@ def get_sys_info_route():
 def control_device_route():
     data = request.json
     device_config = data['device_config']
+    credentials = device_config.get('credentials')
+    device_config.update({'credentials': Credentials(username=credentials['username'], password=credentials['password'])} if credentials else {})
     action = data['action']
     child_num = data.get('child_num')
     app.logger.debug(f"Controlling device: {device_config['host']}, action: {action}, child_num: {child_num}")
