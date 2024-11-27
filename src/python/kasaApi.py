@@ -85,7 +85,7 @@ def custom_device_serializer(device: Device):
 def custom_discovery_serializer(device: Device):
     app.logger.debug(f"Serializing device for discovery: {device.host}")
     disc_info = {
-        "model": device._discovery_info.get("model")
+        "model": device._discovery_info.get("device_model")
     }
 
     return {
