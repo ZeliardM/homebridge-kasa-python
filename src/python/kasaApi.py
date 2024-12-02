@@ -1,4 +1,5 @@
 import asyncio, eventlet, eventlet.wsgi, os, requests, sys
+import json
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO
 from kasa import Credentials, Discover, Device, UnsupportedDeviceException
@@ -45,6 +46,9 @@ def custom_device_serializer(device: Device):
         "hw_ver": device.hw_info["hw_ver"],
         "is_off": device.is_off,
         "is_on": device.is_on,
+        "features": {
+            "brightness": device.features['brightness'].value if 'brightness' in device.features.keys() else None
+        }, 
         "mac": device.hw_info["mac"],
         "sw_ver": device.sys_info.get("sw_ver") or device.sys_info.get("fw_ver")
     }
@@ -220,6 +224,27 @@ async def control_device(device_config, action, child_num=None):
     finally:
         await dev.disconnect()
 
+async def set_device_feature(device_config, feature, value, child_num=None):
+    if child_num is not None:
+        app.logger.debug(f"Setting device feature: {device_config['host']}, feature: {feature}, value: {value}, child_num: {child_num}")
+    else:
+        app.logger.debug(f"Setting device feature: {device_config['host']}, feature: {feature}, value: {value}")
+
+    dev = await Device.connect(config=Device.Config.from_dict(device_config))
+    try:
+        if child_num is not None:
+            child = dev.children[child_num]
+            await dev.features[feature].set_value(value)
+        else:
+            await dev.features[feature].set_value(value)
+        app.logger.debug(f"Set device feature {device_config['host']} feature: {feature}, value: {value}")
+        return {"status": "success", f"{feature}": value}
+    except Exception as e:
+        app.logger.error(f"Error setting device feature {device_config['host']}: {str(e)}")
+        return {"status": "error", "message": str(e)}
+    finally:
+        await dev.disconnect()
+
 def run_async(func, *args):
     loop = asyncio.get_event_loop()
     return loop.run_until_complete(func(*args))
@@ -261,6 +286,20 @@ def control_device_route():
     app.logger.debug(f"Controlling device: {device_config['host']}, action: {action}, child_num: {child_num}")
     result = run_async(control_device, device_config, action, child_num)
     return jsonify(result)
+
+@app.route('/setDeviceFeature', methods=['POST'])
+def set_device_feature_route():
+    data = request.json
+    device_config = data['device_config']
+    credentials = device_config.get('credentials')
+    device_config.update({'credentials': Credentials(username=credentials['username'], password=credentials['password'])} if credentials else {})
+    feature = data['feature']
+    value = data['value']
+    child_num = data.get('child_num')
+    app.logger.debug(f"Setting device feature: {device_config['host']}, feature: {feature}, value: {value} , child_num: {child_num}")
+    result = run_async(set_device_feature, device_config, feature, value, child_num)
+    return jsonify(result)
+
 
 if __name__ == '__main__':
     port = int(sys.argv[1])

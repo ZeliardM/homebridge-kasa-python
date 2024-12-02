@@ -13,6 +13,7 @@ export interface SysInfo {
   mac: string;
   state?: boolean;
   sw_ver: string;
+  features: Record<string, number | boolean | string>;
 }
 
 export interface DiscoveryInfo {

@@ -1,10 +1,10 @@
-import type { Logger, PlatformConfig } from 'homebridge';
 import axios from 'axios';
-import path from 'node:path';
+import type { Logger, PlatformConfig } from 'homebridge';
 import { promises as fs } from 'node:fs';
-import HomekitDevice from './index.js';
-import KasaPythonPlatform from '../platform.js';
+import path from 'node:path';
 import { parseConfig } from '../config.js';
+import KasaPythonPlatform from '../platform.js';
+import HomekitDevice from './index.js';
 import type { ConfigDevice, DeviceConfig, DiscoveryInfo, KasaDevice, SysInfo } from './kasaDevices.js';
 
 export default class DeviceManager {
@@ -244,6 +244,46 @@ export default class DeviceManager {
       }
     } catch (error) {
       this.log.error(`Error performing action: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`);
+      if (axios.isAxiosError(error) && error.response) {
+        this.log.error(`Response status: ${error.response.status}`);
+        this.log.error(`Response data: ${JSON.stringify(error.response.data)}`);
+      }
+    }
+  }
+
+  async setDeviceFeature(device: HomekitDevice, feature: string, value: number | boolean | string, child_num?: number): Promise<void> {
+    const childText = child_num !== undefined ? ` child ${child_num}` : '';
+    try {
+      await this.peformSetDeviceFeature(device, feature, value, child_num);
+    } catch (error) {
+      this.log.error(
+        `An error occurred setting device feature ${device.name}${childText}: ${feature}: ${value} ${
+          axios.isAxiosError(error) ? error.message : 'An unknown error occurred'
+        }`,
+      );
+      if (axios.isAxiosError(error) && error.response) {
+        this.log.error(`Response status: ${error.response.status}`);
+        this.log.error(`Response data: ${JSON.stringify(error.response.data)}`);
+      }
+    }
+  }
+
+  private async peformSetDeviceFeature(device: HomekitDevice, feature: string, value: number | boolean | string,
+    childNumber?: number): Promise<void> {
+    const url = `${this.apiUrl}/setDeviceFeature`;
+    const data = {
+      device_config: device.deviceConfig,
+      feature,
+      value,
+      ...(childNumber !== undefined && { child_num: childNumber }),
+    };
+    try {
+      const response = await axios.post(url, data);
+      if (response.data.status !== 'success') {
+        this.log.error(`Error setting device feature: ${response.data.message}`);
+      }
+    } catch (error) {
+      this.log.error(`Error setting device feature: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`);
       if (axios.isAxiosError(error) && error.response) {
         this.log.error(`Response status: ${error.response.status}`);
         this.log.error(`Response data: ${JSON.stringify(error.response.data)}`);

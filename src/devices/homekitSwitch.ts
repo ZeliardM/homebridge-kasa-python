@@ -1,15 +1,16 @@
+import type { Characteristic, CharacteristicValue, Service, WithUUID } from 'homebridge';
 import { Categories } from 'homebridge';
-import type { Service, Characteristic, CharacteristicValue, WithUUID } from 'homebridge';
 
-import HomekitDevice from './index.js';
-import { deferAndCombine, getOrAddCharacteristic } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
+import { deferAndCombine, getOrAddCharacteristic } from '../utils.js';
+import HomekitDevice from './index.js';
 import type { KasaDevice, Switch, SysInfo } from './kasaDevices.js';
 
 export default class HomeKitDeviceSwitch extends HomekitDevice {
   private getSysInfo: () => Promise<KasaDevice | undefined>;
   private previousKasaDevice: Switch | undefined;
   private isUpdating: boolean = false;
+  private isDimmer: boolean = false;
 
   constructor(
     platform: KasaPythonPlatform,
@@ -41,13 +42,21 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
   }
 
   private addSwitchService() {
-    const { Switch } = this.platform.Service;
+    const { Switch, Lightbulb } = this.platform.Service;
+
+    this.isDimmer = this.kasaDevice.sys_info.features['brightness'] !== null;
 
     const switchService: Service =
-      this.homebridgeAccessory.getService(Switch) ?? this.addService(Switch, this.name);
+      this.homebridgeAccessory.getService(this.isDimmer ? Lightbulb : Switch)
+        ?? this.addService(this.isDimmer ? Lightbulb : Switch, this.name);
 
     this.log.debug(`Adding characteristics for switch service: ${this.name}`);
-    this.addCharacteristic(switchService, this.platform.Characteristic.On);
+    this.addCharacteristic(switchService, this.platform.Characteristic.On, this.handleOnSet);
+
+    if(this.isDimmer) {
+      this.log.debug(`Adding dimming characteristic for switch service: ${this.name}`);
+      this.addCharacteristic(switchService, this.platform.Characteristic.Brightness, this.handleOnBrightnessSet);
+    }
 
     return switchService;
   }
@@ -55,26 +64,40 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
   private addCharacteristic(
     service: Service,
     characteristicType: WithUUID<new () => Characteristic>,
+    handleOnSet?: (value: CharacteristicValue) => Promise<void>,
   ) {
     this.log.debug(`Adding characteristic ${this.platform.getCharacteristicName(characteristicType)} for device: ${this.name}`);
     const characteristic: Characteristic = getOrAddCharacteristic(service, characteristicType);
     characteristic.onGet(this.handleOnGet.bind(this, characteristicType));
-    if (characteristicType === this.platform.Characteristic.On) {
-      characteristic.onSet(this.handleOnSet.bind(this));
+
+    if(handleOnSet) {
+      characteristic.onSet(handleOnSet.bind(this));
     }
 
     return service;
   }
 
   private async handleOnGet(characteristicType: WithUUID<new () => Characteristic>): Promise<CharacteristicValue> {
-    this.log.debug(`Handling OnGet for characteristic ${this.platform.getCharacteristicName(characteristicType)} for device: ${this.name}`);
+    const characteristicName = this.platform.getCharacteristicName(characteristicType);
+    this.log.debug(`Handling OnGet for characteristic ${characteristicName} for device: ${this.name}`);
+
     try {
-      const stateValue = this.kasaDevice.sys_info.state;
-      const characteristicName = this.platform.getCharacteristicName(characteristicType);
+      switch(characteristicType) {
+        case this.platform.Characteristic.On:
+        {
+          const stateValue = this.kasaDevice.sys_info.state;
 
-      this.log.debug(`Current State of ${characteristicName} is: ${stateValue} for ${this.name}`);
+          this.log.debug(`Current State of ${characteristicName} is: ${stateValue} for ${this.name}`);
+          return this.kasaDevice.sys_info.state ?? false;
+        }
+        case this.platform.Characteristic.Brightness:
+        {
+          const featureValue = this.kasaDevice.sys_info.features['brightness'];
+          this.log.debug(`Current Value of ${characteristicName} is: ${featureValue} for ${this.name}`);
+          return featureValue;
+        }
 
-      return this.kasaDevice.sys_info.state ?? false;
+      }
     } catch (error) {
       this.log.error('Error getting device state:', error);
     }
@@ -91,7 +114,8 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
           await this.deviceManager.toggleDevice(this, value);
           this.kasaDevice.sys_info.state = value;
           this.previousKasaDevice = this.kasaDevice;
-          const service = this.homebridgeAccessory.getService(this.platform.Service.Switch);
+          const service = this.homebridgeAccessory.getService(
+            this.isDimmer ? this.platform.Service.Lightbulb : this.platform.Service.Switch);
           if (service) {
             const onCharacteristic = service.getCharacteristic(this.platform.Characteristic.On);
             this.updateValue(service, onCharacteristic, value);
@@ -112,6 +136,40 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
     }
   }
 
+  private async handleOnBrightnessSet(value: CharacteristicValue): Promise<void> {
+    this.log.info(`Setting brightness to: ${value} for ${this.name}`);
+    if (typeof value === 'number') {
+      if (this.deviceManager) {
+        try {
+          this.isUpdating = true;
+
+          this.log.debug(`Toggling device brightness to ${value} for device: ${this.name}`);
+
+          await this.deviceManager.setDeviceFeature(this, 'brightness', value);
+          this.kasaDevice.sys_info.features['brightness'] = value;
+          this.previousKasaDevice = this.kasaDevice;
+          const service = this.homebridgeAccessory.getService(
+            this.isDimmer ? this.platform.Service.Lightbulb : this.platform.Service.Switch);
+          if (service) {
+            const onCharacteristic = service.getCharacteristic(this.platform.Characteristic.Brightness);
+            this.updateValue(service, onCharacteristic, value);
+          }
+          this.log.debug(`Successfully set brightness to ${value} for ${this.name}`);
+          return;
+        } catch (error) {
+          this.logRejection(error);
+        } finally {
+          this.isUpdating = false;
+        }
+      } else {
+        throw new Error('Device manager is undefined.');
+      }
+    } else {
+      this.log.warn('setValue: Invalid Brightness:', value);
+      throw new Error(`setValue: Invalid Brightness: ${value}`);
+    }
+  }
+
   private async updateState() {
     if (this.isUpdating) {
       this.log.debug('Update already in progress, skipping updateState');
@@ -120,10 +178,10 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
     this.isUpdating = true;
     try {
       this.log.debug('Updating device state');
-      const device = await this.getSysInfo() as Switch;
+      const device = await this.getSysInfo();
       if (device) {
         this.log.debug('Device found, updating state');
-        const service = this.homebridgeAccessory.getService(this.platform.Service.Switch);
+        const service = this.homebridgeAccessory.getService(this.isDimmer ? this.platform.Service.Lightbulb : this.platform.Service.Switch);
         if (service && this.previousKasaDevice) {
           const previousRelayState = this.previousKasaDevice.sys_info.state;
           if (previousRelayState !== device.sys_info.state) {
@@ -133,6 +191,15 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
             this.log.debug(`Updated state for device: ${this.name} to ${device.sys_info.state}`);
           } else {
             this.log.debug(`State unchanged for device: ${this.name}`);
+          }
+
+          if(this.previousKasaDevice.sys_info.features['brightness'] !== device.sys_info.features['brightness']) {
+            this.kasaDevice.sys_info.features['brightness'] = device.sys_info.features['brightness'];
+            const brightnessCharacteristic = service.getCharacteristic(this.platform.Characteristic.Brightness);
+            this.updateValue(service, brightnessCharacteristic, device.sys_info.features['brightness']);
+            this.log.debug(`Updated brightness for device: ${this.name} to ${device.sys_info.features['brightness']}`);
+          } else {
+            this.log.debug(`Brightness unchanged for device: ${this.name}`);
           }
         } else {
           this.log.warn(`Service not found for device: ${this.name} or previous Kasa device is undefined`);
