@@ -11,6 +11,7 @@ import type {
 } from 'homebridge';
 import { Logger } from 'homebridge/dist/logger.js';
 
+import axios from 'axios';
 import getPort from 'get-port';
 import path from 'node:path';
 import { ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -119,13 +120,28 @@ function startLoggingServer(log: Logging, callback: (port: number) => void) {
   });
 }
 
+async function waitForServer(url: string, log: Logging, timeout: number = 30000, interval: number = 1000): Promise<void> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeout) {
+    try {
+      const response = await axios.get(url);
+      if (response.status === 200) {
+        log.debug(`Server responded with status ${response.status}`);
+        return;
+      }
+    } catch {
+      // Ignore errors and continue checking
+    }
+    await new Promise(resolve => setTimeout(resolve, interval));
+  }
+
+  throw new Error(`Server did not respond within ${timeout / 1000} seconds`);
+}
+
 interface LogEntry {
   level: 'debug' | 'info' | 'warn' | 'error';
   message: string;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
@@ -214,7 +230,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       this.port = await getPort();
       this.deviceManager = new DeviceManager(this);
       await this.startKasaApi();
-      await delay(5000);
+      await waitForServer(`http://127.0.0.1:${this.port}/health`, this.log);
       if (this.deviceManager) {
         discovered_devices = await this.deviceManager.discoverDevices();
       } else {

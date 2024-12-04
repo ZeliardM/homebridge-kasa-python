@@ -262,6 +262,10 @@ def control_device_route():
     result = run_async(control_device, device_config, action, child_num)
     return jsonify(result)
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "healthy"}), 200
+
 if __name__ == '__main__':
     port = int(sys.argv[1])
     app.logger.info(f"Starting server on port {port}")
