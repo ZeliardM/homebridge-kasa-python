@@ -1,28 +1,47 @@
 export type KasaDevice = Plug | Powerstrip | Switch;
 
 export interface SysInfo {
+  active?: number;
   alias: string;
+  brightness?: number;
   children?: ChildDevice[];
   child_num: number;
+  color_temp?: number;
   device_id: string;
   device_type: string;
   host: string;
   hw_ver: string;
-  is_off: boolean;
-  is_on: boolean;
+  hsv?: HSV[];
   mac: string;
   state?: boolean;
   sw_ver: string;
+  [key: string]: string | number | boolean | ChildDevice[] | HSV[] | undefined;
 }
 
 export interface DiscoveryInfo {
   model: string;
 }
 
+export interface FeatureInfo {
+  brightness?: boolean;
+  color_temp?: boolean;
+  hsv?: boolean;
+}
+
 export interface ChildDevice {
+  active?: number;
+  alias: string;
+  brightness?: number;
+  color_temp?: number;
+  hsv?: HSV[];
   id: string;
   state: boolean;
-  alias: string;
+  [key: string]: string | number | boolean | HSV[] | undefined;
+}
+
+export interface HSV {
+  hue: number;
+  saturation: number;
 }
 
 export interface DeviceConfig {
@@ -48,18 +67,21 @@ export interface ConfigDevice {
 export interface Plug {
   sys_info: SysInfo;
   disc_info: DiscoveryInfo;
+  feature_info: FeatureInfo;
   device_config: DeviceConfig;
 }
 
 export interface Powerstrip {
   sys_info: SysInfo;
   disc_info: DiscoveryInfo;
+  feature_info: FeatureInfo;
   device_config: DeviceConfig;
 }
 
 export interface Switch {
   sys_info: SysInfo;
   disc_info: DiscoveryInfo;
+  feature_info: FeatureInfo;
   device_config: DeviceConfig;
 }
 
