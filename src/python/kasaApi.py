@@ -142,6 +142,16 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
     for ip, dev in devices.items():
         dev: Device
         try:
+            components = await dev._raw_query("component_nego")
+            component_list = components.get("component_nego", {}).get("component_list", [])
+            homekit_component = next((item for item in component_list if item.get("id") == "homekit"), None)
+            if not dev.alias and homekit_component:
+                app.logger.debug(f"Native HomeKit Support found for device {ip} and was not added to update tasks")
+                continue
+        except Exception:
+            app.logger.debug(f"Native HomeKit Support not found for device {ip}")
+
+        try:
             dev_type = dev.sys_info.get("mic_type") or dev.sys_info.get("type")
             if dev_type and dev_type not in UNSUPPORTED_TYPES:
                 tasks.append(update_device_info(ip, dev))
