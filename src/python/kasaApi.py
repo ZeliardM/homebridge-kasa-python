@@ -1,7 +1,7 @@
 import asyncio, eventlet, eventlet.wsgi, math, os, requests, sys
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO
-from kasa import Credentials, Discover, Device, Module, UnsupportedDeviceException
+from kasa import Credentials, Discover, Device, Module, UnsupportedDeviceError
 from loguru import logger
 
 app = Flask(__name__)
@@ -117,8 +117,8 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
     async def on_discovered(device: Device):
         try:
             await device.update()
-            app.logger.debug(f"Discovered device has been updated: {device.host}")
-        except UnsupportedDeviceException as e:
+            app.logger.debug(f"Discovered device: {device.host}")
+        except UnsupportedDeviceError as e:
             app.logger.warning(f"Unsupported device found during discovery: {device.host} - {str(e)}")
         except Exception as e:
             app.logger.error(f"Error updating device during discovery: {device.host} - {str(e)}")
@@ -144,9 +144,9 @@ async def discover_devices(username=None, password=None, additional_broadcasts=N
             discovered_device = await Discover.discover_single(host=host, credentials=creds)
             await on_discovered(discovered_device)
             devices[host] = discovered_device
-            app.logger.debug(f"Discovered device: {host}")
-        except UnsupportedDeviceException as e:
-            app.logger.warning(f"Unsupported device found during discovery: {host} - {str(e)}")
+            app.logger.debug(f"Discovered manual device: {host} with device type {discovered_device.device_type}")
+        except UnsupportedDeviceError as e:
+            app.logger.warning(f"Unsupported device found during manual discovery: {host} - {str(e)}")
         except Exception as e:
             app.logger.error(f"Error discovering device {host}: {str(e)}", exc_info=True)
 
