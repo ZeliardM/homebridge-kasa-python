@@ -19,6 +19,7 @@ export default class HomeKitDevicePlug extends HomekitDevice {
       platform,
       kasaDevice,
       Categories.OUTLET,
+      'OUTLET',
     );
     this.log.debug(`Initializing HomeKitDevicePlug for device: ${kasaDevice.sys_info.alias}`);
     this.addOutletService();

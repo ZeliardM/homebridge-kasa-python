@@ -1,4 +1,3 @@
-import { Categories } from 'homebridge';
 import type {
   API,
   Characteristic,
@@ -25,7 +24,6 @@ import create from './devices/create.js';
 import DeviceManager from './devices/deviceManager.js';
 import HomekitDevice from './devices/index.js';
 import PythonChecker from './python/pythonChecker.js';
-import { EnumParser } from './categoriesParse.js';
 import { parseConfig } from './config.js';
 import { runCommand } from './utils.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
@@ -153,7 +151,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public config: KasaPythonConfig;
   public deviceManager: DeviceManager | undefined;
   public port: number = 0;
-  private readonly categories: Record<number, string>;
   private readonly homekitDevicesById: Map<string, HomekitDevice> = new Map();
   private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
   private platformInitialization: Promise<void>;
@@ -165,7 +162,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.storagePath = this.api.user.storagePath();
     this.venvPythonExecutable = path.join(this.storagePath, 'kasa-python', '.venv', 'bin', 'python3');
     this.config = parseConfig(config);
-    this.categories = this.initializeCategories();
     this.platformInitialization = this.initializePlatform().catch((error) => {
       this.log.error('Platform initialization failed:', error);
     });
@@ -182,10 +178,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
 
   private createHomekitDevice(kasaDevice: KasaDevice): HomekitDevice | undefined {
     return create(this, kasaDevice);
-  }
-
-  private initializeCategories(): Record<number, string> {
-    return new EnumParser(this).parse() as Record<number, string>;
   }
 
   async initializePlatform(): Promise<void> {
@@ -358,10 +350,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     return characteristic.name ??
       characteristic.displayName ??
       lookupCharacteristicNameByUUID(this.api.hap.Characteristic, characteristic.UUID);
-  }
-
-  getCategoryName(category: Categories): string {
-    return this.categories ? this.categories[category] : 'Unknown';
   }
 
   registerPlatformAccessory(platformAccessory: PlatformAccessory<KasaPythonAccessoryContext>): void {

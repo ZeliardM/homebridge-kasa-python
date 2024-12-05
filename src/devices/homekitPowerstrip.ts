@@ -19,6 +19,7 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
       platform,
       kasaDevice,
       Categories.OUTLET,
+      'OUTLET',
     );
     this.log.debug(`Initializing HomeKitDevicePowerStrip for device: ${kasaDevice.sys_info.alias}`);
     this.kasaDevice.sys_info.children?.forEach((child: ChildDevice, index: number) => {

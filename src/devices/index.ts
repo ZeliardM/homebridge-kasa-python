@@ -19,7 +19,6 @@ import type { KasaPythonAccessoryContext } from '../platform.js';
 
 export default abstract class HomekitDevice {
   readonly log: Logger;
-  readonly categoryName: string;
   readonly deviceConfig: DeviceConfig;
   protected deviceManager: DeviceManager | undefined;
   homebridgeAccessory: PlatformAccessory<KasaPythonAccessoryContext>;
@@ -28,11 +27,11 @@ export default abstract class HomekitDevice {
     readonly platform: KasaPythonPlatform,
     protected kasaDevice: KasaDevice,
     readonly category: Categories,
+    readonly categoryName: string,
   ) {
     this.deviceConfig = kasaDevice.device_config;
     this.deviceManager = platform.deviceManager;
     this.log = prefixLogger(platform.log, `[${this.name}]`);
-    this.categoryName = this.platform.getCategoryName(this.category);
     this.homebridgeAccessory = this.initializeAccessory();
     this.homebridgeAccessory.on(PlatformAccessoryEvent.IDENTIFY, () => this.identify());
   }
@@ -50,7 +49,7 @@ export default abstract class HomekitDevice {
     } else {
       this.log.debug(
         `Existing Accessory found [${homebridgeAccessory.context.deviceId}] ` +
-        `[${homebridgeAccessory.UUID}] category: ${this.platform.getCategoryName(homebridgeAccessory.category)}`,
+        `[${homebridgeAccessory.UUID}] category: ${this.categoryName}`,
       );
       accessory = homebridgeAccessory;
       this.updateAccessory(accessory);

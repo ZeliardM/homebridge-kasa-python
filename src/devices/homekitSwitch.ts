@@ -19,6 +19,7 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
       platform,
       kasaDevice,
       Categories.SWITCH,
+      'SWITCH',
     );
     this.log.debug(`Initializing HomeKitDeviceSwitch for device: ${kasaDevice.sys_info.alias}`);
     this.addSwitchService();
