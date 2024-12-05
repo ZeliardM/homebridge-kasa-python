@@ -36,9 +36,9 @@ export type KasaPythonAccessoryContext = {
 };
 
 let packageConfig: { name: string; version: string; engines: { node: string | Range } };
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function loadPackageConfig(logger: Logging): Promise<void> {
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const packageConfigPath = path.join(__dirname, '..', 'package.json');
   const log: Logger = prefixLogger(logger, '[Package Config]');
   try {
@@ -253,7 +253,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   private async startKasaApi(): Promise<void> {
-    const scriptPath = `${this.storagePath}/node_modules/homebridge-kasa-python/dist/python/kasaApi.py`;
+    const scriptPath = path.join(__dirname, 'python', 'kasaApi.py');
     const loggerLevel = this.getLoggerLevel();
 
     startLoggingServer(this.log, async (loggingPort) => {
