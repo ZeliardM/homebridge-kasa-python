@@ -71,7 +71,7 @@ class PythonChecker {
   }
 
   private async createVenv(): Promise<void> {
-    const [stdout] = await runCommand(this.log, this.pythonExecutable, ['-m', 'venv', this.venvPath, '--clear'], undefined, false, false);
+    const [stdout] = await runCommand(this.log, this.pythonExecutable, ['-m', 'venv', this.venvPath, '--clear'], undefined, true);
     if (stdout.includes('not created successfully') || !this.isVenvCreated()) {
       while (true) {
         this.log.error('virtualenv python module is not installed.');
@@ -89,7 +89,7 @@ class PythonChecker {
   }
 
   private async getPythonHome(executable: string): Promise<string> {
-    const [venvPythonHome] = await runCommand(this.log, executable, [path.join(__dirname, 'pythonHome.py')], undefined, false, false);
+    const [venvPythonHome] = await runCommand(this.log, executable, [path.join(__dirname, 'pythonHome.py')], undefined, true);
     return venvPythonHome.trim();
   }
 
@@ -101,7 +101,7 @@ class PythonChecker {
   }
 
   private async updatePip(): Promise<void> {
-    await runCommand(this.log, this.venvPipExecutable, ['install', '--upgrade', 'pip'], undefined, false, false);
+    await runCommand(this.log, this.venvPipExecutable, ['install', '--upgrade', 'pip'], undefined, true);
   }
 
   private async ensureVenvRequirementsSatisfied(): Promise<void> {
@@ -111,7 +111,7 @@ class PythonChecker {
   }
 
   private async areRequirementsSatisfied(): Promise<boolean> {
-    const [freezeStdout] = await runCommand(this.log, this.venvPipExecutable, ['freeze'], undefined, false, false);
+    const [freezeStdout] = await runCommand(this.log, this.venvPipExecutable, ['freeze'], undefined, true);
     const freeze = this.freezeStringToObject(freezeStdout);
     const requirements = this.freezeStringToObject(fs.readFileSync(this.requirementsPath).toString());
     return Object.keys(requirements).every(pkg => freeze[pkg] === requirements[pkg]);
@@ -126,16 +126,16 @@ class PythonChecker {
   }
 
   private async installRequirements(): Promise<void> {
-    await runCommand(this.log, this.venvPipExecutable, ['install', '-r', this.requirementsPath], undefined, false, false);
+    await runCommand(this.log, this.venvPipExecutable, ['install', '-r', this.requirementsPath], undefined, true);
   }
 
   private async getSystemPythonVersion(): Promise<string> {
-    const [version] = await runCommand(this.log, this.pythonExecutable, ['--version'], undefined, false, false);
+    const [version] = await runCommand(this.log, this.pythonExecutable, ['--version'], undefined, true);
     return version.trim().replace('Python ', '');
   }
 
   private async getVenvPipVersion(): Promise<string> {
-    const [version] = await runCommand(this.log, this.venvPipExecutable, ['--version'], undefined, false, false);
+    const [version] = await runCommand(this.log, this.venvPipExecutable, ['--version'], undefined, true);
     return version.trim().split(' ')[1];
   }
 
