@@ -174,15 +174,12 @@ export const LightStrips = [
   'L930-5(US)',
 ];
 
-export const Hubs = [
+export const Unsupported = [
   'KH100(EU)',
   'KH100(UK)',
   'H100(EU)',
   'H200(EU)',
   'H200(US)',
-];
-
-export const HubConnectedDevices = [
   'KE100(EU)',
   'KE100(UK)',
   'S200B(EU)',
@@ -196,9 +193,6 @@ export const HubConnectedDevices = [
   'T310(US)',
   'T315(EU)',
   'T315(US)',
-];
-
-export const Cameras = [
   'C210(EU)',
   'TC65',
 ];
