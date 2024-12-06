@@ -64,6 +64,13 @@ export interface ConfigDevice {
   alias: string;
 }
 
+export interface LightBulb {
+  sys_info: SysInfo;
+  disc_info: DiscoveryInfo;
+  feature_info: FeatureInfo;
+  device_config: DeviceConfig;
+}
+
 export interface Plug {
   sys_info: SysInfo;
   disc_info: DiscoveryInfo;
@@ -111,7 +118,7 @@ export const Plugs = [
   'TP15(US)',
 ];
 
-export const PowerStrips = [
+export const Powerstrips = [
   'EP40(US)',
   'EP40M(US)',
   'HS107(US)',
@@ -161,7 +168,7 @@ export const Bulbs = [
   'L630(EU)',
 ];
 
-export const LightStrips = [
+export const Lightstrips = [
   'KL400L5(US)',
   'KL420L5(US)',
   'KL430(UN)',

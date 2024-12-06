@@ -1,17 +1,22 @@
 import HomekitDevice from './index.js';
+import HomeKitDeviceLightBulb from './homekitLightBulb.js';
 import HomeKitDevicePlug from './homekitPlug.js';
 import HomeKitDevicePowerStrip from './homekitPowerstrip.js';
 import HomeKitDeviceSwitch from './homekitSwitch.js';
-import { Switches } from './kasaDevices.js';
+import { Bulbs, Lightstrips, Plugs, Powerstrips, Switches } from './kasaDevices.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { KasaDevice, Plug, Powerstrip, Switch } from './kasaDevices.js';
+import type { KasaDevice, LightBulb, Plug, Powerstrip, Switch } from './kasaDevices.js';
+
+function isLightBulb(device: KasaDevice): device is LightBulb {
+  return Bulbs.includes(device.disc_info.model) || Lightstrips.includes(device.disc_info.model);
+}
 
 function isPlug(device: KasaDevice): device is Plug {
-  return 'child_num' in device.sys_info && device.sys_info.child_num === 0;
+  return Plugs.includes(device.disc_info.model);
 }
 
 function isPowerStrip(device: KasaDevice): device is Powerstrip {
-  return device.sys_info.children !== undefined && device.sys_info.child_num > 0 && Array.isArray(device.sys_info.children);
+  return Powerstrips.includes(device.disc_info.model);
 }
 
 function isSwitch(device: KasaDevice): device is Switch {
@@ -22,16 +27,20 @@ export default function create(
   platform: KasaPythonPlatform,
   KasaDevice: KasaDevice,
 ): HomekitDevice | undefined {
+  if (isLightBulb(KasaDevice)) {
+    return new HomeKitDeviceLightBulb(platform, KasaDevice);
+  }
+
+  if (isPlug(KasaDevice)) {
+    return new HomeKitDevicePlug(platform, KasaDevice);
+  }
+
   if (isPowerStrip(KasaDevice)) {
     return new HomeKitDevicePowerStrip(platform, KasaDevice);
   }
 
   if (isSwitch(KasaDevice)) {
     return new HomeKitDeviceSwitch(platform, KasaDevice);
-  }
-
-  if (isPlug(KasaDevice)) {
-    return new HomeKitDevicePlug(platform, KasaDevice);
   }
 
   platform.log.error('Unknown device type:', KasaDevice);
