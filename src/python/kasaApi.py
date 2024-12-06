@@ -30,12 +30,12 @@ UNSUPPORTED_TYPES = {
 def serialize_child(child: Device):
     return {
         "alias": child.alias,
-        **({"brightness": getattr(child.modules[Module.Light], "brightness")} if Module.Light in child.modules else {}),
-        **({"color_temp": getattr(child.modules[Module.Light], "color_temp")} if Module.Light in child.modules else {}),
+        **({"brightness": getattr(child.modules[Module.Light], "brightness")} if child.modules[Module.Light].is_dimmable else {}),
+        **({"color_temp": getattr(child.modules[Module.Light], "color_temp")} if child.modules[Module.Light].is_variable_color_temp else {}),
         **({"hsv": {
             "hue": getattr(child.modules[Module.Light], "hsv")[0],
             "saturation": getattr(child.modules[Module.Light], "hsv")[1]
-        }} if Module.Light in child.modules else {}),
+        }} if child.modules[Module.Light].is_color else {}),
         "id": child.device_id.split("_", 1)[1],
         "state": child.features["state"].value
     }
@@ -43,17 +43,17 @@ def serialize_child(child: Device):
 def custom_sysinfo_config_serializer(device: Device):
     app.logger.debug(f"Serializing device: {device.host}")
 
-    child_num = len(device.children) if device.children else 0
+    child_num = device.children.count if device.children else 0
 
     sys_info = {
-        "alias": device.alias,
+        "alias": device.alias if device.alias else f'{device.device_type}_{device.host}',
         "child_num": child_num,
-        "device_id": device.sys_info.get("deviceId") or device.sys_info.get("device_id"),
+        "device_id": device.sys_info["deviceId"] or device.sys_info["device_id"],
         "device_type": device.config.connection_type.device_family.value,
         "host": device.host,
         "hw_ver": device.hw_info["hw_ver"],
-        "mac": device.hw_info["mac"],
-        "sw_ver": device.sys_info.get("sw_ver") or device.sys_info.get("fw_ver")
+        "mac": device.mac,
+        "sw_ver": device.hw_info["sw_ver"],
     }
 
     if child_num > 0:
@@ -61,12 +61,12 @@ def custom_sysinfo_config_serializer(device: Device):
     else:
         sys_info.update({
             "state": device.features["state"].value,
-            **({"brightness": getattr(device.modules[Module.Light], "brightness")} if Module.Light in device.modules else {}),
-            **({"color_temp": getattr(device.modules[Module.Light], "color_temp")} if Module.Light in device.modules else {}),
+            **({"brightness": getattr(device.modules[Module.Light], "brightness")} if device.modules[Module.Light].is_dimmable else {}),
+            **({"color_temp": getattr(device.modules[Module.Light], "color_temp")} if device.modules[Module.Light].is_variable_color_temp else {}),
             **({"hsv": {
                 "hue": getattr(device.modules[Module.Light], "hsv")[0],
                 "saturation": getattr(device.modules[Module.Light], "hsv")[1]
-            }} if Module.Light in device.modules else {})
+            }} if device.modules[Module.Light].is_color else {})
         })
 
     device_config = {
@@ -75,8 +75,7 @@ def custom_sysinfo_config_serializer(device: Device):
         **({"credentials": {
             "username": device.config.credentials.username,
             "password": device.config.credentials.password
-        }} if device.config.credentials else {
-        }),
+        }} if device.config.credentials else {}),
         "connection_type": {
             "device_family": device.config.connection_type.device_family.value,
             "encryption_type": device.config.connection_type.encryption_type.value,
@@ -93,7 +92,7 @@ def custom_sysinfo_config_serializer(device: Device):
 def custom_discovery_feature_serializer(device: Device):
     app.logger.debug(f"Serializing device for discovery: {device.host}")
     disc_info = {
-        "model": device._discovery_info.get("device_model", device.sys_info.get("model"))
+        "model": device._discovery_info["device_model"] or device.sys_info["model"]
     }
 
     app.logger.debug(f"Serializing device features: {device.host}")
