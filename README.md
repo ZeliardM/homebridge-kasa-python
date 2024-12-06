@@ -296,7 +296,7 @@ Automatic Discovery may be possible only for some devices. If your device is not
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.2</td>
     </tr>
     <tr>
-      <td align="center" rowspan="31" style="border: 1px solid black; padding: 8px;">Wall Switches</td>
+      <td align="center" rowspan="31" style="border: 1px solid black; padding: 8px;">Switches</td>
       <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">ES20M</td>
       <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.8</td>
@@ -426,7 +426,7 @@ Automatic Discovery may be possible only for some devices. If your device is not
       <td align="center" style="border: 1px solid black; padding: 8px;">1.1.0</td>
     </tr>
     <tr>
-      <td align="center" rowspan="22" style="border: 1px solid black; padding: 8px;">Bulbs</td>
+      <td align="center" rowspan="39" style="border: 1px solid black; padding: 8px;">Light Bulbs</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">KL110</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.8.11</td>
@@ -522,7 +522,6 @@ Automatic Discovery may be possible only for some devices. If your device is not
       <td align="center" style="border: 1px solid black; padding: 8px;">1.1.2</td>
     </tr>
     <tr>
-      <td align="center" rowspan="17" style="border: 1px solid black; padding: 8px;">Light Strips</td>
       <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">KL400L5</td>
       <td align="center" rowspan="2" style="border: 1px solid black; padding: 8px;">1.0 (US)</td>
       <td align="center" style="border: 1px solid black; padding: 8px;">1.0.5</td>

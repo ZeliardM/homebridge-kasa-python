@@ -1,22 +1,22 @@
 import HomekitDevice from './index.js';
 import HomeKitDeviceLightBulb from './homekitLightBulb.js';
 import HomeKitDevicePlug from './homekitPlug.js';
-import HomeKitDevicePowerStrip from './homekitPowerstrip.js';
+import HomeKitDevicePowerStrip from './homekitPowerStrip.js';
 import HomeKitDeviceSwitch from './homekitSwitch.js';
-import { Bulbs, Lightstrips, Plugs, Powerstrips, Switches } from './kasaDevices.js';
+import { LightBulbs, Plugs, PowerStrips, Switches } from './kasaDevices.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { KasaDevice, LightBulb, Plug, Powerstrip, Switch } from './kasaDevices.js';
+import type { KasaDevice, LightBulb, Plug, PowerStrip, Switch } from './kasaDevices.js';
 
 function isLightBulb(device: KasaDevice): device is LightBulb {
-  return Bulbs.includes(device.disc_info.model) || Lightstrips.includes(device.disc_info.model);
+  return LightBulbs.includes(device.disc_info.model);
 }
 
 function isPlug(device: KasaDevice): device is Plug {
   return Plugs.includes(device.disc_info.model);
 }
 
-function isPowerStrip(device: KasaDevice): device is Powerstrip {
-  return Powerstrips.includes(device.disc_info.model);
+function isPowerStrip(device: KasaDevice): device is PowerStrip {
+  return PowerStrips.includes(device.disc_info.model);
 }
 
 function isSwitch(device: KasaDevice): device is Switch {

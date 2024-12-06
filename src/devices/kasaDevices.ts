@@ -1,4 +1,4 @@
-export type KasaDevice = Plug | Powerstrip | Switch;
+export type KasaDevice = Plug | PowerStrip | Switch;
 
 export interface SysInfo {
   active?: number;
@@ -78,7 +78,7 @@ export interface Plug {
   device_config: DeviceConfig;
 }
 
-export interface Powerstrip {
+export interface PowerStrip {
   sys_info: SysInfo;
   disc_info: DiscoveryInfo;
   feature_info: FeatureInfo;
@@ -118,7 +118,7 @@ export const Plugs = [
   'TP15(US)',
 ];
 
-export const Powerstrips = [
+export const PowerStrips = [
   'EP40(US)',
   'EP40M(US)',
   'HS107(US)',
@@ -150,7 +150,7 @@ export const Switches = [
   'S505D(US)',
 ];
 
-export const Bulbs = [
+export const LightBulbs = [
   'KL110(US)',
   'KL120(US)',
   'KL125(US)',
@@ -166,9 +166,6 @@ export const Bulbs = [
   'L530E(EU)',
   'L530E(US)',
   'L630(EU)',
-];
-
-export const Lightstrips = [
   'KL400L5(US)',
   'KL420L5(US)',
   'KL430(UN)',

@@ -3,12 +3,12 @@ import type { Service } from 'homebridge';
 
 import HomekitDevice from './index.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { ChildDevice, Powerstrip } from './kasaDevices.js';
+import type { ChildDevice, PowerStrip } from './kasaDevices.js';
 
 export default class HomeKitDevicePowerStrip extends HomekitDevice {
   constructor(
     platform: KasaPythonPlatform,
-    protected kasaDevice: Powerstrip,
+    protected kasaDevice: PowerStrip,
   ) {
     super(
       platform,
