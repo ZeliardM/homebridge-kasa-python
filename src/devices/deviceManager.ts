@@ -2,7 +2,6 @@ import type { CharacteristicValue, Logger, PlatformConfig } from 'homebridge';
 import axios from 'axios';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
-import HomekitDevice from './index.js';
 import KasaPythonPlatform from '../platform.js';
 import { parseConfig } from '../config.js';
 import type { ConfigDevice, DeviceConfig, DiscoveryInfo, FeatureInfo, KasaDevice, SysInfo } from './kasaDevices.js';
@@ -196,9 +195,9 @@ export default class DeviceManager {
     }
   }
 
-  async getSysInfo(device: HomekitDevice): Promise<SysInfo | undefined> {
+  async getSysInfo(deviceConfig: DeviceConfig): Promise<SysInfo | undefined> {
     try {
-      const response = await axios.post(`${this.apiUrl}/getSysInfo`, { device_config: device.deviceConfig });
+      const response = await axios.post(`${this.apiUrl}/getSysInfo`, { device_config: deviceConfig });
       const sysInfo: SysInfo = response.data.sys_info;
       this.updateDeviceAlias(sysInfo);
       return sysInfo;
@@ -207,7 +206,7 @@ export default class DeviceManager {
     }
   }
 
-  async controlDevice(device: HomekitDevice, feature: string, value: CharacteristicValue, child_num?: number): Promise<void> {
+  async controlDevice(deviceConfig: DeviceConfig, feature: string, value: CharacteristicValue, child_num?: number): Promise<void> {
     try {
       let action: string;
       switch (feature) {
@@ -226,18 +225,18 @@ export default class DeviceManager {
           throw new Error(`Unsupported feature: ${feature}`);
       }
 
-      await this.performDeviceAction(device, feature, action, value, child_num);
+      await this.performDeviceAction(deviceConfig, feature, action, value, child_num);
     } catch (error) {
-      this.logError(`An error occurred performing action ${feature} with value ${value} for device ${device.name}`, error, child_num);
+      this.logError('An error occurred performing action', error);
     }
   }
 
   private async performDeviceAction(
-    device: HomekitDevice, feature: string, action: string, value: CharacteristicValue, childNumber?: number,
+    deviceConfig: DeviceConfig, feature: string, action: string, value: CharacteristicValue, childNumber?: number,
   ): Promise<void> {
     const url = `${this.apiUrl}/controlDevice`;
     const data = {
-      device_config: device.deviceConfig,
+      device_config: deviceConfig,
       feature,
       action,
       value,

@@ -11,11 +11,11 @@ export interface SysInfo {
   device_type: string;
   host: string;
   hw_ver: string;
-  hsv?: HSV[];
+  hsv?: HSV;
   mac: string;
   state?: boolean;
   sw_ver: string;
-  [key: string]: string | number | boolean | ChildDevice[] | HSV[] | undefined;
+  [key: string]: string | number | boolean | ChildDevice[] | HSV | undefined;
 }
 
 export interface DiscoveryInfo {
@@ -33,10 +33,10 @@ export interface ChildDevice {
   alias: string;
   brightness?: number;
   color_temp?: number;
-  hsv?: HSV[];
+  hsv?: HSV;
   id: string;
   state: boolean;
-  [key: string]: string | number | boolean | HSV[] | undefined;
+  [key: string]: string | number | boolean | HSV | undefined;
 }
 
 export interface HSV {
