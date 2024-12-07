@@ -139,7 +139,7 @@ export const Switches = [
   'HS210(US)',
   'HS220(US)',
   'KP405(US)',
-  'KS200M(US)',
+  'KS200(US)',
   'KS200M(US)',
   'KS205(US)',
   'KS220(US)',
