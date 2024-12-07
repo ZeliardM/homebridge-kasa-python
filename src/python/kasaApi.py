@@ -327,12 +327,6 @@ async def get_sys_info_route():
     try:
         data = await request.get_json()
         device_config = data['device_config']
-        credentials = device_config.get('credentials')
-        if credentials:
-            device_config['credentials'] = Credentials(
-                username=credentials['username'],
-                password=credentials['password']
-            )
         sys_info = await get_sys_info(device_config)
         return jsonify(sys_info)
     except Exception as e:
@@ -344,12 +338,6 @@ async def control_device_route():
     try:
         data = await request.get_json()
         device_config = data['device_config']
-        credentials = device_config.get('credentials')
-        if credentials:
-            device_config['credentials'] = Credentials(
-                username=credentials['username'],
-                password=credentials['password']
-            )
         feature = data['feature']
         action = data['action']
         value = data.get('value')
