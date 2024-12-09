@@ -1,5 +1,5 @@
 import type { CharacteristicValue, Logger, PlatformConfig } from 'homebridge';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import KasaPythonPlatform from '../platform.js';
@@ -76,17 +76,28 @@ export default class DeviceManager {
     this.log.info('Discovering devices...');
     try {
       const config = this.username && this.password ? { auth: { username: this.username, password: this.password } } : {};
-      const response = await axios.post(`${this.apiUrl}/discover`, {
-        additionalBroadcasts: this.additionalBroadcasts,
-        manualDevices: this.manualDevices,
-      }, config);
+      const response = await axios.post<{
+        devices: Record<string, {
+          sys_info: SysInfo;
+          disc_info: DiscoveryInfo;
+          feature_info: FeatureInfo;
+          device_config: DeviceConfig;
+        }>;
+      }>(
+        `${this.apiUrl}/discover`,
+        {
+          additionalBroadcasts: this.additionalBroadcasts,
+          manualDevices: this.manualDevices,
+        },
+        config,
+      );
 
       const devices: Record<string, {
         sys_info: SysInfo;
         disc_info: DiscoveryInfo;
         feature_info: FeatureInfo;
         device_config: DeviceConfig;
-      }> = response.data;
+      }> = response.data.devices;
 
       const configPath = path.join(this.platform.storagePath, 'config.json');
       const fileConfig = await this.readConfigFile(configPath);
@@ -142,7 +153,12 @@ export default class DeviceManager {
 
       return processedDevices;
     } catch (error) {
-      this.log.error(`An error occurred during device discovery: ${error}`);
+      if (axios.isAxiosError(error)) {
+        const errorMessage = (error as AxiosError<{ error: string }>).response?.data?.error || 'An unexpected error occurred';
+        this.log.error(`An error occurred during device discovery: ${errorMessage}`);
+      } else {
+        this.log.error(`An unexpected error occurred: ${(error as Error).message}`);
+      }
       return {};
     }
   }
@@ -164,7 +180,12 @@ export default class DeviceManager {
       this.updateDeviceAlias(sysInfo);
       return sysInfo;
     } catch (error) {
-      this.log.error(`An error occurred during getSysInfo: ${error}`);
+      if (axios.isAxiosError(error)) {
+        const errorMessage = (error as AxiosError<{ error: string }>).response?.data?.error || 'An unexpected error occurred';
+        this.log.error(`An error occurred during device discovery: ${errorMessage}`);
+      } else {
+        this.log.error(`An unexpected error occurred: ${(error as Error).message}`);
+      }
     }
   }
 
@@ -189,7 +210,12 @@ export default class DeviceManager {
 
       await this.performDeviceAction(deviceConfig, feature, action, value, child_num);
     } catch (error) {
-      this.log.error(`An error occurred performing action: ${error}`);
+      if (axios.isAxiosError(error)) {
+        const errorMessage = (error as AxiosError<{ error: string }>).response?.data?.error || 'An unexpected error occurred';
+        this.log.error(`An error occurred during device discovery: ${errorMessage}`);
+      } else {
+        this.log.error(`An unexpected error occurred: ${(error as Error).message}`);
+      }
     }
   }
 
@@ -211,7 +237,12 @@ export default class DeviceManager {
         this.log.error(`Error performing action: ${response.data.message}`);
       }
     } catch (error) {
-      this.log.error(`Error performing action: ${error}`);
+      if (axios.isAxiosError(error)) {
+        const errorMessage = (error as AxiosError<{ error: string }>).response?.data?.error || 'An unexpected error occurred';
+        this.log.error(`An error occurred during device discovery: ${errorMessage}`);
+      } else {
+        this.log.error(`An unexpected error occurred: ${(error as Error).message}`);
+      }
     }
   }
 }

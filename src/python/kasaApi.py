@@ -284,8 +284,10 @@ async def discover_route():
         manual_devices = data.get('manualDevices', [])
         devices_info = await discover_devices(username, password, additional_broadcasts, manual_devices)
         return jsonify(devices_info)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An unexpected error occurred"}), 500
 
 @app.route('/getSysInfo', methods=['POST'])
 async def get_sys_info_route():
@@ -294,8 +296,10 @@ async def get_sys_info_route():
         device_config = data['device_config']
         sys_info = await get_sys_info(device_config)
         return jsonify(sys_info)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An unexpected error occurred"}), 500
 
 @app.route('/controlDevice', methods=['POST'])
 async def control_device_route():
@@ -308,8 +312,10 @@ async def control_device_route():
         child_num = data.get('child_num')
         result = await control_device(device_config, feature, action, value, child_num)
         return jsonify(result)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An unexpected error occurred"}), 500
 
 @app.route('/health', methods=['GET'])
 async def health_check():
