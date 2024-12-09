@@ -27,12 +27,12 @@ export default class DeviceManager {
     return manualDevices.map(device => {
       if (typeof device === 'string') {
         return { host: device, alias: 'Will Be Filled By Plug-In Automatically' };
-      } else {
-        if ('breakoutChildDevices' in device) {
-          delete device.breakoutChildDevices;
-        }
-        return device;
+      } else if ('breakoutChildDevices' in device) {
+        delete device.breakoutChildDevices;
+      } else if ('host' in device && !('alias' in device)) {
+        (device as ConfigDevice).alias = 'Will Be Filled By Plug-In Automatically';
       }
+      return device;
     });
   }
 
@@ -111,7 +111,7 @@ export default class DeviceManager {
 
       if (platformConfig.manualDevices.length > 0 &&
         (typeof platformConfig.manualDevices[0] === 'string' ||
-          platformConfig.manualDevices.some((device: ConfigDevice) => typeof device !== 'string' && 'breakoutChildDevices' in device))) {
+          platformConfig.manualDevices.some((device: ConfigDevice) => typeof device !== 'string'))) {
         platformConfig.manualDevices = this.convertManualDevices(platformConfig.manualDevices);
       }
 

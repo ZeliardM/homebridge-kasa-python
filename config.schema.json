@@ -17,53 +17,51 @@
       "enableCredentials": {
         "title": "Enable Credentials",
         "type": "boolean",
-        "required": false,
         "description": "Enable to use username and password for authentication.",
         "default": false
       },
       "username": {
         "title": "Username",
         "type": "string",
-        "required": false,
         "description": "Username for the Kasa account. Required for cloud devices.",
         "placeholder": "Username",
-        "minLength": 1
+        "minLength": 1,
+        "condition": {
+          "functionBody": "return model.enableCredentials;"
+        }
       },
       "password": {
         "title": "Password",
         "type": "string",
-        "required": false,
         "description": "Password for the Kasa account. Required for cloud devices.",
         "placeholder": "Password",
-        "minLength": 1
+        "minLength": 1,
+        "condition": {
+          "functionBody": "return model.enableCredentials && model.username && model.username !== '';"
+        }
       },
       "pollingInterval": {
         "title": "Polling Interval (seconds)",
         "type": "integer",
-        "required": false,
         "description": "How often to check device status in the background (seconds)",
+        "default": "5",
         "placeholder": "5"
       },
       "additionalBroadcasts": {
         "title": "Additional Broadcast Addresses",
         "type": "array",
-        "buttonText": "Add Broadcast Address",
         "items": {
           "title": "Broadcast Address",
-          "type": "string",
-          "required": true
+          "type": "string"
         },
-        "required": false,
         "description": "List of additional broadcast addresses to discover devices on. Format: 192.168.1.255"
       },
       "manualDevices": {
         "title": "Manual List Of Devices",
         "type": "array",
-        "buttonText": "Add Manual Device",
         "items": {
           "title": "Manual Device",
           "type": "object",
-          "required": ["host"],
           "properties": {
             "host": {
               "type": "string",
@@ -73,57 +71,20 @@
               "type": "string",
               "title": "Alias",
               "readonly": true,
-              "default": "Will Be Filled By Plug-In Automatically",
               "condition": {
                 "functionBody": "return model.manualDevices && model.manualDevices[arrayIndices] && model.manualDevices[arrayIndices].host && model.manualDevices[arrayIndices].host !== '';"
               }
             }
           }
         },
-        "required": false,
         "description": "List of devices to manually add."
       },
       "waitTimeUpdate": {
         "title": "Wait Time Update (milliseconds)",
         "type": "integer",
-        "required": false,
         "description": "The time to wait to combine similar commands for a device before sending a command to a device (milliseconds). Default: 100.",
+        "default": "100",
         "placeholder": "100"
-      }
-    },
-    "dependencies": {
-      "enableCredentials": {
-        "oneOf": [
-          {
-            "properties": {
-              "enableCredentials": {
-                "enum": [false]
-              }
-            }
-          },
-          {
-            "properties": {
-              "enableCredentials": {
-                "enum": [true]
-              },
-              "username": {
-                "type": "string",
-                "required": false,
-                "description": "Username for the Kasa account. Required for cloud devices.",
-                "placeholder": "Username",
-                "minLength": 1
-              },
-              "password": {
-                "type": "string",
-                "required": false,
-                "description": "Password for the Kasa account. Required for cloud devices.",
-                "placeholder": "Password",
-                "minLength": 1
-              }
-            },
-            "required": ["username", "password"]
-          }
-        ]
       }
     }
   },
@@ -158,11 +119,9 @@
             {
               "key": "additionalBroadcasts",
               "type": "array",
-              "buttonText": "Add Broadcast Address",
               "items": {
                 "title": "Broadcast Address",
-                "type": "string",
-                "required": true
+                "type": "string"
               }
             }
           ]
@@ -176,7 +135,6 @@
             {
               "key": "manualDevices",
               "type": "array",
-              "buttonText": "Add Manual Device",
               "items": [
                 "manualDevices[].host", "manualDevices[].alias"
               ]
