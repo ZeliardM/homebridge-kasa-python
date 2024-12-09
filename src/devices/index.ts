@@ -47,10 +47,8 @@ export default abstract class HomekitDevice {
       accessory.context.deviceId = this.id;
       this.platform.registerPlatformAccessory(accessory);
     } else {
-      this.log.debug(
-        `Existing Accessory found [${homebridgeAccessory.context.deviceId}] ` +
-        `[${homebridgeAccessory.UUID}] category: ${this.categoryName}`,
-      );
+      this.log.debug(`Existing Accessory found [${homebridgeAccessory.context.deviceId}] ` +
+        `[${homebridgeAccessory.UUID}] category: ${this.categoryName}`);
       accessory = homebridgeAccessory;
       this.updateAccessory(accessory);
     }
@@ -113,16 +111,14 @@ export default abstract class HomekitDevice {
   updateValue(
     service: Service,
     characteristic: Characteristic,
+    deviceAlias: string,
     value: Nullable<CharacteristicValue> | Error | HapStatusError,
-    childDeviceAlias?: string,
   ): void {
-    const logMessage = `Updating ${this.platform.lsc(service, characteristic)}` +
-      `${childDeviceAlias ? ` on ${childDeviceAlias}` : ''} to ${value}`;
-    this.log.debug(logMessage);
+    this.log.info(`Updating ${this.platform.lsc(service, characteristic)} on ${deviceAlias} to ${value}`);
     characteristic.updateValue(value);
   }
 
   logRejection(reason: unknown): void {
-    this.log.error(JSON.stringify(reason));
+    this.log.error(`Rejection: ${JSON.stringify(reason)}`);
   }
 }

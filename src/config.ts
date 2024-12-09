@@ -99,7 +99,7 @@ function convertManualDevices(manualDevices: (string | ConfigDevice)[] | undefin
     return [];
   }
 
-  const convertedDevices = manualDevices.map(device => {
+  return manualDevices.map(device => {
     if (typeof device === 'string') {
       return { host: device, alias: 'Will Be Filled By Plug-In Automatically' };
     } else {
@@ -109,7 +109,6 @@ function convertManualDevices(manualDevices: (string | ConfigDevice)[] | undefin
       return device;
     }
   });
-  return convertedDevices;
 }
 
 export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {

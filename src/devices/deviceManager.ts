@@ -37,14 +37,7 @@ export default class DeviceManager {
   }
 
   private updateDeviceAlias(device: KasaDevice | SysInfo): void {
-    if ('sys_info' in device) {
-      this.updateAliasForSysInfo(device.sys_info as SysInfo);
-    } else {
-      this.updateAliasForSysInfo(device);
-    }
-  }
-
-  private updateAliasForSysInfo(sysInfo: SysInfo): void {
+    const sysInfo = 'sys_info' in device ? device.sys_info as SysInfo : device;
     if (sysInfo.alias) {
       const aliasMappings: { [key: string]: string } = {
         'TP-LINK_Power Strip_': 'Power Strip',
@@ -66,7 +59,7 @@ export default class DeviceManager {
       const configData = await fs.readFile(configPath, 'utf8');
       return JSON.parse(configData);
     } catch (error) {
-      this.logError('Error reading config file', error);
+      this.log.error(`Error reading config file: ${error}`);
       throw error;
     }
   }
@@ -75,79 +68,54 @@ export default class DeviceManager {
     try {
       await fs.writeFile(configPath, JSON.stringify(fileConfig, null, 2), 'utf8');
     } catch (error) {
-      this.logError('Error writing config file', error);
+      this.log.error(`Error writing config file: ${error}`);
     }
   }
 
   async discoverDevices(): Promise<Record<string, KasaDevice>> {
     this.log.info('Discovering devices...');
     try {
-      const config = {
-        ...(this.username && this.password && {
-          auth: {
-            username: this.username,
-            password: this.password,
-          },
-        }),
-      };
-      this.log.debug(
-        `Sending discovery request with additionalBroadcasts: ${JSON.stringify(this.additionalBroadcasts)}, ` +
-        `and manualDevices: ${JSON.stringify(this.manualDevices)}`,
-      );
+      const config = this.username && this.password ? { auth: { username: this.username, password: this.password } } : {};
       const response = await axios.post(`${this.apiUrl}/discover`, {
         additionalBroadcasts: this.additionalBroadcasts,
         manualDevices: this.manualDevices,
       }, config);
-      this.log.debug('Discovery request sent successfully');
+
       const devices: Record<string, {
         sys_info: SysInfo;
         disc_info: DiscoveryInfo;
         feature_info: FeatureInfo;
         device_config: DeviceConfig;
       }> = response.data;
-      this.log.info(`Devices discovered: ${Object.keys(devices).length}`);
 
       const configPath = path.join(this.platform.storagePath, 'config.json');
-      this.log.debug(`Reading config file from path: ${configPath}`);
       const fileConfig = await this.readConfigFile(configPath);
-      this.log.debug('Config file read successfully');
 
       const platformConfig = fileConfig.platforms.find((platformConfig: PlatformConfig) => platformConfig.platform === 'KasaPython');
       if (!platformConfig) {
         this.log.error('KasaPython configuration not found in config file.');
         return {};
       }
-      this.log.debug('KasaPython configuration found in config file');
 
-      if (!platformConfig.manualDevices) {
-        this.log.debug('Initializing manualDevices as an empty array');
-        platformConfig.manualDevices = [];
-      }
+      platformConfig.manualDevices = platformConfig.manualDevices || [];
 
-      if (platformConfig.manualDevices.length > 0) {
-        this.log.debug('Filtering manualDevices to remove entries without a host');
-        platformConfig.manualDevices = platformConfig.manualDevices.filter((device: string | ConfigDevice) => {
-          if (typeof device === 'string') {
-            return true;
-          } else if (!device.host) {
-            this.log.warn(`Removing manual device without host: ${JSON.stringify(device)}`);
-            return false;
-          }
+      platformConfig.manualDevices = platformConfig.manualDevices.filter((device: string | ConfigDevice) => {
+        if (typeof device === 'string') {
           return true;
-        });
-      }
+        } else if (!device.host) {
+          this.log.warn(`Removing manual device without host: ${JSON.stringify(device)}`);
+          return false;
+        }
+        return true;
+      });
 
-      if (
-        platformConfig.manualDevices.length > 0 &&
+      if (platformConfig.manualDevices.length > 0 &&
         (typeof platformConfig.manualDevices[0] === 'string' ||
-          platformConfig.manualDevices.some((device: ConfigDevice) => typeof device !== 'string' && 'breakoutChildDevices' in device))
-      ) {
-        this.log.debug('Converting manualDevices');
+          platformConfig.manualDevices.some((device: ConfigDevice) => typeof device !== 'string' && 'breakoutChildDevices' in device))) {
         platformConfig.manualDevices = this.convertManualDevices(platformConfig.manualDevices);
       }
 
       const processedDevices: { [key: string]: KasaDevice } = {};
-      this.log.debug('Processing discovered devices');
 
       Object.keys(devices).forEach(ip => {
         const deviceInfo = devices[ip].sys_info;
@@ -163,24 +131,18 @@ export default class DeviceManager {
         };
         this.processDevice(device, platformConfig);
         processedDevices[ip] = device;
-        this.log.debug(`Processed device with IP: ${ip}`);
       });
 
-      if (!platformConfig.manualDevices || platformConfig.manualDevices.length === 0) {
-        this.log.debug('Removing manualDevices from config as it is empty or undefined');
+      if (!platformConfig.manualDevices.length) {
         delete platformConfig.manualDevices;
       }
 
-      this.log.debug('Writing updated config file');
       await this.writeConfigFile(configPath, fileConfig);
-      this.log.debug('Config file written successfully');
-
       this.platform.config = parseConfig(platformConfig);
-      this.log.debug('Platform config updated');
 
       return processedDevices;
     } catch (error) {
-      this.logError('An error occurred during device discovery', error);
+      this.log.error(`An error occurred during device discovery: ${error}`);
       return {};
     }
   }
@@ -202,7 +164,7 @@ export default class DeviceManager {
       this.updateDeviceAlias(sysInfo);
       return sysInfo;
     } catch (error) {
-      this.logError('An error occurred during getSysInfo', error);
+      this.log.error(`An error occurred during getSysInfo: ${error}`);
     }
   }
 
@@ -227,7 +189,7 @@ export default class DeviceManager {
 
       await this.performDeviceAction(deviceConfig, feature, action, value, child_num);
     } catch (error) {
-      this.logError('An error occurred performing action', error);
+      this.log.error(`An error occurred performing action: ${error}`);
     }
   }
 
@@ -249,18 +211,7 @@ export default class DeviceManager {
         this.log.error(`Error performing action: ${response.data.message}`);
       }
     } catch (error) {
-      this.logError('Error performing action', error);
-    }
-  }
-
-  private logError(message: string, error: unknown, child_num?: number): void {
-    this.log.error(`${message}: ${axios.isAxiosError(error) ? error.message : 'An unknown error occurred'}`);
-    if (axios.isAxiosError(error) && error.response) {
-      this.log.error(`Response status: ${error.response.status}`);
-      this.log.error(`Response data: ${JSON.stringify(error.response.data)}`);
-    }
-    if (child_num !== undefined) {
-      this.log.error(`Child number: ${child_num}`);
+      this.log.error(`Error performing action: ${error}`);
     }
   }
 }

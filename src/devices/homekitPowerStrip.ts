@@ -2,7 +2,7 @@ import { Categories } from 'homebridge';
 import type { Characteristic, CharacteristicValue, Service, WithUUID } from 'homebridge';
 
 import HomekitDevice from './index.js';
-import { deferAndCombine, getOrAddCharacteristic } from '../utils.js';
+import { deferAndCombine } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
 import type { ChildDevice, KasaDevice, PowerStrip, SysInfo } from './kasaDevices.js';
 
@@ -23,17 +23,13 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
     );
     this.log.debug(`Initializing HomeKitDevicePowerStrip for device: ${kasaDevice.sys_info.alias}`);
     this.kasaDevice.sys_info.children?.forEach((child: ChildDevice, index: number) => {
-      this.log.debug(`Adding outlet service for child device: ${child.alias}`);
-      this.addOutletService(child, index);
+      this.checkService(child, index);
     });
 
-    this.getSysInfo = deferAndCombine(async (requestCount: number) => {
-      this.log.debug(`Executing deferred getSysInfo count: ${requestCount}`);
+    this.getSysInfo = deferAndCombine(async () => {
       if (this.deviceManager) {
-        this.log.debug('Fetching new SysInfo from device manager');
-        this.previousKasaDevice = this.kasaDevice;
+        this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
         this.kasaDevice.sys_info = await this.deviceManager.getSysInfo(this.deviceConfig) as SysInfo;
-        this.log.debug('Updated SysInfo from device manager');
       } else {
         this.log.warn('Device manager is not available');
       }
@@ -42,47 +38,55 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
     this.startPolling();
   }
 
-  private addOutletService(child: ChildDevice, index: number) {
+  private checkService(child: ChildDevice, index: number) {
     const { Outlet } = this.platform.Service;
-    const outletService: Service =
+    const service: Service =
       this.homebridgeAccessory.getServiceById(Outlet, `outlet-${index + 1}`) ??
       this.addService(Outlet, child.alias, `outlet-${index + 1}`);
-
-    this.log.debug(`Adding characteristics for outlet service: ${child.alias}`);
-    this.addCharacteristic(outletService, this.platform.Characteristic.On, child);
-    this.addCharacteristic(outletService, this.platform.Characteristic.OutletInUse, child);
-
-    return outletService;
+    this.checkCharacteristics(service, child);
+    return service;
   }
 
-  identify(): void {
-    this.log.info('identify');
+  private checkCharacteristics(service: Service, child: ChildDevice) {
+    const characteristics = [
+      {
+        type: this.platform.Characteristic.On,
+        name: this.platform.getCharacteristicName(this.platform.Characteristic.On),
+      },
+      {
+        type: this.platform.Characteristic.OutletInUse,
+        name: this.platform.getCharacteristicName(this.platform.Characteristic.OutletInUse),
+      },
+    ].filter(Boolean) as { type: WithUUID<new () => Characteristic>; name: string | undefined }[];
+
+    characteristics.forEach(({ type, name }) => {
+      this.getOrAddCharacteristic(service, type, name, child);
+    });
   }
 
-  private addCharacteristic(
+  private getOrAddCharacteristic(
     service: Service,
     characteristicType: WithUUID<new () => Characteristic>,
+    characteristicName: string | undefined,
     child: ChildDevice,
   ) {
-    const alias = child.alias;
-    this.log.debug(`Adding characteristic ${this.platform.getCharacteristicName(characteristicType)} for device: ${alias}`);
-    const characteristic: Characteristic = getOrAddCharacteristic(service, characteristicType);
-    characteristic.onGet(this.handleOnGet.bind(this, characteristicType, child));
+    const characteristic: Characteristic = service.getCharacteristic(characteristicType) ??
+      service.addCharacteristic(characteristicType);
+    characteristic.onGet(this.handleOnGet.bind(this, service, characteristicType, characteristicName, child));
     if (characteristicType === this.platform.Characteristic.On) {
-      characteristic.onSet(this.handleOnSet.bind(this, service, characteristicType, child));
+      characteristic.onSet(this.handleOnSet.bind(this, service, characteristicType, characteristicName, child));
     }
     return service;
   }
 
-  private async handleOnGet(characteristicType: WithUUID<new () => Characteristic>, child: ChildDevice): Promise<CharacteristicValue> {
-    const characteristicName = this.platform.getCharacteristicName(characteristicType);
-    if (!characteristicName) {
-      throw new Error('Characteristic name is undefined');
-    }
-    this.log.debug(`Getting current value for characteristic ${characteristicName} for device: ${child.alias}`);
+  private async handleOnGet(
+    service: Service,
+    characteristicType: WithUUID<new () => Characteristic>,
+    characteristicName: string | undefined,
+    child: ChildDevice,
+  ): Promise<CharacteristicValue> {
     try {
-      const characteristicValue = this.getCharacteristicValue(characteristicType, child);
-      this.log.debug(`Current Value of ${characteristicName} is: ${characteristicValue} for ${child.alias}`);
+      const characteristicValue = service.getCharacteristic(characteristicType).value;
       return characteristicValue ?? false;
     } catch (error) {
       this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
@@ -90,37 +94,13 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
     return false;
   }
 
-  private getCharacteristicValue(
-    characteristicType: WithUUID<new () => Characteristic>,
-    child: ChildDevice,
-  ): CharacteristicValue | undefined {
-    const characteristicMap: { [key: string]: keyof ChildDevice } = {
-      On: 'state',
-      OutletInUse: 'state',
-    };
-
-    const characteristicKey = characteristicMap[characteristicType.name];
-    const childDevice = this.kasaDevice.sys_info.children?.find(c => c.id === child.id);
-    const value = childDevice ? childDevice[characteristicKey as keyof ChildDevice] : undefined;
-
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null) {
-      return value;
-    }
-
-    return undefined;
-  }
-
   private async handleOnSet(
     service: Service,
     characteristicType: WithUUID<new () => Characteristic>,
+    characteristicName: string | undefined,
     child: ChildDevice,
     value: CharacteristicValue,
   ): Promise<void> {
-    const characteristicName = this.platform.getCharacteristicName(characteristicType);
-    if (!characteristicName) {
-      throw new Error('Characteristic name is undefined');
-    }
-    this.log.info(`Setting ${characteristicName} to: ${value} for ${child.alias}`);
     if (this.deviceManager) {
       try {
         this.isUpdating = true;
@@ -129,23 +109,24 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
           On: 'state',
         };
 
-        const characteristicKey = characteristicMap[characteristicName];
+        const characteristicKey = characteristicMap[characteristicName ?? ''];
         if (!characteristicKey) {
           throw new Error(`Characteristic key not found for ${characteristicName}`);
         }
 
         const childNumber = parseInt(child.id.slice(-1), 10);
         await this.deviceManager.controlDevice(this.deviceConfig, characteristicKey, value, childNumber);
-        const kasaChild = this.kasaDevice.sys_info.children?.find(c => c.id === child.id);
-        if (kasaChild) {
-          (kasaChild[characteristicKey as keyof ChildDevice] as unknown as CharacteristicValue) = value;
+        (child[characteristicKey as keyof ChildDevice] as unknown as CharacteristicValue) = value;
+
+        const childIndex = this.kasaDevice.sys_info.children?.findIndex(c => c.id === child.id);
+        if (childIndex !== undefined && childIndex !== -1) {
+          this.kasaDevice.sys_info.children![childIndex] = { ...child };
         }
 
-        this.previousKasaDevice = this.kasaDevice;
-        this.updateValue(service, service.getCharacteristic(characteristicType), value);
-        this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), value);
-        this.log.debug(`Successfully set ${characteristicName} to ${value} for ${child.alias}`);
-        return;
+        this.updateValue(service, service.getCharacteristic(characteristicType), child.alias, value);
+        this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, value);
+
+        this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
         this.logRejection(error);
       } finally {
@@ -163,29 +144,22 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
     }
     this.isUpdating = true;
     try {
-      this.log.debug('Updating device state');
       await this.getSysInfo();
-      this.log.debug('Device found, updating state');
-      this.kasaDevice.sys_info.children?.forEach(async (child: ChildDevice) => {
+      this.kasaDevice.sys_info.children?.forEach((child: ChildDevice) => {
         const childNumber = parseInt(child.id.slice(-1), 10);
-        this.log.debug(`Processing child device: ${child.alias} with child number: ${childNumber}`);
         const service = this.homebridgeAccessory.getServiceById(this.platform.Service.Outlet, `outlet-${childNumber + 1}`);
         if (service && this.previousKasaDevice) {
-          this.log.debug(`Service found for child device: ${child.alias}`);
           const previousChild = this.previousKasaDevice.sys_info.children?.find(c => c.id === child.id);
-          if (previousChild && previousChild.state !== child.state) {
-            this.log.debug('Updating child devicestate');
-            this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), child.state);
-            this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.state);
-            this.log.debug(`Updated state for child device: ${child.alias} to ${child.state}`);
-          } else {
-            this.log.debug(`State unchanged for child device: ${child.alias}`);
+          if (previousChild) {
+            if (previousChild.state !== child.state) {
+              this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), child.alias, child.state);
+              this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, child.state);
+            }
           }
         } else {
           this.log.warn(`Service not found for child device: ${child.alias} or previous Kasa device is undefined`);
         }
       });
-      this.log.debug('Device state updated successfully');
     } catch (error) {
       this.log.error('Error updating device state:', error);
     } finally {
@@ -194,7 +168,10 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
   }
 
   private startPolling() {
-    this.log.debug('Starting polling for device state updates');
     setInterval(this.updateState.bind(this), this.platform.config.discoveryOptions.pollingInterval);
+  }
+
+  identify(): void {
+    this.log.info('identify');
   }
 }

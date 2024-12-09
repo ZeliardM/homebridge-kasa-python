@@ -52,11 +52,9 @@ class PythonChecker {
 
   private async ensurePythonVersion(): Promise<void> {
     const version: string = await this.getSystemPythonVersion();
-    if (SUPPORTED_PYTHON_VERSIONS.findIndex((e) => version.includes(e)) === -1) {
-      while (true) {
-        this.log.error(`Python ${version} is installed. However, only Python ${SUPPORTED_PYTHON_VERSIONS.join(', ')} is supported.`);
-        await delay(300000);
-      }
+    if (!SUPPORTED_PYTHON_VERSIONS.some(e => version.includes(e))) {
+      this.log.error(`Python ${version} is installed. However, only Python ${SUPPORTED_PYTHON_VERSIONS.join(', ')} is supported.`);
+      await delay(300000);
     }
   }
 
@@ -73,10 +71,8 @@ class PythonChecker {
   private async createVenv(): Promise<void> {
     const [stdout] = await runCommand(this.log, this.pythonExecutable, ['-m', 'venv', this.venvPath, '--clear'], undefined, true);
     if (stdout.includes('not created successfully') || !this.isVenvCreated()) {
-      while (true) {
-        this.log.error('virtualenv python module is not installed.');
-        await delay(300000);
-      }
+      this.log.error('virtualenv python module is not installed.');
+      await delay(300000);
     }
   }
 
@@ -144,7 +140,7 @@ class PythonChecker {
       const response = await axios.get<{ info: { version: string } }>('https://pypi.org/pypi/pip/json');
       return response.data.info.version;
     } catch (e) {
-      this.log.error(e as string);
+      this.log.error(`Error fetching most recent pip version: ${e}`);
       return 'error';
     }
   }

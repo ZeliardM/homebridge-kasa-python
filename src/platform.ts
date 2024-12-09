@@ -15,10 +15,8 @@ import getPort from 'get-port';
 import path from 'node:path';
 import { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { promises as fs } from 'node:fs';
-import { createServer } from 'node:http';
 import { Range, satisfies } from 'semver';
-import { StringDecoder } from 'node:string_decoder';
-import { fileURLToPath, parse } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 import create from './devices/create.js';
 import DeviceManager from './devices/deviceManager.js';
@@ -81,43 +79,6 @@ async function checkForUpgrade(storagePath: string, logger: Logging): Promise<bo
   return false;
 }
 
-function startLoggingServer(log: Logging, callback: (port: number) => void) {
-  getPort().then(port => {
-    const server = createServer((req, res) => {
-      const parsedUrl = parse(req.url!, true);
-      const decoder = new StringDecoder('utf-8');
-      let buffer = '';
-
-      req.on('data', (chunk) => {
-        buffer += decoder.write(chunk);
-      });
-
-      req.on('end', () => {
-        buffer += decoder.end();
-        if (parsedUrl.pathname === '/log' && req.method === 'POST') {
-          try {
-            const logEntry: LogEntry = JSON.parse(buffer);
-            if (logEntry.level in log) {
-              log[logEntry.level](logEntry.message);
-            } else {
-              log.error(`Invalid log level: ${logEntry.level}`);
-            }
-          } catch (error) {
-            log.error('Failed to parse log entry:', error);
-          }
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok' }));
-      });
-    });
-
-    server.listen(port, () => {
-      log.debug(`Logging server started on port ${port}`);
-      callback(port);
-    });
-  });
-}
-
 async function waitForServer(url: string, log: Logging, timeout: number = 30000, interval: number = 1000): Promise<void> {
   const startTime = Date.now();
 
@@ -135,11 +96,6 @@ async function waitForServer(url: string, log: Logging, timeout: number = 30000,
   }
 
   throw new Error(`Server did not respond within ${timeout / 1000} seconds`);
-}
-
-interface LogEntry {
-  level: 'debug' | 'info' | 'warn' | 'error';
-  message: string;
 }
 
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
@@ -216,27 +172,18 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   private async didFinishLaunching(): Promise<void> {
-    let discovered_devices: Record<string, KasaDevice> = {};
     try {
       await this.checkPython(this.isUpgrade);
       this.port = await getPort();
       this.deviceManager = new DeviceManager(this);
       await this.startKasaApi();
       await waitForServer(`http://127.0.0.1:${this.port}/health`, this.log);
-      if (this.deviceManager) {
-        discovered_devices = await this.deviceManager.discoverDevices();
-      } else {
-        this.log.error('Device manager is undefined.');
-      }
-      if (Object.keys(discovered_devices).length > 0) {
-        Object.keys(discovered_devices).forEach(ip => {
-          const device: KasaDevice = discovered_devices[ip];
-          this.foundDevice(device);
-        });
+      const discoveredDevices = await this.deviceManager?.discoverDevices() || {};
+      if (Object.keys(discoveredDevices).length > 0) {
+        Object.values(discoveredDevices).forEach(device => this.foundDevice(device));
       } else {
         this.log.error('No devices found.');
       }
-
       this.unregisterUnusedAccessories();
     } catch (error) {
       this.log.error('An error occurred during startup:', error);
@@ -254,59 +201,29 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
 
   private async startKasaApi(): Promise<void> {
     const scriptPath = path.join(__dirname, 'python', 'kasaApi.py');
-    const loggerLevel = this.getLoggerLevel();
 
-    startLoggingServer(this.log, async (loggingPort) => {
-      const loggingServerUrl = `http://localhost:${loggingPort}/log`;
+    try {
+      const [, , , process] = await runCommand(
+        this.log,
+        this.venvPythonExecutable,
+        [scriptPath, this.port.toString()],
+        undefined,
+        true,
+        true,
+        true,
+      );
 
-      try {
-        const [, , , process] = await runCommand(
-          this.log,
-          this.venvPythonExecutable,
-          [scriptPath, this.port.toString()],
-          undefined,
-          true,
-          true,
-          true,
-          {
-            LOGGER_LEVEL: loggerLevel,
-            LOGGING_SERVER_URL: loggingServerUrl,
-          },
-        );
-
-        this.kasaProcess = process;
-      } catch (error) {
-        if (error instanceof Error) {
-          this.log.error(`Error starting kasaApi.py process: ${error.message}`);
-        } else {
-          this.log.error('An unknown error occurred during startup');
-        }
-        throw error;
-      }
-    });
+      this.kasaProcess = process;
+    } catch (error) {
+      this.log.error(`Error starting kasaApi.py process: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    }
   }
 
   private stopKasaApi(): void {
     if (this.kasaProcess) {
       this.kasaProcess.kill();
       this.kasaProcess = null;
-    }
-  }
-
-  private getLoggerLevel(): string {
-    const level = process.env.LOGGER_LEVEL || 'INFO';
-
-    switch (level.toUpperCase()) {
-      case 'DEBUG':
-        return 'DEBUG';
-      case 'INFO':
-        return 'INFO';
-      case 'WARN':
-        return 'WARN';
-      case 'ERROR':
-        return 'ERROR';
-      default:
-        return 'INFO';
     }
   }
 
@@ -337,8 +254,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         : undefined;
 
     return `[${serviceName ? serviceName : ''}` +
-      `${serviceName && characteristicName ? '.' : ''}` +
-      `${characteristicName ? characteristicName : ''}]`;
+           `${serviceName && characteristicName ? '.' : ''}` +
+           `${characteristicName ? characteristicName : ''}]`;
   }
 
   getServiceName(service: { UUID: string }): string | undefined {
@@ -358,9 +275,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
 
   configureAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
     this.log.info(
-      `Configuring cached accessory: [${accessory.displayName}] UUID: ${accessory.UUID} deviceId: ${
-        accessory.context.deviceId
-      }`,
+      `Configuring cached accessory: [${accessory.displayName}] UUID: ${accessory.UUID} deviceId: ${accessory.context.deviceId}`,
     );
     this.configuredAccessories.set(accessory.UUID, accessory);
   }

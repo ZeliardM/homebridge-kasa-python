@@ -1,7 +1,6 @@
 export type KasaDevice = Plug | PowerStrip | Switch;
 
 export interface SysInfo {
-  active?: number;
   alias: string;
   brightness?: number;
   children?: ChildDevice[];
@@ -29,7 +28,6 @@ export interface FeatureInfo {
 }
 
 export interface ChildDevice {
-  active?: number;
   alias: string;
   brightness?: number;
   color_temp?: number;
@@ -112,6 +110,7 @@ export const Plugs = [
   'P110(EU)',
   'P110(UK)',
   'P110M(AU)',
+  'P115(US)',
   'P115(EU)',
   'P125M(US)',
   'P135(US)',
@@ -138,6 +137,7 @@ export const Switches = [
   'HS210(US)',
   'HS220(US)',
   'KP405(US)',
+  'KS200(US)',
   'KS200M(US)',
   'KS205(US)',
   'KS220(US)',

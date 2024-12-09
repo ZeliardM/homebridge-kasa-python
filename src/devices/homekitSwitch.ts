@@ -2,7 +2,7 @@ import { Categories } from 'homebridge';
 import type { Characteristic, CharacteristicValue, Service, WithUUID } from 'homebridge';
 
 import HomekitDevice from './index.js';
-import { deferAndCombine, getOrAddCharacteristic } from '../utils.js';
+import { deferAndCombine } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
 import type { KasaDevice, Switch, SysInfo } from './kasaDevices.js';
 
@@ -24,15 +24,12 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
     );
     this.log.debug(`Initializing HomeKitDeviceSwitch for device: ${kasaDevice.sys_info.alias}`);
     this.hasBrightness = !!this.kasaDevice.feature_info.brightness;
-    this.addSwitchService();
+    this.checkService();
 
-    this.getSysInfo = deferAndCombine(async (requestCount: number) => {
-      this.log.debug(`Executing deferred getSysInfo count: ${requestCount}`);
+    this.getSysInfo = deferAndCombine(async () => {
       if (this.deviceManager) {
-        this.log.debug('Fetching new SysInfo from device manager');
-        this.previousKasaDevice = this.kasaDevice;
+        this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
         this.kasaDevice.sys_info = await this.deviceManager.getSysInfo(this.deviceConfig) as SysInfo;
-        this.log.debug('Updated SysInfo from device manager');
       } else {
         this.log.warn('Device manager is not available');
       }
@@ -41,78 +38,56 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
     this.startPolling();
   }
 
-  private addSwitchService() {
+  private checkService() {
     const { Switch, Lightbulb } = this.platform.Service;
-
     const serviceType = this.hasBrightness ? Lightbulb : Switch;
-
-    const switchService: Service =
+    const service: Service =
       this.homebridgeAccessory.getService(serviceType) ?? this.addService(serviceType, this.name);
-
-    this.log.debug(`Adding characteristics for ${this.hasBrightness ? 'lightbulb' : 'switch'} service: ${this.name}`);
-    if (this.hasBrightness) {
-      this.addCharacteristic(switchService, this.platform.Characteristic.Brightness);
-    }
-    this.addCharacteristic(switchService, this.platform.Characteristic.On);
-
-    return switchService;
-  }
-
-  identify(): void {
-    this.log.info('identify');
-  }
-
-  private addCharacteristic(
-    service: Service,
-    characteristicType: WithUUID<new () => Characteristic>,
-  ) {
-    this.log.debug(`Adding characteristic ${this.platform.getCharacteristicName(characteristicType)} for device: ${this.name}`);
-    const characteristic: Characteristic = getOrAddCharacteristic(service, characteristicType);
-    characteristic.onGet(this.handleOnGet.bind(this, characteristicType));
-    characteristic.onSet(this.handleOnSet.bind(this, service, characteristicType));
+    this.checkCharacteristics(service);
     return service;
   }
 
-  private async handleOnGet(characteristicType: WithUUID<new () => Characteristic>): Promise<CharacteristicValue> {
-    const characteristicName = this.platform.getCharacteristicName(characteristicType);
-    if (!characteristicName) {
-      throw new Error('Characteristic name is undefined');
-    }
-    this.log.debug(`Getting current value for characteristic ${characteristicName} for device: ${this.name}`);
-    try {
-      const characteristicValue = this.getCharacteristicValue(characteristicType);
-      this.log.debug(`Current Value of ${characteristicName} is: ${characteristicValue} for ${this.name}`);
-      return characteristicValue ?? this.getDefaultValue(characteristicType);
-    } catch (error) {
-      this.log.error(
-        `Error getting current value for characteristic ${characteristicName} for device: ${this.name}:`,
-        error,
-      );
-    }
-    return this.getDefaultValue(characteristicType);
+  private checkCharacteristics(service: Service) {
+    const characteristics = [
+      {
+        type: this.platform.Characteristic.On,
+        name: this.platform.getCharacteristicName(this.platform.Characteristic.On),
+      },
+      this.hasBrightness && {
+        type: this.platform.Characteristic.Brightness,
+        name: this.platform.getCharacteristicName(this.platform.Characteristic.Brightness),
+      },
+    ].filter(Boolean) as { type: WithUUID<new () => Characteristic>; name: string | undefined }[];
+
+    characteristics.forEach(({ type, name }) => {
+      this.getOrAddCharacteristic(service, type, name);
+    });
   }
 
-  private getCharacteristicValue(
+  private getOrAddCharacteristic(
+    service: Service,
     characteristicType: WithUUID<new () => Characteristic>,
-  ): CharacteristicValue | undefined {
-    const characteristicMap: { [key: string]: keyof SysInfo } = {
-      Brightness: 'brightness',
-      On: 'state',
-    };
+    characteristicName: string | undefined,
+  ) {
+    const characteristic: Characteristic = service.getCharacteristic(characteristicType) ??
+      service.addCharacteristic(characteristicType);
+    characteristic.onGet(this.handleOnGet.bind(this, service, characteristicType, characteristicName));
+    characteristic.onSet(this.handleOnSet.bind(this, service, characteristicType, characteristicName));
+    return characteristic;
+  }
 
-    const characteristicKey = characteristicMap[characteristicType.name];
-    if (!characteristicKey) {
-      this.log.warn(`Characteristic ${characteristicType.name} is not supported`);
-      return undefined;
+  private async handleOnGet(
+    service: Service,
+    characteristicType: WithUUID<new () => Characteristic>,
+    characteristicName: string | undefined,
+  ): Promise<CharacteristicValue> {
+    try {
+      const characteristicValue = service.getCharacteristic(characteristicType).value;
+      return characteristicValue ?? this.getDefaultValue(characteristicType);
+    } catch (error) {
+      this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
     }
-
-    const value = this.kasaDevice.sys_info[characteristicKey as keyof SysInfo];
-
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null) {
-      return value;
-    }
-
-    return undefined;
+    return this.getDefaultValue(characteristicType);
   }
 
   private getDefaultValue(characteristicType: WithUUID<new () => Characteristic>): CharacteristicValue {
@@ -125,13 +100,9 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
   private async handleOnSet(
     service: Service,
     characteristicType: WithUUID<new () => Characteristic>,
+    characteristicName: string | undefined,
     value: CharacteristicValue,
   ): Promise<void> {
-    const characteristicName = this.platform.getCharacteristicName(characteristicType);
-    if (!characteristicName) {
-      throw new Error('Characteristic name is undefined');
-    }
-    this.log.info(`Setting ${characteristicName} to: ${value} for ${this.name}`);
     if (this.deviceManager) {
       try {
         this.isUpdating = true;
@@ -141,7 +112,7 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
           On: 'state',
         };
 
-        const characteristicKey = characteristicMap[characteristicName];
+        const characteristicKey = characteristicMap[characteristicName ?? ''];
         if (!characteristicKey) {
           throw new Error(`Characteristic key not found for ${characteristicName}`);
         }
@@ -149,10 +120,9 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
         await this.deviceManager.controlDevice(this.deviceConfig, characteristicKey, value);
         (this.kasaDevice.sys_info as unknown as Record<string, CharacteristicValue>)[characteristicKey] = value;
 
-        this.previousKasaDevice = this.kasaDevice;
-        this.updateValue(service, service.getCharacteristic(characteristicType), value);
-        this.log.debug(`Successfully set ${characteristicName} to ${value} for ${this.name}`);
-        return;
+        this.updateValue(service, service.getCharacteristic(characteristicType), this.name, value);
+
+        this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
         this.logRejection(error);
       } finally {
@@ -163,42 +133,30 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
     }
   }
 
-  private async updateState() {
+  protected async updateState() {
     if (this.isUpdating) {
       this.log.debug('Update already in progress, skipping updateState');
       return;
     }
     this.isUpdating = true;
     try {
-      this.log.debug('Updating device state');
       await this.getSysInfo();
-      this.log.debug('Device found, updating state');
-      const service = this.homebridgeAccessory.getService(this.platform.Service.Switch) ||
-                            this.homebridgeAccessory.getService(this.platform.Service.Lightbulb);
+      const service = this.homebridgeAccessory.getService(this.platform.Service.Switch) ??
+        this.homebridgeAccessory.getService(this.platform.Service.Lightbulb);
       if (service && this.previousKasaDevice) {
-        if (this.previousKasaDevice.sys_info.state !== this.kasaDevice.sys_info.state) {
-          this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), this.kasaDevice.sys_info.state ?? false);
-          this.log.debug(`Updated state for device: ${this.name} to ${this.kasaDevice.sys_info.state}`);
-        } else {
-          this.log.debug(`State unchanged for device: ${this.name}`);
+        const { state, brightness } = this.kasaDevice.sys_info;
+        const prevState = this.previousKasaDevice.sys_info;
+
+        if (prevState.state !== state) {
+          this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), this.name, state ?? false);
         }
 
-        if (service.testCharacteristic(this.platform.Characteristic.Brightness)) {
-          if (this.previousKasaDevice.sys_info.brightness !== this.kasaDevice.sys_info.brightness) {
-            this.updateValue(
-              service,
-              service.getCharacteristic(this.platform.Characteristic.Brightness),
-              this.kasaDevice.sys_info.brightness ?? 0,
-            );
-            this.log.debug(`Updated brightness for device: ${this.name} to ${this.kasaDevice.sys_info.brightness}`);
-          } else {
-            this.log.debug(`Brightness unchanged for device: ${this.name}`);
-          }
+        if (this.hasBrightness && prevState.brightness !== brightness) {
+          this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.Brightness), this.name, brightness ?? 0);
         }
       } else {
         this.log.warn(`Service not found for device: ${this.name} or previous Kasa device is undefined`);
       }
-      this.log.debug('Device state updated successfully');
     } catch (error) {
       this.log.error('Error updating device state:', error);
     } finally {
@@ -207,7 +165,10 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
   }
 
   private startPolling() {
-    this.log.debug('Starting polling for device state updates');
     setInterval(this.updateState.bind(this), this.platform.config.discoveryOptions.pollingInterval);
+  }
+
+  identify(): void {
+    this.log.info('identify');
   }
 }

@@ -3,8 +3,6 @@ import type {
   Characteristic,
   Logger,
   Logging,
-  Service,
-  WithUUID,
 } from 'homebridge';
 
 import { ChildProcessWithoutNullStreams, spawn, SpawnOptionsWithoutStdio } from 'node:child_process';
@@ -48,31 +46,8 @@ export function delay(ms: number): Promise<void> {
   });
 }
 
-export function getOrAddCharacteristic(service: Service, characteristic: WithUUID<new () => Characteristic>): Characteristic {
-  const allCharacteristics = service.characteristics.concat(service.optionalCharacteristics);
-  if (!hasCharacteristic(allCharacteristics, characteristic)) {
-    service.addOptionalCharacteristic(characteristic);
-  }
-  return service.getCharacteristic(characteristic) || service.addCharacteristic(characteristic);
-}
-
-export function hasCharacteristic(
-  characteristics: Array<Characteristic>,
-  characteristic: WithUUID<{ new (): Characteristic }>,
-): boolean {
-  return characteristics.some(
-    (char: Characteristic) =>
-      char instanceof characteristic ||
-      (char as WithUUID<Characteristic>).UUID === characteristic.UUID,
-  );
-}
-
 export function isObjectLike(candidate: unknown): candidate is Record<string, unknown> {
   return typeof candidate === 'object' && candidate !== null || typeof candidate === 'function';
-}
-
-export function kelvinToMired(kelvin: number): number {
-  return 1e6 / kelvin;
 }
 
 export function lookup<T>(
@@ -93,10 +68,6 @@ export function lookupCharacteristicNameByUUID(
   uuid: string,
 ): string | undefined {
   return Object.keys(characteristic).find(key => ((characteristic as unknown as {[key: string]: {UUID: string}})[key].UUID === uuid));
-}
-
-export function miredToKelvin(mired: number): number {
-  return 1e6 / mired;
 }
 
 export function prefixLogger(logger: Logger, prefix: string | (() => string)): Logging {
@@ -128,7 +99,6 @@ export async function runCommand(
   hideStdout: boolean = false,
   hideStderr: boolean = false,
   returnProcess: boolean = false,
-  envVars: Record<string, string> = {},
 ): Promise<[string, string, number | null, (ChildProcessWithoutNullStreams | null)?]> {
   let stdout: string = '';
   let stderr: string = '';
@@ -145,7 +115,7 @@ export async function runCommand(
   logger.debug(`Running command: ${command} ${filteredArgs.join(' ')}`);
   const p: ChildProcessWithoutNullStreams = spawn(command, filteredArgs, {
     ...options,
-    env: { ...process.env, ...envVars },
+    env: process.env,
   });
   logger.debug(`Command PID: ${p.pid}`);
 
