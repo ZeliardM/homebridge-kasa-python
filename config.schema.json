@@ -44,8 +44,13 @@
         "title": "Polling Interval (seconds)",
         "type": "integer",
         "description": "How often to check device status in the background (seconds)",
-        "default": "5",
-        "placeholder": "5"
+        "default": 5
+      },
+      "discoveryPollingInterval": {
+        "title": "Discovery Polling Interval (seconds)",
+        "type": "integer",
+        "description": "How often to discover new devices in the background (seconds)",
+        "default": 300
       },
       "additionalBroadcasts": {
         "title": "Additional Broadcast Addresses",
@@ -83,8 +88,7 @@
         "title": "Wait Time Update (milliseconds)",
         "type": "integer",
         "description": "The time to wait to combine similar commands for a device before sending a command to a device (milliseconds). Default: 100.",
-        "default": "100",
-        "placeholder": "100"
+        "default": 100
       }
     }
   },
@@ -110,6 +114,7 @@
       "expandable": true,
       "items": [
         "pollingInterval",
+        "discoveryPollingInterval",
         {
           "type": "fieldset",
           "title": "Additional Broadcasts",

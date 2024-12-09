@@ -178,13 +178,15 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       this.deviceManager = new DeviceManager(this);
       await this.startKasaApi();
       await waitForServer(`http://127.0.0.1:${this.port}/health`, this.log);
-      const discoveredDevices = await this.deviceManager?.discoverDevices() || {};
-      if (Object.keys(discoveredDevices).length > 0) {
-        Object.values(discoveredDevices).forEach(device => this.foundDevice(device));
-      } else {
-        this.log.error('No devices found.');
-      }
+      await this.discoverDevices();
       this.unregisterUnusedAccessories();
+      setInterval(async () => {
+        try {
+          await this.discoverDevices();
+        } catch (error) {
+          this.log.error('Error during device discovery:', error);
+        }
+      }, this.config.discoveryOptions.discoveryPollingInterval);
     } catch (error) {
       this.log.error('An error occurred during startup:', error);
     }
@@ -217,6 +219,15 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     } catch (error) {
       this.log.error(`Error starting kasaApi.py process: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
+    }
+  }
+
+  private async discoverDevices() {
+    const discoveredDevices = await this.deviceManager?.discoverDevices() || {};
+    if (Object.keys(discoveredDevices).length > 0) {
+      Object.values(discoveredDevices).forEach(device => this.foundDevice(device));
+    } else {
+      this.log.error('No devices found.');
     }
   }
 

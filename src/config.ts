@@ -49,6 +49,7 @@ export interface KasaPythonConfigInput {
   username?: string;
   password?: string;
   pollingInterval?: number;
+  discoveryPollingInterval?: number;
   additionalBroadcasts?: string[];
   manualDevices?: (string | ConfigDevice)[];
   waitTimeUpdate?: number;
@@ -61,6 +62,7 @@ export type KasaPythonConfig = {
   password: string;
   discoveryOptions: {
     pollingInterval: number;
+    discoveryPollingInterval: number;
     additionalBroadcasts: string[];
     manualDevices: ConfigDevice[];
   };
@@ -74,6 +76,7 @@ export const defaultConfig: KasaPythonConfig = {
   password: '',
   discoveryOptions: {
     pollingInterval: 5,
+    discoveryPollingInterval: 300,
     additionalBroadcasts: [],
     manualDevices: [],
   },
@@ -104,8 +107,8 @@ function convertManualDevices(manualDevices: (string | ConfigDevice)[] | undefin
       return { host: device, alias: 'Will Be Filled By Plug-In Automatically' };
     } else if ('breakoutChildDevices' in device) {
       delete device.breakoutChildDevices;
-    } else if ('host' in device && 'alias' !in device) {
-      device.alias = 'Will Be Filled By Plug-In Automatically';
+    } else if ('host' in device && !('alias' in device)) {
+      (device as ConfigDevice).alias = 'Will Be Filled By Plug-In Automatically';
     }
     return device;
   });
@@ -148,6 +151,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     waitTimeUpdate: c.waitTimeUpdate ?? defaultConfig.waitTimeUpdate,
     discoveryOptions: {
       pollingInterval: (c.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
+      discoveryPollingInterval: (c.discoveryPollingInterval ?? defaultConfig.discoveryOptions.discoveryPollingInterval) * 1000,
       additionalBroadcasts: c.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
       manualDevices: c.manualDevices ? convertManualDevices(c.manualDevices) : defaultConfig.discoveryOptions.manualDevices,
     },
