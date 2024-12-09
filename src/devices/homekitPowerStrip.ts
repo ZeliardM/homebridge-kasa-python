@@ -86,10 +86,21 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
     child: ChildDevice,
   ): Promise<CharacteristicValue> {
     try {
-      const characteristicValue = service.getCharacteristic(characteristicType).value;
+      let characteristicValue = service.getCharacteristic(characteristicType).value;
+      if (!characteristicValue) {
+        characteristicValue = this.getInitialValue(characteristicType, child);
+        service.getCharacteristic(characteristicType).updateValue(characteristicValue);
+      }
       return characteristicValue ?? false;
     } catch (error) {
       this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
+    }
+    return false;
+  }
+
+  private getInitialValue(characteristicType: WithUUID<new () => Characteristic>, child: ChildDevice): CharacteristicValue {
+    if (characteristicType === this.platform.Characteristic.On || characteristicType === this.platform.Characteristic.OutletInUse) {
+      return child.state ?? false;
     }
     return false;
   }

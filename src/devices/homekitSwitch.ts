@@ -82,10 +82,23 @@ export default class HomeKitDeviceSwitch extends HomekitDevice {
     characteristicName: string | undefined,
   ): Promise<CharacteristicValue> {
     try {
-      const characteristicValue = service.getCharacteristic(characteristicType).value;
+      let characteristicValue = service.getCharacteristic(characteristicType).value;
+      if (!characteristicValue) {
+        characteristicValue = this.getInitialValue(characteristicType);
+        service.getCharacteristic(characteristicType).updateValue(characteristicValue);
+      }
       return characteristicValue ?? this.getDefaultValue(characteristicType);
     } catch (error) {
       this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
+    }
+    return this.getDefaultValue(characteristicType);
+  }
+
+  private getInitialValue(characteristicType: WithUUID<new () => Characteristic>): CharacteristicValue {
+    if (characteristicType === this.platform.Characteristic.On) {
+      return this.kasaDevice.sys_info.state ?? false;
+    } else if (characteristicType === this.platform.Characteristic.Brightness) {
+      return this.kasaDevice.sys_info.brightness ?? 0;
     }
     return this.getDefaultValue(characteristicType);
   }

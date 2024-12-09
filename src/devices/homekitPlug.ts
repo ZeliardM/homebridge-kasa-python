@@ -81,10 +81,21 @@ export default class HomeKitDevicePlug extends HomekitDevice {
     characteristicName: string | undefined,
   ): Promise<CharacteristicValue> {
     try {
-      const characteristicValue = service.getCharacteristic(characteristicType).value;
+      let characteristicValue = service.getCharacteristic(characteristicType).value;
+      if (!characteristicValue) {
+        characteristicValue = this.getInitialValue(characteristicType);
+        service.getCharacteristic(characteristicType).updateValue(characteristicValue);
+      }
       return characteristicValue ?? false;
     } catch (error) {
       this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
+    }
+    return false;
+  }
+
+  private getInitialValue(characteristicType: WithUUID<new () => Characteristic>): CharacteristicValue {
+    if (characteristicType === this.platform.Characteristic.On || characteristicType === this.platform.Characteristic.OutletInUse) {
+      return this.kasaDevice.sys_info.state ?? false;
     }
     return false;
   }
