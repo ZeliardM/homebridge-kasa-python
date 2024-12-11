@@ -1,4 +1,4 @@
-export type KasaDevice = Plug | PowerStrip | Switch;
+export type KasaDevice = LightBulb | Plug | PowerStrip | Switch;
 
 export interface SysInfo {
   alias: string;
@@ -67,6 +67,8 @@ export interface LightBulb {
   disc_info: DiscoveryInfo;
   feature_info: FeatureInfo;
   device_config: DeviceConfig;
+  last_seen: Date;
+  offline: boolean;
 }
 
 export interface Plug {
@@ -74,6 +76,8 @@ export interface Plug {
   disc_info: DiscoveryInfo;
   feature_info: FeatureInfo;
   device_config: DeviceConfig;
+  last_seen: Date;
+  offline: boolean;
 }
 
 export interface PowerStrip {
@@ -81,6 +85,8 @@ export interface PowerStrip {
   disc_info: DiscoveryInfo;
   feature_info: FeatureInfo;
   device_config: DeviceConfig;
+  last_seen: Date;
+  offline: boolean;
 }
 
 export interface Switch {
@@ -88,6 +94,8 @@ export interface Switch {
   disc_info: DiscoveryInfo;
   feature_info: FeatureInfo;
   device_config: DeviceConfig;
+  last_seen: Date;
+  offline: boolean;
 }
 
 export const Plugs = [

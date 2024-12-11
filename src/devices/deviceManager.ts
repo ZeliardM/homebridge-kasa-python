@@ -1,10 +1,12 @@
 import type { CharacteristicValue, Logger, PlatformConfig } from 'homebridge';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import KasaPythonPlatform from '../platform.js';
 import { parseConfig } from '../config.js';
 import type { ConfigDevice, DeviceConfig, DiscoveryInfo, FeatureInfo, KasaDevice, SysInfo } from './kasaDevices.js';
+
+const enableLogging = false;
 
 export default class DeviceManager {
   private log: Logger;
@@ -76,14 +78,12 @@ export default class DeviceManager {
     this.log.info('Discovering devices...');
     try {
       const config = this.username && this.password ? { auth: { username: this.username, password: this.password } } : {};
-      const response = await axios.post<{
-        devices: Record<string, {
-          sys_info: SysInfo;
-          disc_info: DiscoveryInfo;
-          feature_info: FeatureInfo;
-          device_config: DeviceConfig;
-        }>;
-      }>(
+      const response = await axios.post<Record<string, {
+        sys_info: SysInfo;
+        disc_info: DiscoveryInfo;
+        feature_info: FeatureInfo;
+        device_config: DeviceConfig;
+      }>>(
         `${this.apiUrl}/discover`,
         {
           additionalBroadcasts: this.additionalBroadcasts,
@@ -97,7 +97,12 @@ export default class DeviceManager {
         disc_info: DiscoveryInfo;
         feature_info: FeatureInfo;
         device_config: DeviceConfig;
-      }> = response.data.devices;
+      }> = response.data;
+
+      if (!devices || Object.keys(devices).length === 0) {
+        this.log.error('No devices found.');
+        return {};
+      }
 
       const configPath = path.join(this.platform.storagePath, 'config.json');
       const fileConfig = await this.readConfigFile(configPath);
@@ -120,9 +125,7 @@ export default class DeviceManager {
         return true;
       });
 
-      if (platformConfig.manualDevices.length > 0 &&
-        (typeof platformConfig.manualDevices[0] === 'string' ||
-          platformConfig.manualDevices.some((device: ConfigDevice) => typeof device !== 'string'))) {
+      if (this.shouldConvertManualDevices(platformConfig.manualDevices)) {
         platformConfig.manualDevices = this.convertManualDevices(platformConfig.manualDevices);
       }
 
@@ -139,6 +142,8 @@ export default class DeviceManager {
           disc_info: discoveryInfo,
           feature_info: featureInfo,
           device_config: deviceConfig,
+          last_seen: new Date(),
+          offline: false,
         };
         this.processDevice(device, platformConfig);
         processedDevices[ip] = device;
@@ -153,24 +158,45 @@ export default class DeviceManager {
 
       return processedDevices;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const errorMessage = (error as AxiosError<{ error: string }>).response?.data?.error || 'An unexpected error occurred';
-        this.log.error(`An error occurred during device discovery: ${errorMessage}`);
+      if (axios.isAxiosError(error) && error.response) {
+        const statusCode = error.response.status;
+        const errorMessage = error.response.data.error;
+        if (statusCode === 500) {
+          if (enableLogging) {
+            this.log.error(`Exception during getSysInfo post request: ${errorMessage}`);
+          }
+        } else {
+          if (enableLogging) {
+            this.log.error(`Unexpected error during getSysInfo post request: ${errorMessage}`);
+          }
+        }
       } else {
-        this.log.error(`An unexpected error occurred: ${(error as Error).message}`);
+        if (enableLogging) {
+          this.log.error('Error during getSysInfo post request:', error);
+        }
       }
       return {};
     }
   }
 
   private processDevice(device: KasaDevice, platformConfig: PlatformConfig): void {
-    this.updateDeviceAlias(device);
+    try {
+      this.updateDeviceAlias(device);
 
-    const existingDevice = platformConfig.manualDevices.find((d: ConfigDevice) => d.host === device.sys_info.host);
-    if (existingDevice) {
-      existingDevice.host = device.sys_info.host;
-      existingDevice.alias = device.sys_info.alias;
+      const existingDevice = platformConfig.manualDevices.find((d: ConfigDevice) => d.host === device.sys_info.host);
+      if (existingDevice) {
+        existingDevice.host = device.sys_info.host;
+        existingDevice.alias = device.sys_info.alias;
+      }
+    } catch (error) {
+      this.log.error(`Error processing device: ${(error as Error).message}`);
     }
+  }
+
+  private shouldConvertManualDevices(manualDevices: (string | ConfigDevice)[]): boolean {
+    return manualDevices.length > 0 &&
+      (typeof manualDevices[0] === 'string' ||
+        manualDevices.some((device) => typeof device !== 'string'));
   }
 
   async getSysInfo(deviceConfig: DeviceConfig): Promise<SysInfo | undefined> {
@@ -180,43 +206,45 @@ export default class DeviceManager {
       this.updateDeviceAlias(sysInfo);
       return sysInfo;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const errorMessage = (error as AxiosError<{ error: string }>).response?.data?.error || 'An unexpected error occurred';
-        this.log.error(`An error occurred during device discovery: ${errorMessage}`);
+      if (axios.isAxiosError(error) && error.response) {
+        const statusCode = error.response.status;
+        const errorMessage = error.response.data.error;
+        if (statusCode === 500) {
+          if (enableLogging) {
+            this.log.error(`Exception during getSysInfo post request: ${errorMessage}`);
+          }
+        } else {
+          if (enableLogging) {
+            this.log.error(`Unexpected error during getSysInfo post request: ${errorMessage}`);
+          }
+        }
       } else {
-        this.log.error(`An unexpected error occurred: ${(error as Error).message}`);
+        if (enableLogging) {
+          this.log.error('Error during getSysInfo post request:', error);
+        }
       }
     }
   }
 
   async controlDevice(deviceConfig: DeviceConfig, feature: string, value: CharacteristicValue, child_num?: number): Promise<void> {
-    try {
-      let action: string;
-      switch (feature) {
-        case 'brightness':
-        case 'color_temp':
-          action = `set_${feature}`;
-          break;
-        case 'hue':
-        case 'saturation':
-          action = 'set_hsv';
-          break;
-        case 'state':
-          action = value ? 'turn_on' : 'turn_off';
-          break;
-        default:
-          throw new Error(`Unsupported feature: ${feature}`);
-      }
-
-      await this.performDeviceAction(deviceConfig, feature, action, value, child_num);
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const errorMessage = (error as AxiosError<{ error: string }>).response?.data?.error || 'An unexpected error occurred';
-        this.log.error(`An error occurred during device discovery: ${errorMessage}`);
-      } else {
-        this.log.error(`An unexpected error occurred: ${(error as Error).message}`);
-      }
+    let action: string;
+    switch (feature) {
+      case 'brightness':
+      case 'color_temp':
+        action = `set_${feature}`;
+        break;
+      case 'hue':
+      case 'saturation':
+        action = 'set_hsv';
+        break;
+      case 'state':
+        action = value ? 'turn_on' : 'turn_off';
+        break;
+      default:
+        throw new Error(`Unsupported feature: ${feature}`);
     }
+
+    await this.performDeviceAction(deviceConfig, feature, action, value, child_num);
   }
 
   private async performDeviceAction(
@@ -237,11 +265,22 @@ export default class DeviceManager {
         this.log.error(`Error performing action: ${response.data.message}`);
       }
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const errorMessage = (error as AxiosError<{ error: string }>).response?.data?.error || 'An unexpected error occurred';
-        this.log.error(`An error occurred during device discovery: ${errorMessage}`);
+      if (axios.isAxiosError(error) && error.response) {
+        const statusCode = error.response.status;
+        const errorMessage = error.response.data.error;
+        if (statusCode === 500) {
+          if (enableLogging) {
+            this.log.error(`Exception during getSysInfo post request: ${errorMessage}`);
+          }
+        } else {
+          if (enableLogging) {
+            this.log.error(`Unexpected error during getSysInfo post request: ${errorMessage}`);
+          }
+        }
       } else {
-        this.log.error(`An unexpected error occurred: ${(error as Error).message}`);
+        if (enableLogging) {
+          this.log.error('Error during getSysInfo post request:', error);
+        }
       }
     }
   }

@@ -14,6 +14,8 @@
         "username": "Username",
         "password": "Password",
         "pollingInterval": 5,
+        "discoveryPollingInterval": 300,
+        "offlineInterval": 7,
         "waitTimeUpdate": 100,
         "additionalBroadcasts": [
           "192.168.1.255",

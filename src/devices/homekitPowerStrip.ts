@@ -6,14 +6,17 @@ import { deferAndCombine } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
 import type { ChildDevice, KasaDevice, PowerStrip, SysInfo } from './kasaDevices.js';
 
+const enableLogging = false;
+
 export default class HomeKitDevicePowerStrip extends HomekitDevice {
-  private isUpdating: boolean = false;
+  public isUpdating: boolean = false;
   private previousKasaDevice: KasaDevice | undefined;
   private getSysInfo: () => Promise<void>;
+  private pollingInterval: NodeJS.Timeout | undefined;
 
   constructor(
     platform: KasaPythonPlatform,
-    protected kasaDevice: PowerStrip,
+    public kasaDevice: PowerStrip,
   ) {
     super(
       platform,
@@ -86,6 +89,11 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
     child: ChildDevice,
   ): Promise<CharacteristicValue> {
     try {
+      if (this.kasaDevice.offline) {
+        this.log.warn(`Device is offline, cannot get value for characteristic ${characteristicName}`);
+        return false;
+      }
+
       let characteristicValue = service.getCharacteristic(characteristicType).value;
       if (!characteristicValue) {
         characteristicValue = this.getInitialValue(characteristicType, child);
@@ -93,7 +101,11 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
       }
       return characteristicValue ?? false;
     } catch (error) {
-      this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
+      if (enableLogging) {
+        this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
+      }
+      this.kasaDevice.offline = true;
+      this.stopPolling();
     }
     return false;
   }
@@ -112,6 +124,11 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
     child: ChildDevice,
     value: CharacteristicValue,
   ): Promise<void> {
+    if (this.kasaDevice.offline) {
+      this.log.warn(`Device is offline, cannot set value for characteristic ${characteristicName}`);
+      return;
+    }
+
     if (this.deviceManager) {
       try {
         this.isUpdating = true;
@@ -139,7 +156,11 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
 
         this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
-        this.logRejection(error);
+        if (enableLogging) {
+          this.log.error(`Error setting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
+        }
+        this.kasaDevice.offline = true;
+        this.stopPolling();
       } finally {
         this.isUpdating = false;
       }
@@ -149,8 +170,11 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
   }
 
   protected async updateState() {
-    if (this.isUpdating) {
-      this.log.debug('Update already in progress, skipping updateState');
+    if (this.kasaDevice.offline) {
+      this.stopPolling();
+      return;
+    }
+    if (this.isUpdating || this.platform.periodicDeviceDiscovering) {
       return;
     }
     this.isUpdating = true;
@@ -172,14 +196,43 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
         }
       });
     } catch (error) {
-      this.log.error('Error updating device state:', error);
+      if (enableLogging) {
+        this.log.error('Error updating device state:', error);
+      }
+      this.kasaDevice.offline = true;
+      this.stopPolling();
     } finally {
       this.isUpdating = false;
     }
   }
 
-  private startPolling() {
-    setInterval(this.updateState.bind(this), this.platform.config.discoveryOptions.pollingInterval);
+  public startPolling() {
+    if (this.kasaDevice.offline) {
+      this.stopPolling();
+      return;
+    }
+
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+    }
+
+    this.pollingInterval = setInterval(async () => {
+      if (this.kasaDevice.offline) {
+        if (this.isUpdating) {
+          this.isUpdating = false;
+        }
+        this.stopPolling();
+      } else {
+        await this.updateState();
+      }
+    }, this.platform.config.discoveryOptions.pollingInterval);
+  }
+
+  public stopPolling() {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = undefined;
+    }
   }
 
   identify(): void {

@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Kasa Python",
   "name": "homebridge-kasa-python",
-  "version": "2.7.0-beta.5",
+  "version": "2.7.0-beta.6",
   "description": "Plugin that uses Python-Kasa API to communicate with Kasa Devices.",
   "license": "MIT",
   "type": "module",
@@ -51,10 +51,10 @@
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.16.0",
     "@types/lodash.defaults": "^4.2.9",
-    "@types/node": "^22.10.1",
+    "@types/node": "^22.10.2",
     "@types/semver": "^7.5.8",
-    "@typescript-eslint/parser": "^8.17.0",
-    "@stylistic/eslint-plugin": "^2.11.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "@stylistic/eslint-plugin": "^2.12.1",
     "eslint": "^9.16.0",
     "globals": "^15.13.0",
     "homebridge": "^2.0.0-beta.23",
@@ -62,7 +62,7 @@
     "node-persist": "^4.0.3",
     "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",
-    "typescript-eslint": "^8.17.0"
+    "typescript-eslint": "^8.18.0"
   },
   "homepage": "https://github.com/ZeliardM/homebridge-kasa-python#readme",
   "funding": [

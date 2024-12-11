@@ -52,6 +52,12 @@
         "description": "How often to discover new devices in the background (seconds)",
         "default": 300
       },
+      "offlineInterval": {
+        "title": "Offline Interval (days)",
+        "type": "integer",
+        "description": "How often to remove offline devices in the background (days)",
+        "default": 7
+      },
       "additionalBroadcasts": {
         "title": "Additional Broadcast Addresses",
         "type": "array",
@@ -115,6 +121,7 @@
       "items": [
         "pollingInterval",
         "discoveryPollingInterval",
+        "offlineInterval",
         {
           "type": "fieldset",
           "title": "Additional Broadcasts",

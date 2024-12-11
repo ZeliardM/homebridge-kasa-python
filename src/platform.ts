@@ -31,6 +31,8 @@ import type { KasaDevice } from './devices/kasaDevices.js';
 
 export type KasaPythonAccessoryContext = {
   deviceId?: string;
+  lastSeen?: Date;
+  offline?: boolean;
 };
 
 let packageConfig: { name: string; version: string; engines: { node: string | Range } };
@@ -86,7 +88,6 @@ async function waitForServer(url: string, log: Logging, timeout: number = 30000,
     try {
       const response = await axios.get(url);
       if (response.status === 200) {
-        log.debug(`Server responded with status ${response.status}`);
         return;
       }
     } catch {
@@ -101,6 +102,7 @@ async function waitForServer(url: string, log: Logging, timeout: number = 30000,
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public readonly Characteristic: typeof Characteristic;
   public readonly configuredAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
+  public readonly offlineAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
   public readonly Service: typeof Service;
   public readonly storagePath: string;
   public readonly venvPythonExecutable: string;
@@ -111,6 +113,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
   private platformInitialization: Promise<void>;
   private isUpgrade: boolean = false;
+  public periodicDeviceDiscovering: boolean = false;
 
   constructor(public readonly log: Logging, config: PlatformConfig, public readonly api: API) {
     this.Service = this.api.hap.Service;
@@ -125,6 +128,10 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.api.on('didFinishLaunching', async () => {
       await this.platformInitialization;
       await this.didFinishLaunching();
+      if (this.offlineAccessories.size > 0) {
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, Array.from(this.offlineAccessories.values()));
+        this.offlineAccessories.clear();
+      }
     });
 
     this.api.on('shutdown', () => {
@@ -179,16 +186,132 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       await this.startKasaApi();
       await waitForServer(`http://127.0.0.1:${this.port}/health`, this.log);
       await this.discoverDevices();
-      this.unregisterUnusedAccessories();
       setInterval(async () => {
-        try {
-          await this.discoverDevices();
-        } catch (error) {
-          this.log.error('Error during device discovery:', error);
-        }
+        await this.periodicDeviceDiscovery();
       }, this.config.discoveryOptions.discoveryPollingInterval);
     } catch (error) {
       this.log.error('An error occurred during startup:', error);
+    }
+  }
+
+  private async periodicDeviceDiscovery(): Promise<void> {
+    if (this.periodicDeviceDiscovering) {
+      return;
+    }
+
+    this.periodicDeviceDiscovering = true;
+    try {
+      const discoveredDevices = await this.deviceManager?.discoverDevices() || {};
+      const now = new Date();
+      const offlineInterval = this.config.discoveryOptions.offlineInterval;
+
+      this.configuredAccessories.forEach((accessory, uuid) => {
+        const deviceId = accessory.context.deviceId;
+        if (deviceId) {
+          const device = this.findDiscoveredDevice(discoveredDevices, deviceId);
+          if (device) {
+            this.updateAccessoryDeviceStatus(accessory, device, now);
+            this.updateOrCreateHomekitDevice(deviceId, device);
+          } else {
+            this.updateAccessoryStatus(accessory);
+            this.handleOfflineDevice(deviceId, accessory, uuid, now, offlineInterval);
+          }
+        }
+      });
+
+      Object.values(discoveredDevices).forEach(device => {
+        device.last_seen = now;
+        device.offline = false;
+        const deviceId = device.sys_info.device_id;
+        const isConfigured = Array.from(this.configuredAccessories.values()).some(accessory => accessory.context.deviceId === deviceId);
+        if (!isConfigured) {
+          this.foundDevice(device);
+        }
+      });
+    } catch (error) {
+      this.log.error('Error during periodic device discovery:', error);
+    } finally {
+      this.periodicDeviceDiscovering = false;
+    }
+  }
+
+  private findDiscoveredDevice(discoveredDevices: Record<string, KasaDevice>, deviceId: string): KasaDevice | undefined {
+    try {
+      const device = Object.values(discoveredDevices).find(device => device.sys_info.device_id === deviceId);
+      return device;
+    } catch (error) {
+      this.log.error('Error finding discovered device:', error);
+      return undefined;
+    }
+  }
+
+  private updateAccessoryDeviceStatus(accessory: PlatformAccessory<KasaPythonAccessoryContext>, device: KasaDevice, now: Date): void {
+    try {
+      device.last_seen = now;
+      device.offline = false;
+      accessory.context.lastSeen = now;
+      accessory.context.offline = false;
+      this.api.updatePlatformAccessories([accessory]);
+    } catch (error) {
+      this.log.error('Error updating device offline status:', error);
+    }
+  }
+
+  private updateOrCreateHomekitDevice(deviceId: string, device: KasaDevice): void {
+    try {
+      if (this.homekitDevicesById.has(deviceId)) {
+        const existingDevice = this.homekitDevicesById.get(deviceId);
+        if (existingDevice) {
+          if (!existingDevice.isUpdating) {
+            if (existingDevice.kasaDevice.offline === true && device.offline === false) {
+              existingDevice.kasaDevice = device;
+              existingDevice.startPolling();
+            } else {
+              existingDevice.kasaDevice = device;
+            }
+          }
+        }
+      } else {
+        this.foundDevice(device);
+      }
+    } catch (error) {
+      this.log.error('Error updating or creating Homekit device:', error);
+    }
+  }
+
+  private updateAccessoryStatus(accessory: PlatformAccessory): void {
+    try {
+      accessory.context.offline = true;
+      this.api.updatePlatformAccessories([accessory]);
+    } catch (error) {
+      this.log.error('Error updating accessory status:', error);
+    }
+  }
+
+  private handleOfflineDevice(deviceId: string, accessory: PlatformAccessory, uuid: string, now: Date, offlineInterval: number): void {
+    try {
+      const homekitDevice = this.homekitDevicesById.get(deviceId);
+      if (homekitDevice) {
+        const timeSinceLastSeen = now.getTime() - homekitDevice.kasaDevice.last_seen.getTime();
+        if (timeSinceLastSeen < offlineInterval) {
+          homekitDevice.kasaDevice.offline = true;
+        } else if (timeSinceLastSeen > offlineInterval) {
+          this.log.info(`Accessory [${accessory.displayName}] has been offline for too long, removing.`);
+          this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+          this.configuredAccessories.delete(uuid);
+        }
+      } else if (accessory.context.offline === true) {
+        const timeSinceLastSeen = now.getTime() - new Date(accessory.context.lastSeen).getTime();
+        if (timeSinceLastSeen < offlineInterval) {
+          this.updateAccessoryStatus(accessory);
+        } else if (timeSinceLastSeen > offlineInterval) {
+          this.log.info(`Accessory [${accessory.displayName}] has been offline for too long, removing.`);
+          this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+          this.configuredAccessories.delete(uuid);
+        }
+      }
+    } catch (error) {
+      this.log.error('Error handling offline device:', error);
     }
   }
 
@@ -226,8 +349,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     const discoveredDevices = await this.deviceManager?.discoverDevices() || {};
     if (Object.keys(discoveredDevices).length > 0) {
       Object.values(discoveredDevices).forEach(device => this.foundDevice(device));
-    } else {
-      this.log.error('No devices found.');
     }
   }
 
@@ -236,19 +357,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       this.kasaProcess.kill();
       this.kasaProcess = null;
     }
-  }
-
-  private unregisterUnusedAccessories(): void {
-    const homekitDeviceIds = new Set(this.homekitDevicesById.keys());
-
-    this.configuredAccessories.forEach((accessory, uuid) => {
-      const deviceId = accessory.context.deviceId;
-      if (deviceId && !homekitDeviceIds.has(deviceId)) {
-        this.log.info(`Unregistering unused accessory: [${accessory.displayName}] UUID: ${uuid}`);
-        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-        this.configuredAccessories.delete(uuid);
-      }
-    });
   }
 
   public lsc(
@@ -285,6 +393,24 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   configureAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
+    if (!accessory.context.lastSeen && !accessory.context.offline) {
+      accessory.context.lastSeen = new Date();
+      accessory.context.offline = false;
+    }
+    if (accessory.context.lastSeen) {
+      const now = new Date();
+      const timeSinceLastSeen = now.getTime() - new Date(accessory.context.lastSeen).getTime();
+      const offlineInterval = this.config.discoveryOptions.offlineInterval;
+
+      if (timeSinceLastSeen > offlineInterval && accessory.context.offline === true) {
+        this.log.info(`Accessory [${accessory.displayName}] has been offline for too long, removing.`);
+        this.configuredAccessories.delete(accessory.UUID);
+        this.offlineAccessories.set(accessory.UUID, accessory);
+        return;
+      } else if (timeSinceLastSeen < offlineInterval && accessory.context.offline === true) {
+        this.updateAccessoryStatus(accessory);
+      }
+    }
     this.log.info(
       `Configuring cached accessory: [${accessory.displayName}] UUID: ${accessory.UUID} deviceId: ${accessory.context.deviceId}`,
     );

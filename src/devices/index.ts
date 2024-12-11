@@ -22,10 +22,11 @@ export default abstract class HomekitDevice {
   readonly deviceConfig: DeviceConfig;
   protected deviceManager: DeviceManager | undefined;
   homebridgeAccessory: PlatformAccessory<KasaPythonAccessoryContext>;
+  public isUpdating: boolean = false;
 
   constructor(
     readonly platform: KasaPythonPlatform,
-    protected kasaDevice: KasaDevice,
+    public kasaDevice: KasaDevice,
     readonly category: Categories,
     readonly categoryName: string,
   ) {
@@ -45,6 +46,8 @@ export default abstract class HomekitDevice {
       this.log.debug(`Creating new Accessory [${this.id}] [${uuid}] category: ${this.categoryName}`);
       accessory = new this.platform.api.platformAccessory(this.name, uuid, this.category);
       accessory.context.deviceId = this.id;
+      accessory.context.lastSeen = this.kasaDevice.last_seen;
+      accessory.context.offline = this.kasaDevice.offline;
       this.platform.registerPlatformAccessory(accessory);
     } else {
       this.log.debug(`Existing Accessory found [${homebridgeAccessory.context.deviceId}] ` +
@@ -65,13 +68,15 @@ export default abstract class HomekitDevice {
     this.correctAccessoryProperty(accessory, 'displayName', this.name);
     this.correctAccessoryProperty(accessory, 'category', this.category);
     this.correctAccessoryProperty(accessory.context, 'deviceId', this.id);
+    this.correctAccessoryProperty(accessory.context, 'lastSeen', this.kasaDevice.last_seen);
+    this.correctAccessoryProperty(accessory.context, 'offline', this.kasaDevice.offline);
     this.platform.configuredAccessories.set(accessory.UUID, accessory);
     this.platform.api.updatePlatformAccessories([accessory]);
   }
 
   private correctAccessoryProperty<T, K extends keyof T>(obj: T, key: K, expectedValue: T[K]): void {
     if (obj[key] !== expectedValue) {
-      this.log.warn(`Correcting Accessory ${String(key)} from: ${String(obj[key])} to: ${String(expectedValue)}`);
+      this.log.debug(`Correcting Accessory ${String(key)} from: ${String(obj[key])} to: ${String(expectedValue)}`);
       obj[key] = expectedValue;
     }
   }
@@ -101,6 +106,8 @@ export default abstract class HomekitDevice {
   }
 
   abstract identify(): void;
+
+  abstract startPolling(): void;
 
   addService(serviceConstructor: typeof this.platform.Service.Outlet, name: string, subType?: string): Service {
     const serviceName = this.platform.getServiceName(serviceConstructor);
