@@ -389,6 +389,9 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   registerPlatformAccessory(platformAccessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
+    if (!this.configuredAccessories.has(platformAccessory.UUID)) {
+      this.configuredAccessories.set(platformAccessory.UUID, platformAccessory);
+    }
     this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [platformAccessory]);
   }
 
