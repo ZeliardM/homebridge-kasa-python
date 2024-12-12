@@ -36,7 +36,7 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
       } else {
         this.log.warn('Device manager is not available');
       }
-    }, platform.config.waitTimeUpdate);
+    }, platform.config.advancedOptions.waitTimeUpdate);
 
     this.startPolling();
   }

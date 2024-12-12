@@ -68,7 +68,9 @@ export type KasaPythonConfig = {
     additionalBroadcasts: string[];
     manualDevices: ConfigDevice[];
   };
-  waitTimeUpdate: number;
+  advancedOptions: {
+    waitTimeUpdate: number;
+  };
 };
 
 export const defaultConfig: KasaPythonConfig = {
@@ -83,7 +85,9 @@ export const defaultConfig: KasaPythonConfig = {
     additionalBroadcasts: [],
     manualDevices: [],
   },
-  waitTimeUpdate: 100,
+  advancedOptions: {
+    waitTimeUpdate: 100,
+  },
 };
 
 function loadSchema() {
@@ -151,13 +155,15 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     enableCredentials: c.enableCredentials ?? defaultConfig.enableCredentials,
     username: c.username ?? defaultConfig.username,
     password: c.password ?? defaultConfig.password,
-    waitTimeUpdate: c.waitTimeUpdate ?? defaultConfig.waitTimeUpdate,
     discoveryOptions: {
       pollingInterval: (c.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
       discoveryPollingInterval: (c.discoveryPollingInterval ?? defaultConfig.discoveryOptions.discoveryPollingInterval) * 1000,
       offlineInterval: (c.offlineInterval ?? defaultConfig.discoveryOptions.offlineInterval) * 24 * 60 * 60 * 1000,
       additionalBroadcasts: c.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
       manualDevices: c.manualDevices ? convertManualDevices(c.manualDevices) : defaultConfig.discoveryOptions.manualDevices,
+    },
+    advancedOptions: {
+      waitTimeUpdate: c.waitTimeUpdate ?? defaultConfig.advancedOptions.waitTimeUpdate,
     },
   };
 }
