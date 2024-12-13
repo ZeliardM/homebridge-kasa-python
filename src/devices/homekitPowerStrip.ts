@@ -1,14 +1,12 @@
 import { Categories } from 'homebridge';
 import type { Characteristic, CharacteristicValue, Service, WithUUID } from 'homebridge';
 
-import HomekitDevice from './index.js';
+import HomeKitDevice from './index.js';
 import { deferAndCombine } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
 import type { ChildDevice, KasaDevice, PowerStrip, SysInfo } from './kasaDevices.js';
 
-const enableLogging = false;
-
-export default class HomeKitDevicePowerStrip extends HomekitDevice {
+export default class HomeKitDevicePowerStrip extends HomeKitDevice {
   public isUpdating: boolean = false;
   private previousKasaDevice: KasaDevice | undefined;
   private getSysInfo: () => Promise<void>;
@@ -33,6 +31,7 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
       if (this.deviceManager) {
         this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
         this.kasaDevice.sys_info = await this.deviceManager.getSysInfo(this.deviceConfig) as SysInfo;
+        this.log.debug(`Updated sys_info for device: ${this.kasaDevice.sys_info.alias}`);
       } else {
         this.log.warn('Device manager is not available');
       }
@@ -99,11 +98,10 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
         characteristicValue = this.getInitialValue(characteristicType, child);
         service.getCharacteristic(characteristicType).updateValue(characteristicValue);
       }
+      this.log.debug(`Got value for characteristic ${characteristicName}: ${characteristicValue}`);
       return characteristicValue ?? false;
     } catch (error) {
-      if (enableLogging) {
-        this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
-      }
+      this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
       this.kasaDevice.offline = true;
       this.stopPolling();
     }
@@ -132,6 +130,7 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
     if (this.deviceManager) {
       try {
         this.isUpdating = true;
+        this.log.debug(`Setting value for characteristic ${characteristicName} to ${value}`);
 
         const characteristicMap: { [key: string]: string } = {
           On: 'state',
@@ -155,10 +154,9 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
         this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, value);
 
         this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
+        this.log.debug(`Set value for characteristic ${characteristicName} to ${value} successfully`);
       } catch (error) {
-        if (enableLogging) {
-          this.log.error(`Error setting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
-        }
+        this.log.error(`Error setting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
         this.kasaDevice.offline = true;
         this.stopPolling();
       } finally {
@@ -189,6 +187,7 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
             if (previousChild.state !== child.state) {
               this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), child.alias, child.state);
               this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, child.state);
+              this.log.debug(`Updated state for child device: ${child.alias} to ${child.state}`);
             }
           }
         } else {
@@ -196,9 +195,7 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
         }
       });
     } catch (error) {
-      if (enableLogging) {
-        this.log.error('Error updating device state:', error);
-      }
+      this.log.error('Error updating device state:', error);
       this.kasaDevice.offline = true;
       this.stopPolling();
     } finally {
@@ -216,6 +213,7 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
       clearInterval(this.pollingInterval);
     }
 
+    this.log.debug('Starting polling for device:', this.name);
     this.pollingInterval = setInterval(async () => {
       if (this.kasaDevice.offline) {
         if (this.isUpdating) {
@@ -232,6 +230,7 @@ export default class HomeKitDevicePowerStrip extends HomekitDevice {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
       this.pollingInterval = undefined;
+      this.log.debug('Stopped polling');
     }
   }
 

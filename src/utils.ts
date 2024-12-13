@@ -134,10 +134,11 @@ export async function runCommand(
   });
 
   if (returnProcess) {
-    logger.debug('Command started.');
+    logger.debug('Command started and returning process.');
 
     const stderrReady = new Promise<void>((resolve) => {
       p.stderr.once('data', () => {
+        logger.debug('Process data received.');
         resolve();
       });
     });
@@ -148,7 +149,13 @@ export async function runCommand(
   }
 
   const exitCode = await new Promise<number | null>((resolve, reject) => {
-    p.on('close', resolve).on('error', reject);
+    p.on('close', (code) => {
+      logger.debug(`Command closed with exit code: ${code}`);
+      resolve(code);
+    }).on('error', (error) => {
+      logger.error('Command encountered an error:', error);
+      reject(error);
+    });
   });
 
   p.stdout.destroy();
@@ -156,6 +163,7 @@ export async function runCommand(
   p.kill();
 
   if (outputFile) {
+    logger.debug(`Writing command output to file: ${outputFile}`);
     await writeFile(outputFile, stdout);
   }
 

@@ -1,14 +1,14 @@
 import type { HAP, PlatformAccessory, Service } from 'homebridge';
 
-import type HomekitDevice from './devices/index.js';
+import type HomeKitDevice from './devices/index.js';
 
-export default function accessoryInformation(
+export default function platformAccessoryInformation(
   hap: HAP,
-): (accessory: PlatformAccessory, homekitDevice: HomekitDevice) => Service | undefined {
+): (platformAccessory: PlatformAccessory, homekitDevice: HomeKitDevice) => Service | undefined {
   const { Characteristic, Service: { AccessoryInformation } } = hap;
 
-  return (accessory: PlatformAccessory, homekitDevice: HomekitDevice) => {
-    const infoService = accessory.getService(AccessoryInformation) ?? accessory.addService(AccessoryInformation);
+  return (platformAccessory: PlatformAccessory, homekitDevice: HomeKitDevice) => {
+    const infoService = platformAccessory.getService(AccessoryInformation) ?? platformAccessory.addService(AccessoryInformation);
 
     [Characteristic.Name, Characteristic.Manufacturer, Characteristic.Model, Characteristic.SerialNumber, Characteristic.FirmwareRevision]
       .forEach(characteristic => {

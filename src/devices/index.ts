@@ -17,7 +17,7 @@ import type KasaPythonPlatform from '../platform.js';
 import type { DeviceConfig, KasaDevice } from './kasaDevices.js';
 import type { KasaPythonAccessoryContext } from '../platform.js';
 
-export default abstract class HomekitDevice {
+export default abstract class HomeKitDevice {
   readonly log: Logger;
   readonly deviceConfig: DeviceConfig;
   protected deviceManager: DeviceManager | undefined;
@@ -40,43 +40,43 @@ export default abstract class HomekitDevice {
   private initializeAccessory(): PlatformAccessory<KasaPythonAccessoryContext> {
     const uuid = this.platform.api.hap.uuid.generate(this.id);
     const homebridgeAccessory = this.platform.configuredAccessories.get(uuid);
-    let accessory: PlatformAccessory<KasaPythonAccessoryContext>;
+    let platformAccessory: PlatformAccessory<KasaPythonAccessoryContext>;
 
     if (!homebridgeAccessory) {
-      this.log.debug(`Creating new Accessory [${this.id}] [${uuid}] category: ${this.categoryName}`);
-      accessory = new this.platform.api.platformAccessory(this.name, uuid, this.category);
-      accessory.context.deviceId = this.id;
-      accessory.context.lastSeen = this.kasaDevice.last_seen;
-      accessory.context.offline = this.kasaDevice.offline;
-      this.platform.registerPlatformAccessory(accessory);
+      this.log.debug(`Creating new Platform Accessory [${this.id}] [${uuid}] category: ${this.categoryName}`);
+      platformAccessory = new this.platform.api.platformAccessory(this.name, uuid, this.category);
+      platformAccessory.context.deviceId = this.id;
+      platformAccessory.context.lastSeen = this.kasaDevice.last_seen;
+      platformAccessory.context.offline = this.kasaDevice.offline;
+      this.platform.registerPlatformAccessory(platformAccessory);
     } else {
-      this.log.debug(`Existing Accessory found [${homebridgeAccessory.context.deviceId}] ` +
+      this.log.debug(`Existing Platform Accessory found [${homebridgeAccessory.context.deviceId}] ` +
         `[${homebridgeAccessory.UUID}] category: ${this.categoryName}`);
-      accessory = homebridgeAccessory;
-      this.updateAccessory(accessory);
+      platformAccessory = homebridgeAccessory;
+      this.updateAccessory(platformAccessory);
     }
 
-    const accInfo = AccessoryInformation(this.platform.api.hap)(accessory, this);
+    const accInfo = AccessoryInformation(this.platform.api.hap)(platformAccessory, this);
     if (!accInfo) {
       this.log.error('Could not retrieve default AccessoryInformation');
     }
 
-    return accessory;
+    return platformAccessory;
   }
 
-  private updateAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
-    this.correctAccessoryProperty(accessory, 'displayName', this.name);
-    this.correctAccessoryProperty(accessory, 'category', this.category);
-    this.correctAccessoryProperty(accessory.context, 'deviceId', this.id);
-    this.correctAccessoryProperty(accessory.context, 'lastSeen', this.kasaDevice.last_seen);
-    this.correctAccessoryProperty(accessory.context, 'offline', this.kasaDevice.offline);
-    this.platform.configuredAccessories.set(accessory.UUID, accessory);
-    this.platform.api.updatePlatformAccessories([accessory]);
+  private updateAccessory(platformAccessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
+    this.correctAccessoryProperty(platformAccessory, 'displayName', this.name);
+    this.correctAccessoryProperty(platformAccessory, 'category', this.category);
+    this.correctAccessoryProperty(platformAccessory.context, 'deviceId', this.id);
+    this.correctAccessoryProperty(platformAccessory.context, 'lastSeen', this.kasaDevice.last_seen);
+    this.correctAccessoryProperty(platformAccessory.context, 'offline', this.kasaDevice.offline);
+    this.platform.configuredAccessories.set(platformAccessory.UUID, platformAccessory);
+    this.platform.api.updatePlatformAccessories([platformAccessory]);
   }
 
   private correctAccessoryProperty<T, K extends keyof T>(obj: T, key: K, expectedValue: T[K]): void {
     if (obj[key] !== expectedValue) {
-      this.log.debug(`Correcting Accessory ${String(key)} from: ${String(obj[key])} to: ${String(expectedValue)}`);
+      this.log.debug(`Correcting Platform Accessory ${String(key)} from: ${String(obj[key])} to: ${String(expectedValue)}`);
       obj[key] = expectedValue;
     }
   }

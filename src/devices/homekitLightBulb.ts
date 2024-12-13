@@ -1,14 +1,12 @@
 import { Categories } from 'homebridge';
 import type { Characteristic, CharacteristicValue, Service, WithUUID } from 'homebridge';
 
-import HomekitDevice from './index.js';
+import HomeKitDevice from './index.js';
 import { deferAndCombine } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
 import type { KasaDevice, LightBulb, SysInfo } from './kasaDevices.js';
 
-const enableLogging = false;
-
-export default class HomeKitDeviceLightBulb extends HomekitDevice {
+export default class HomeKitDeviceLightBulb extends HomeKitDevice {
   public isUpdating: boolean = false;
   private getSysInfo: () => Promise<void>;
   private hasBrightness: boolean;
@@ -37,6 +35,7 @@ export default class HomeKitDeviceLightBulb extends HomekitDevice {
       if (this.deviceManager) {
         this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
         this.kasaDevice.sys_info = await this.deviceManager.getSysInfo(this.deviceConfig) as SysInfo;
+        this.log.debug(`Updated sys_info for device: ${this.kasaDevice.sys_info.alias}`);
       } else {
         this.log.warn('Device manager is not available');
       }
@@ -110,11 +109,10 @@ export default class HomeKitDeviceLightBulb extends HomekitDevice {
         characteristicValue = this.getInitialValue(characteristicType);
         service.getCharacteristic(characteristicType).updateValue(characteristicValue);
       }
+      this.log.debug(`Got value for characteristic ${characteristicName}: ${characteristicValue}`);
       return characteristicValue ?? this.getDefaultValue(characteristicType);
     } catch (error) {
-      if (enableLogging) {
-        this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
-      }
+      this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
       this.kasaDevice.offline = true;
       this.stopPolling();
     }
@@ -165,6 +163,7 @@ export default class HomeKitDeviceLightBulb extends HomekitDevice {
     if (this.deviceManager) {
       try {
         this.isUpdating = true;
+        this.log.debug(`Setting value for characteristic ${characteristicName} to ${value}`);
 
         const characteristicMap: { [key: string]: string } = {
           Brightness: 'brightness',
@@ -185,10 +184,9 @@ export default class HomeKitDeviceLightBulb extends HomekitDevice {
         this.updateValue(service, service.getCharacteristic(characteristicType), this.name, value);
 
         this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
+        this.log.debug(`Set value for characteristic ${characteristicName} to ${value} successfully`);
       } catch (error) {
-        if (enableLogging) {
-          this.log.error(`Error setting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
-        }
+        this.log.error(`Error setting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
         this.kasaDevice.offline = true;
         this.stopPolling();
       } finally {
@@ -217,31 +215,34 @@ export default class HomeKitDeviceLightBulb extends HomekitDevice {
 
         if (prevState.state !== state) {
           this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), this.name, state ?? false);
+          this.log.debug(`Updated state for device: ${this.name} to state: ${state}`);
         }
 
         if (this.hasBrightness && prevState.brightness !== brightness) {
           this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.Brightness), this.name, brightness ?? 0);
+          this.log.debug(`Updated brightness for device: ${this.name} to brightness: ${brightness}`);
         }
 
         if (this.hasColorTemp && prevState.color_temp !== color_temp) {
           this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.ColorTemperature), this.name, color_temp ?? 0);
+          this.log.debug(`Updated color_temp for device: ${this.name} to color_temp: ${color_temp}`);
         }
 
         if (this.hasHSV) {
           if (prevState.hsv?.hue !== hsv?.hue) {
             this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.Hue), this.name, hsv?.hue ?? 0);
+            this.log.debug(`Updated hue for device: ${this.name} to hue: ${hsv?.hue}`);
           }
           if (prevState.hsv?.saturation !== hsv?.saturation) {
             this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.Saturation), this.name, hsv?.saturation ?? 0);
+            this.log.debug(`Updated saturation for device: ${this.name} to saturation: ${hsv?.saturation}`);
           }
         }
       } else {
         this.log.warn(`Service not found for device: ${this.name} or previous Kasa device is undefined`);
       }
     } catch (error) {
-      if (enableLogging) {
-        this.log.error('Error updating device state:', error);
-      }
+      this.log.error('Error updating device state:', error);
       this.kasaDevice.offline = true;
       this.stopPolling();
     } finally {
@@ -259,6 +260,7 @@ export default class HomeKitDeviceLightBulb extends HomekitDevice {
       clearInterval(this.pollingInterval);
     }
 
+    this.log.debug('Starting polling for device:', this.name);
     this.pollingInterval = setInterval(async () => {
       if (this.kasaDevice.offline) {
         if (this.isUpdating) {
@@ -275,6 +277,7 @@ export default class HomeKitDeviceLightBulb extends HomekitDevice {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
       this.pollingInterval = undefined;
+      this.log.debug('Stopped polling');
     }
   }
 
