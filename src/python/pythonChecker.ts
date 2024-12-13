@@ -84,7 +84,13 @@ class PythonChecker {
 
   private async createVenv(): Promise<void> {
     this.log.debug('Creating virtual environment at path:', this.venvPath);
-    const [stdout] = await runCommand(this.log, this.pythonExecutable, ['-m', 'venv', this.venvPath, '--clear'], undefined, true);
+    const [stdout] = await runCommand(
+      this.log,
+      this.pythonExecutable,
+      ['-m', 'venv', this.venvPath, '--clear', '--upgrade-deps'],
+      undefined,
+      true,
+    );
     if (stdout.includes('not created successfully') || !this.isVenvCreated()) {
       this.log.error('virtualenv python module is not installed.');
       await delay(300000);
