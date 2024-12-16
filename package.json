@@ -14,7 +14,7 @@
   },
   "engines": {
     "homebridge": "^1.8.0 || ^2.0.0-beta.0",
-    "node": "^18.20.5 || ^20.18.1 || ^22.12.0 || ^23.3.0",
+    "node": "^18.20.5 || ^20.18.1 || ^22.12.0 || ^23.4.0",
     "python": "^3.11.0"
   },
   "main": "dist/index.js",
@@ -49,16 +49,14 @@
   ],
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
-    "@eslint/js": "^9.16.0",
-    "@types/lodash.defaults": "^4.2.9",
+    "@eslint/js": "^9.17.0",
     "@types/node": "^22.10.2",
-    "@types/semver": "^7.5.8",
     "@typescript-eslint/parser": "^8.18.0",
     "@stylistic/eslint-plugin": "^2.12.1",
-    "eslint": "^9.16.0",
+    "eslint": "^9.17.0",
     "globals": "^15.13.0",
     "homebridge": "^2.0.0-beta.23",
-    "nodemon": "^3.1.7",
+    "nodemon": "^3.1.9",
     "node-persist": "^4.0.3",
     "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",
@@ -76,15 +74,10 @@
     }
   ],
   "dependencies": {
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1",
     "axios": "^1.7.9",
     "get-port": "^7.1.0",
-    "lodash.defaults": "^4.2.0",
-    "semver": "^7.6.3",
     "ts-essentials": "^10.0.3",
-    "typescript": "^5.7.2",
-    "util": "^0.12.5"
+    "typescript": "^5.7.2"
   },
   "overrides": {
     "node-persist": "^4.0.3"

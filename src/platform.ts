@@ -11,11 +11,10 @@ import type {
 import { Logger } from 'homebridge/dist/logger.js';
 
 import axios from 'axios';
-import getPort from 'get-port';
+import net from 'node:net';
 import path from 'node:path';
 import { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { promises as fs } from 'node:fs';
-import { Range, satisfies } from 'semver';
 import { fileURLToPath } from 'node:url';
 
 import create from './devices/create.js';
@@ -35,7 +34,7 @@ export type KasaPythonAccessoryContext = {
   offline?: boolean;
 };
 
-let packageConfig: { name: string; version: string; engines: { node: string | Range } };
+let packageConfig: { name: string; version: string; engines: { node: string } };
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function loadPackageConfig(logger: Logging): Promise<void> {
@@ -50,6 +49,29 @@ async function loadPackageConfig(logger: Logging): Promise<void> {
     log.error(`Error reading package.json: ${error}`);
     throw error;
   }
+}
+
+function satisfiesVersion(currentVersion: string, requiredVersion: string): boolean {
+  const versions = requiredVersion.split('||').map(v => v.trim());
+
+  return versions.some(version => {
+    const [requiredMajor, requiredMinor, requiredPatch] = version.replace('^', '').split('.').map(Number);
+    const [currentMajor, currentMinor, currentPatch] = currentVersion.replace('v', '').split('.').map(Number);
+
+    if (currentMajor > requiredMajor) {
+      return true;
+    }
+    if (currentMajor < requiredMajor) {
+      return false;
+    }
+    if (currentMinor > requiredMinor) {
+      return true;
+    }
+    if (currentMinor < requiredMinor) {
+      return false;
+    }
+    return currentPatch >= requiredPatch;
+  });
 }
 
 async function checkForUpgrade(storagePath: string, logger: Logging): Promise<boolean> {
@@ -107,6 +129,17 @@ async function waitForServer(url: string, log: Logging, timeout: number = 30000,
 
   log.error(`Server did not respond within ${timeout / 1000} seconds`);
   throw new Error(`Server did not respond within ${timeout / 1000} seconds`);
+}
+
+async function getAvailablePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.listen(0, () => {
+      const port = (server.address() as net.AddressInfo).port;
+      server.close(() => resolve(port));
+    });
+    server.on('error', reject);
+  });
 }
 
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
@@ -191,7 +224,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
 
     try {
       this.log.debug('Checking Node.js version');
-      if (!satisfies(process.version, packageConfig.engines.node)) {
+      if (!satisfiesVersion(process.version, packageConfig.engines.node)) {
         this.log.error(`Error: not using minimum node version ${packageConfig.engines.node}`);
       } else {
         this.log.debug(`Node.js version ${process.version} satisfies the requirement ${packageConfig.engines.node}`);
@@ -217,7 +250,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       await this.checkPython(this.isUpgrade);
 
       this.log.debug('Getting available port');
-      this.port = await getPort();
+      this.port = await getAvailablePort();
       this.log.debug(`Port assigned: ${this.port}`);
 
       this.log.debug('Initializing DeviceManager');

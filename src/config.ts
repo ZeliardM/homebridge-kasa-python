@@ -1,18 +1,10 @@
-import Ajv, { ErrorObject } from 'ajv';
-import addFormats from 'ajv-formats';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { isObjectLike } from './utils.js';
 import type { ConfigDevice } from './devices/kasaDevices.js';
-
-let schemaCache: KasaPythonConfig;
 
 export class ConfigParseError extends Error {
   constructor(
     message: string,
-    public errors?: ErrorObject<string, Record<string, unknown>, unknown>[] | null,
+    public errors?: string[] | null,
     public unknownError?: unknown,
   ) {
     super(message);
@@ -23,15 +15,12 @@ export class ConfigParseError extends Error {
 
   private formatMessage(
     message: string,
-    errors?: ErrorObject<string, Record<string, unknown>, unknown>[] | null,
+    errors?: string[] | null,
     unknownError?: unknown,
   ): string {
     let formattedMessage = message;
     if (errors && errors.length > 0) {
-      const errorsAsString = errors.map((e) => {
-        const allowedValues = 'allowedValues' in e.params ? `. Allowed values: ${JSON.stringify(e.params.allowedValues)}` : '';
-        return `\`${e.instancePath.replace(/^\//, '')}\` ${e.message}${allowedValues}`;
-      }).join('\n');
+      const errorsAsString = errors.join('\n');
       formattedMessage += `:\n${errorsAsString}`;
     }
     if (unknownError instanceof Error) {
@@ -90,20 +79,6 @@ export const defaultConfig: KasaPythonConfig = {
   },
 };
 
-function loadSchema() {
-  if (!schemaCache) {
-    try {
-      const __dirname = path.dirname(fileURLToPath(import.meta.url));
-      const schemaPath = path.join(__dirname, '../config.schema.json');
-      const schemaData = fs.readFileSync(schemaPath, 'utf8');
-      schemaCache = JSON.parse(schemaData);
-    } catch (error) {
-      throw new ConfigParseError('Error reading schema', undefined, error);
-    }
-  }
-  return schemaCache;
-}
-
 function convertManualDevices(manualDevices: (string | ConfigDevice)[] | undefined | null): ConfigDevice[] {
   if (!manualDevices || manualDevices.length === 0) {
     return [];
@@ -121,27 +96,56 @@ function convertManualDevices(manualDevices: (string | ConfigDevice)[] | undefin
   });
 }
 
+function validateConfig(config: Record<string, unknown>): string[] {
+  const errors: string[] = [];
+
+  if (typeof config.name !== 'string') {
+    errors.push('`name` should be a string.');
+  }
+
+  if (typeof config.enableCredentials !== 'boolean') {
+    errors.push('`enableCredentials` should be a boolean.');
+  }
+
+  if (config.username && typeof config.username !== 'string') {
+    errors.push('`username` should be a string.');
+  }
+
+  if (config.password && typeof config.password !== 'string') {
+    errors.push('`password` should be a string.');
+  }
+
+  if (config.pollingInterval && typeof config.pollingInterval !== 'number') {
+    errors.push('`pollingInterval` should be a number.');
+  }
+
+  if (config.discoveryPollingInterval && typeof config.discoveryPollingInterval !== 'number') {
+    errors.push('`discoveryPollingInterval` should be a number.');
+  }
+
+  if (config.offlineInterval && typeof config.offlineInterval !== 'number') {
+    errors.push('`offlineInterval` should be a number.');
+  }
+
+  if (config.additionalBroadcasts && !Array.isArray(config.additionalBroadcasts)) {
+    errors.push('`additionalBroadcasts` should be an array of strings.');
+  }
+
+  if (config.manualDevices && !Array.isArray(config.manualDevices)) {
+    errors.push('`manualDevices` should be an array.');
+  }
+
+  if (config.waitTimeUpdate && typeof config.waitTimeUpdate !== 'number') {
+    errors.push('`waitTimeUpdate` should be a number.');
+  }
+
+  return errors;
+}
+
 export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
-  const ajv = new Ajv({ allErrors: true, strict: 'log' });
-  addFormats(ajv);
-  ajv.addVocabulary([
-    'placeholder',
-    'titleMap',
-    'pluginAlias',
-    'pluginType',
-    'singular',
-    'headerDisplay',
-    'footerDisplay',
-    'schema',
-    'layout',
-  ]);
-
-  const schema = loadSchema();
-
-  const validate = ajv.compile(schema);
-  const valid = validate(config);
-  if (!valid) {
-    throw new ConfigParseError('Error parsing config', validate.errors);
+  const errors = validateConfig(config);
+  if (errors.length > 0) {
+    throw new ConfigParseError('Error parsing config', errors);
   }
 
   if (!isObjectLike(config)) {
