@@ -84,9 +84,9 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
     characteristicName: string | undefined,
   ): Promise<CharacteristicValue> {
     try {
-      if (this.kasaDevice.offline) {
-        this.log.warn(`Device is offline, cannot get value for characteristic ${characteristicName}`);
-        return false;
+      if (this.kasaDevice.offline || this.platform.isShuttingDown) {
+        this.log.warn(`Device is offline or platform is shutting down, cannot set value for characteristic ${characteristicName}`);
+        return this.getDefaultValue(characteristicType);
       }
 
       let characteristicValue = service.getCharacteristic(characteristicType).value;
@@ -126,8 +126,8 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
     characteristicName: string | undefined,
     value: CharacteristicValue,
   ): Promise<void> {
-    if (this.kasaDevice.offline) {
-      this.log.warn(`Device is offline, cannot set value for characteristic ${characteristicName}`);
+    if (this.kasaDevice.offline || this.platform.isShuttingDown) {
+      this.log.warn(`Device is offline or platform is shutting down, cannot set value for characteristic ${characteristicName}`);
       return;
     }
 
@@ -166,7 +166,7 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
   }
 
   protected async updateState() {
-    if (this.kasaDevice.offline) {
+    if (this.kasaDevice.offline || this.platform.isShuttingDown) {
       this.stopPolling();
       return;
     }
@@ -174,37 +174,42 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
       return;
     }
     this.isUpdating = true;
-    try {
-      await this.getSysInfo();
-      const service = this.homebridgeAccessory.getService(this.platform.Service.Switch) ??
+    const task = (async () => {
+      try {
+        await this.getSysInfo();
+        const service = this.homebridgeAccessory.getService(this.platform.Service.Switch) ??
         this.homebridgeAccessory.getService(this.platform.Service.Lightbulb);
-      if (service && this.previousKasaDevice) {
-        const { state, brightness } = this.kasaDevice.sys_info;
-        const prevState = this.previousKasaDevice.sys_info;
+        if (service && this.previousKasaDevice) {
+          const { state, brightness } = this.kasaDevice.sys_info;
+          const prevState = this.previousKasaDevice.sys_info;
 
-        if (prevState.state !== state) {
-          this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), this.name, state ?? false);
-          this.log.debug(`Updated state for device: ${this.name} to state: ${state}`);
-        }
+          if (prevState.state !== state) {
+            this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), this.name, state ?? false);
+            this.log.debug(`Updated state for device: ${this.name} to state: ${state}`);
+          }
 
-        if (this.hasBrightness && prevState.brightness !== brightness) {
-          this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.Brightness), this.name, brightness ?? 0);
-          this.log.debug(`Updated brightness for device: ${this.name} to brightness: ${brightness}`);
+          if (this.hasBrightness && prevState.brightness !== brightness) {
+            this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.Brightness), this.name, brightness ?? 0);
+            this.log.debug(`Updated brightness for device: ${this.name} to brightness: ${brightness}`);
+          }
+        } else {
+          this.log.warn(`Service not found for device: ${this.name} or previous Kasa device is undefined`);
         }
-      } else {
-        this.log.warn(`Service not found for device: ${this.name} or previous Kasa device is undefined`);
+      } catch (error) {
+        this.log.error('Error updating device state:', error);
+        this.kasaDevice.offline = true;
+        this.stopPolling();
+      } finally {
+        this.isUpdating = false;
       }
-    } catch (error) {
-      this.log.error('Error updating device state:', error);
-      this.kasaDevice.offline = true;
-      this.stopPolling();
-    } finally {
-      this.isUpdating = false;
-    }
+    })();
+    this.platform.ongoingTasks.push(task);
+    await task;
+    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
   }
 
   public startPolling() {
-    if (this.kasaDevice.offline) {
+    if (this.kasaDevice.offline || this.platform.isShuttingDown) {
       this.stopPolling();
       return;
     }
@@ -215,7 +220,7 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
 
     this.log.debug('Starting polling for device:', this.name);
     this.pollingInterval = setInterval(async () => {
-      if (this.kasaDevice.offline) {
+      if (this.kasaDevice.offline || this.platform.isShuttingDown) {
         if (this.isUpdating) {
           this.isUpdating = false;
         }

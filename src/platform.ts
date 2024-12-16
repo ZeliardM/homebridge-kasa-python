@@ -124,6 +124,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private platformInitialization: Promise<void>;
   private isUpgrade: boolean = false;
   public periodicDeviceDiscovering: boolean = false;
+  public isShuttingDown: boolean = false;
+  public ongoingTasks: Promise<void>[] = [];
 
   constructor(public readonly log: Logging, config: PlatformConfig, public readonly api: API) {
     this.Service = this.api.hap.Service;
@@ -147,8 +149,13 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       }
     });
 
-    this.api.on('shutdown', () => {
-      this.log.debug('Event: shutdown');
+    this.api.on('shutdown', async () => {
+      this.log.debug('KasaPython shutting down');
+      if (!this.isShuttingDown) {
+        this.isShuttingDown = true;
+      }
+      this.log.debug('Waiting for polling tasks to complete');
+      await Promise.all(this.ongoingTasks);
       this.stopKasaApi();
     });
   }

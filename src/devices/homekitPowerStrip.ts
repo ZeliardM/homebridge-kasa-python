@@ -88,8 +88,8 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
     child: ChildDevice,
   ): Promise<CharacteristicValue> {
     try {
-      if (this.kasaDevice.offline) {
-        this.log.warn(`Device is offline, cannot get value for characteristic ${characteristicName}`);
+      if (this.kasaDevice.offline || this.platform.isShuttingDown) {
+        this.log.warn(`Device is offline or platform is shutting down, cannot set value for characteristic ${characteristicName}`);
         return false;
       }
 
@@ -122,8 +122,8 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
     child: ChildDevice,
     value: CharacteristicValue,
   ): Promise<void> {
-    if (this.kasaDevice.offline) {
-      this.log.warn(`Device is offline, cannot set value for characteristic ${characteristicName}`);
+    if (this.kasaDevice.offline || this.platform.isShuttingDown) {
+      this.log.warn(`Device is offline or platform is shutting down, cannot set value for characteristic ${characteristicName}`);
       return;
     }
 
@@ -168,7 +168,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
   }
 
   protected async updateState() {
-    if (this.kasaDevice.offline) {
+    if (this.kasaDevice.offline || this.platform.isShuttingDown) {
       this.stopPolling();
       return;
     }
@@ -176,35 +176,40 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
       return;
     }
     this.isUpdating = true;
-    try {
-      await this.getSysInfo();
-      this.kasaDevice.sys_info.children?.forEach((child: ChildDevice) => {
-        const childNumber = parseInt(child.id.slice(-1), 10);
-        const service = this.homebridgeAccessory.getServiceById(this.platform.Service.Outlet, `outlet-${childNumber + 1}`);
-        if (service && this.previousKasaDevice) {
-          const previousChild = this.previousKasaDevice.sys_info.children?.find(c => c.id === child.id);
-          if (previousChild) {
-            if (previousChild.state !== child.state) {
-              this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), child.alias, child.state);
-              this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, child.state);
-              this.log.debug(`Updated state for child device: ${child.alias} to ${child.state}`);
+    const task = (async () => {
+      try {
+        await this.getSysInfo();
+        this.kasaDevice.sys_info.children?.forEach((child: ChildDevice) => {
+          const childNumber = parseInt(child.id.slice(-1), 10);
+          const service = this.homebridgeAccessory.getServiceById(this.platform.Service.Outlet, `outlet-${childNumber + 1}`);
+          if (service && this.previousKasaDevice) {
+            const previousChild = this.previousKasaDevice.sys_info.children?.find(c => c.id === child.id);
+            if (previousChild) {
+              if (previousChild.state !== child.state) {
+                this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), child.alias, child.state);
+                this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, child.state);
+                this.log.debug(`Updated state for child device: ${child.alias} to ${child.state}`);
+              }
             }
+          } else {
+            this.log.warn(`Service not found for child device: ${child.alias} or previous Kasa device is undefined`);
           }
-        } else {
-          this.log.warn(`Service not found for child device: ${child.alias} or previous Kasa device is undefined`);
-        }
-      });
-    } catch (error) {
-      this.log.error('Error updating device state:', error);
-      this.kasaDevice.offline = true;
-      this.stopPolling();
-    } finally {
-      this.isUpdating = false;
-    }
+        });
+      } catch (error) {
+        this.log.error('Error updating device state:', error);
+        this.kasaDevice.offline = true;
+        this.stopPolling();
+      } finally {
+        this.isUpdating = false;
+      }
+    })();
+    this.platform.ongoingTasks.push(task);
+    await task;
+    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
   }
 
   public startPolling() {
-    if (this.kasaDevice.offline) {
+    if (this.kasaDevice.offline || this.platform.isShuttingDown) {
       this.stopPolling();
       return;
     }
@@ -215,7 +220,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
 
     this.log.debug('Starting polling for device:', this.name);
     this.pollingInterval = setInterval(async () => {
-      if (this.kasaDevice.offline) {
+      if (this.kasaDevice.offline || this.platform.isShuttingDown) {
         if (this.isUpdating) {
           this.isUpdating = false;
         }
