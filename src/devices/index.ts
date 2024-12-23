@@ -8,6 +8,7 @@ import {
   Nullable,
   PlatformAccessory,
   Service,
+  WithUUID,
 } from 'homebridge';
 
 import AccessoryInformation from '../accessoryInformation.js';
@@ -109,10 +110,10 @@ export default abstract class HomeKitDevice {
 
   abstract startPolling(): void;
 
-  addService(serviceConstructor: typeof this.platform.Service.Outlet, name: string, subType?: string): Service {
+  addService(serviceConstructor: WithUUID<typeof this.platform.Service>, name: string, subType?: string): Service {
     const serviceName = this.platform.getServiceName(serviceConstructor);
     this.log.debug(`Creating new ${serviceName} Service on ${name}${subType ? ` [${subType}]` : ''}`);
-    return this.homebridgeAccessory.addService(serviceConstructor, name, subType);
+    return this.homebridgeAccessory.addService(serviceConstructor, name, subType ? subType : '');
   }
 
   updateValue(
