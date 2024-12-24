@@ -14,6 +14,7 @@ const SUPPORTED_PYTHON_VERSIONS: string[] = ['3.11', '3.12', '3.13'];
 class PythonChecker {
   private readonly log: Logger;
   private readonly platform: KasaPythonPlatform;
+  private readonly advancedPythonLogging: boolean;
   private readonly pythonExecutable: string;
   private readonly pluginDirPath: string;
   private readonly venvPath: string;
@@ -25,6 +26,7 @@ class PythonChecker {
   public constructor(platform: KasaPythonPlatform) {
     this.platform = platform;
     this.log = prefixLogger(this.platform.log, '[Python Check]');
+    this.advancedPythonLogging = this.platform.config.advancedOptions.advancedPythonLogging ?? false;
     this.pythonExecutable = 'python3';
     this.pluginDirPath = path.join(this.platform.storagePath, 'kasa-python');
     this.venvPath = path.join(this.pluginDirPath, '.venv');
@@ -89,7 +91,9 @@ class PythonChecker {
       this.pythonExecutable,
       ['-m', 'venv', this.venvPath, '--clear', '--upgrade-deps'],
       undefined,
-      true,
+      this.advancedPythonLogging ? false: true,
+      this.advancedPythonLogging ? false: true,
+
     );
     if (stdout.includes('not created successfully') || !this.isVenvCreated()) {
       this.log.error('virtualenv python module is not installed.');
@@ -115,7 +119,14 @@ class PythonChecker {
 
   private async getPythonHome(executable: string): Promise<string> {
     this.log.debug('Getting Python home for executable:', executable);
-    const [venvPythonHome] = await runCommand(this.log, executable, [path.join(__dirname, 'pythonHome.py')], undefined, true);
+    const [venvPythonHome] = await runCommand(
+      this.log,
+      executable,
+      [path.join(__dirname, 'pythonHome.py')],
+      undefined,
+      this.advancedPythonLogging ? false : true,
+      this.advancedPythonLogging ? false : true,
+    );
     return venvPythonHome.trim();
   }
 
@@ -132,7 +143,14 @@ class PythonChecker {
 
   private async updatePip(): Promise<void> {
     this.log.debug('Updating pip in virtual environment');
-    await runCommand(this.log, this.venvPipExecutable, ['install', '--upgrade', 'pip'], undefined, true);
+    await runCommand(
+      this.log,
+      this.venvPipExecutable,
+      ['install', '--upgrade', 'pip'],
+      undefined,
+      this.advancedPythonLogging ? false : true,
+      this.advancedPythonLogging ? false : true,
+    );
     this.log.debug('Pip updated successfully');
   }
 
@@ -146,7 +164,14 @@ class PythonChecker {
 
   private async areRequirementsSatisfied(): Promise<boolean> {
     this.log.debug('Checking if virtual environment requirements are satisfied');
-    const [freezeStdout] = await runCommand(this.log, this.venvPipExecutable, ['freeze'], undefined, true);
+    const [freezeStdout] = await runCommand(
+      this.log,
+      this.venvPipExecutable,
+      ['freeze'],
+      undefined,
+      this.advancedPythonLogging ? false : true,
+      this.advancedPythonLogging ? false : true,
+    );
     const freeze = this.stringToObject(freezeStdout);
     this.log.debug('Current virtual environment packages:', JSON.stringify(freeze, null, 2));
     const requirementsStdout = fs.readFileSync(this.requirementsPath).toString();
@@ -167,20 +192,41 @@ class PythonChecker {
 
   private async installRequirements(): Promise<void> {
     this.log.debug('Installing requirements from:', this.requirementsPath);
-    await runCommand(this.log, this.venvPipExecutable, ['install', '-r', this.requirementsPath], undefined, true);
+    await runCommand(
+      this.log,
+      this.venvPipExecutable,
+      ['install', '-r', this.requirementsPath],
+      undefined,
+      this.advancedPythonLogging ? false : true,
+      this.advancedPythonLogging ? false : true,
+    );
     this.log.debug('Requirements installed successfully');
   }
 
   private async getSystemPythonVersion(): Promise<string> {
     this.log.debug('Getting system Python version');
-    const [version] = await runCommand(this.log, this.pythonExecutable, ['--version'], undefined, true);
+    const [version] = await runCommand(
+      this.log,
+      this.pythonExecutable,
+      ['--version'],
+      undefined,
+      this.advancedPythonLogging ? false : true,
+      this.advancedPythonLogging ? false : true,
+    );
     this.log.debug('System Python version:', version.trim().replace('Python ', ''));
     return version.trim().replace('Python ', '');
   }
 
   private async getVenvPipVersion(): Promise<string> {
     this.log.debug('Getting virtual environment pip version');
-    const [version] = await runCommand(this.log, this.venvPipExecutable, ['--version'], undefined, true);
+    const [version] = await runCommand(
+      this.log,
+      this.venvPipExecutable,
+      ['--version'],
+      undefined,
+      this.advancedPythonLogging ? false : true,
+      this.advancedPythonLogging ? false : true,
+    );
     this.log.debug('Virtual environment pip version:', version.trim().split(' ')[1]);
     return version.trim().split(' ')[1];
   }

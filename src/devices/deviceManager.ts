@@ -4,9 +4,7 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import KasaPythonPlatform from '../platform.js';
 import { parseConfig } from '../config.js';
-import type { ConfigDevice, DeviceConfig, DiscoveryInfo, FeatureInfo, KasaDevice, SysInfo } from './kasaDevices.js';
-
-const enableLogging = false;
+import type { ConfigDevice, DeviceConfig, FeatureInfo, KasaDevice, SysInfo } from './kasaDevices.js';
 
 export default class DeviceManager {
   private log: Logger;
@@ -80,7 +78,6 @@ export default class DeviceManager {
       const config = this.username && this.password ? { auth: { username: this.username, password: this.password } } : {};
       const response = await axios.post<Record<string, {
         sys_info: SysInfo;
-        disc_info: DiscoveryInfo;
         feature_info: FeatureInfo;
         device_config: DeviceConfig;
       }>>(
@@ -94,7 +91,6 @@ export default class DeviceManager {
 
       const devices: Record<string, {
         sys_info: SysInfo;
-        disc_info: DiscoveryInfo;
         feature_info: FeatureInfo;
         device_config: DeviceConfig;
       }> = response.data;
@@ -133,13 +129,11 @@ export default class DeviceManager {
 
       Object.keys(devices).forEach(ip => {
         const deviceInfo = devices[ip].sys_info;
-        const discoveryInfo = devices[ip].disc_info;
         const featureInfo = devices[ip].feature_info;
         const deviceConfig = devices[ip].device_config;
 
         const device: KasaDevice = {
           sys_info: deviceInfo,
-          disc_info: discoveryInfo,
           feature_info: featureInfo,
           device_config: deviceConfig,
           last_seen: new Date(),
@@ -162,18 +156,12 @@ export default class DeviceManager {
         const statusCode = error.response.status;
         const errorMessage = error.response.data.error;
         if (statusCode === 500) {
-          if (enableLogging) {
-            this.log.error(`Exception during getSysInfo post request: ${errorMessage}`);
-          }
+          this.log.error(`Exception during getSysInfo post request: ${errorMessage}`);
         } else {
-          if (enableLogging) {
-            this.log.error(`Unexpected error during getSysInfo post request: ${errorMessage}`);
-          }
+          this.log.error(`Unexpected error during getSysInfo post request: ${errorMessage}`);
         }
       } else {
-        if (enableLogging) {
-          this.log.error('Error during getSysInfo post request:', error);
-        }
+        this.log.error('Error during getSysInfo post request:', error);
       }
       return {};
     }
@@ -210,18 +198,12 @@ export default class DeviceManager {
         const statusCode = error.response.status;
         const errorMessage = error.response.data.error;
         if (statusCode === 500) {
-          if (enableLogging) {
-            this.log.error(`Exception during getSysInfo post request: ${errorMessage}`);
-          }
+          this.log.error(`Exception during getSysInfo post request: ${errorMessage}`);
         } else {
-          if (enableLogging) {
-            this.log.error(`Unexpected error during getSysInfo post request: ${errorMessage}`);
-          }
+          this.log.error(`Unexpected error during getSysInfo post request: ${errorMessage}`);
         }
       } else {
-        if (enableLogging) {
-          this.log.error('Error during getSysInfo post request:', error);
-        }
+        this.log.error('Error during getSysInfo post request:', error);
       }
     }
   }
@@ -269,18 +251,12 @@ export default class DeviceManager {
         const statusCode = error.response.status;
         const errorMessage = error.response.data.error;
         if (statusCode === 500) {
-          if (enableLogging) {
-            this.log.error(`Exception during getSysInfo post request: ${errorMessage}`);
-          }
+          this.log.error(`Exception during getSysInfo post request: ${errorMessage}`);
         } else {
-          if (enableLogging) {
-            this.log.error(`Unexpected error during getSysInfo post request: ${errorMessage}`);
-          }
+          this.log.error(`Unexpected error during getSysInfo post request: ${errorMessage}`);
         }
       } else {
-        if (enableLogging) {
-          this.log.error('Error during getSysInfo post request:', error);
-        }
+        this.log.error('Error during getSysInfo post request:', error);
       }
     }
   }

@@ -1,6 +1,8 @@
 import { Categories } from 'homebridge';
 import type { Characteristic, CharacteristicValue, Service, WithUUID } from 'homebridge';
 
+import { EventEmitter } from 'node:events';
+
 import HomeKitDevice from './index.js';
 import { deferAndCombine } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
@@ -14,6 +16,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
   private hasHSV: boolean;
   private previousKasaDevice: KasaDevice | undefined;
   private pollingInterval: NodeJS.Timeout | undefined;
+  private updateEmitter: EventEmitter = new EventEmitter();
 
   constructor(
     platform: KasaPythonPlatform,
@@ -42,6 +45,10 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     }, platform.config.advancedOptions.waitTimeUpdate);
 
     this.startPolling();
+
+    platform.periodicDeviceDiscoveryEmitter.on('periodicDeviceDiscoveryComplete', () => {
+      this.updateEmitter.emit('periodicDeviceDiscoveryComplete');
+    });
   }
 
   private checkService() {
@@ -160,6 +167,13 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
       return;
     }
 
+    if (this.isUpdating || this.platform.periodicDeviceDiscovering) {
+      await Promise.race([
+        new Promise<void>((resolve) => this.updateEmitter.once('updateComplete', resolve)),
+        new Promise<void>((resolve) => this.updateEmitter.once('periodicDeviceDiscoveryComplete', resolve)),
+      ]);
+    }
+
     if (this.deviceManager) {
       try {
         this.isUpdating = true;
@@ -191,6 +205,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
         this.stopPolling();
       } finally {
         this.isUpdating = false;
+        this.updateEmitter.emit('updateComplete');
       }
     } else {
       throw new Error('Device manager is undefined.');
@@ -203,7 +218,10 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
       return;
     }
     if (this.isUpdating || this.platform.periodicDeviceDiscovering) {
-      return;
+      await Promise.race([
+        new Promise<void>((resolve) => this.updateEmitter.once('updateComplete', resolve)),
+        new Promise<void>((resolve) => this.updateEmitter.once('periodicDeviceDiscoveryComplete', resolve)),
+      ]);
     }
     this.isUpdating = true;
     const task = (async () => {
@@ -249,6 +267,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
         this.stopPolling();
       } finally {
         this.isUpdating = false;
+        this.updateEmitter.emit('updateComplete');
       }
     })();
     this.platform.ongoingTasks.push(task);
@@ -271,6 +290,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
       if (this.kasaDevice.offline || this.platform.isShuttingDown) {
         if (this.isUpdating) {
           this.isUpdating = false;
+          this.updateEmitter.emit('updateComplete');
         }
         this.stopPolling();
       } else {

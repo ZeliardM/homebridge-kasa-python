@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Kasa Python",
   "name": "homebridge-kasa-python",
-  "version": "2.7.0-beta.9",
+  "version": "2.7.0-beta.10",
   "description": "Plugin that uses Python-Kasa API to communicate with Kasa Devices.",
   "license": "MIT",
   "type": "module",
@@ -14,7 +14,7 @@
   },
   "engines": {
     "homebridge": "^1.8.0 || ^2.0.0-beta.0",
-    "node": "^18.20.5 || ^20.18.1 || ^22.12.0 || ^23.4.0",
+    "node": "^18.20.5 || ^20.18.1 || ^22.12.0 || ^23.5.0",
     "python": "^3.11.0"
   },
   "main": "dist/index.js",
@@ -51,16 +51,16 @@
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.17.0",
     "@types/node": "^22.10.2",
-    "@typescript-eslint/parser": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.2",
     "@stylistic/eslint-plugin": "^2.12.1",
     "eslint": "^9.17.0",
-    "globals": "^15.13.0",
+    "globals": "^15.14.0",
     "homebridge": "^2.0.0-beta.23",
     "nodemon": "^3.1.9",
     "node-persist": "^4.0.3",
     "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",
-    "typescript-eslint": "^8.18.0"
+    "typescript-eslint": "^8.18.2"
   },
   "homepage": "https://github.com/ZeliardM/homebridge-kasa-python#readme",
   "funding": [
@@ -75,7 +75,6 @@
   ],
   "dependencies": {
     "axios": "^1.7.9",
-    "get-port": "^7.1.0",
     "ts-essentials": "^10.0.3",
     "typescript": "^5.7.2"
   },

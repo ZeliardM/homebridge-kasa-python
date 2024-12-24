@@ -8,19 +8,19 @@ import type KasaPythonPlatform from '../platform.js';
 import type { KasaDevice, LightBulb, Plug, PowerStrip, Switch } from './kasaDevices.js';
 
 function isLightBulb(device: KasaDevice): device is LightBulb {
-  return LightBulbs.includes(device.disc_info.model);
+  return LightBulbs.includes(device.sys_info.model);
 }
 
 function isPlug(device: KasaDevice): device is Plug {
-  return Plugs.includes(device.disc_info.model);
+  return Plugs.includes(device.sys_info.model);
 }
 
 function isPowerStrip(device: KasaDevice): device is PowerStrip {
-  return PowerStrips.includes(device.disc_info.model);
+  return PowerStrips.includes(device.sys_info.model);
 }
 
 function isSwitch(device: KasaDevice): device is Switch {
-  return Switches.includes(device.disc_info.model);
+  return Switches.includes(device.sys_info.model);
 }
 
 export default function create(
@@ -30,25 +30,25 @@ export default function create(
 
   if (isLightBulb(kasaDevice)) {
     const lightBulb = kasaDevice as LightBulb;
-    platform.log.debug('HomeKit device is a LightBulb:', lightBulb.disc_info.model);
+    platform.log.debug('HomeKit device is a LightBulb:', lightBulb.sys_info.model);
     return new HomeKitDeviceLightBulb(platform, lightBulb);
   }
 
   if (isPlug(kasaDevice)) {
     const plug = kasaDevice as Plug;
-    platform.log.debug('HomeKit device is a Plug:', plug.disc_info.model);
+    platform.log.debug('HomeKit device is a Plug:', plug.sys_info.model);
     return new HomeKitDevicePlug(platform, plug);
   }
 
   if (isPowerStrip(kasaDevice)) {
     const powerStrip = kasaDevice as PowerStrip;
-    platform.log.debug('HomeKit device is a PowerStrip:', powerStrip.disc_info.model);
+    platform.log.debug('HomeKit device is a PowerStrip:', powerStrip.sys_info.model);
     return new HomeKitDevicePowerStrip(platform, powerStrip);
   }
 
   if (isSwitch(kasaDevice)) {
     const switchDevice = kasaDevice as Switch;
-    platform.log.debug('HomeKit device is a Switch:', switchDevice.disc_info.model);
+    platform.log.debug('HomeKit device is a Switch:', switchDevice.sys_info.model);
     return new HomeKitDeviceSwitch(platform, switchDevice);
   }
 

@@ -95,7 +95,7 @@ export default abstract class HomeKitDevice {
   }
 
   get model(): string {
-    return `${this.kasaDevice.disc_info.model} ${this.kasaDevice.sys_info.hw_ver}`;
+    return `${this.kasaDevice.sys_info.model} ${this.kasaDevice.sys_info.hw_ver}`;
   }
 
   get serialNumber(): string {
@@ -103,7 +103,7 @@ export default abstract class HomeKitDevice {
   }
 
   get firmwareRevision(): string {
-    return `${this.kasaDevice.sys_info.sw_ver.split(' ')[0]}`;
+    return this.kasaDevice.sys_info.sw_ver;
   }
 
   abstract identify(): void;

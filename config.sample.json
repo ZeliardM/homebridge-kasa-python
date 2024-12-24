@@ -17,6 +17,7 @@
         "discoveryPollingInterval": 300,
         "offlineInterval": 7,
         "waitTimeUpdate": 100,
+        "advancedPythonLogging": false,
         "additionalBroadcasts": [
           "192.168.1.255",
           "192.168.2.255"

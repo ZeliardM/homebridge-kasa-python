@@ -8,22 +8,20 @@ export default function platformAccessoryInformation(
   const { Characteristic, Service: { AccessoryInformation } } = hap;
 
   return (platformAccessory: PlatformAccessory, homekitDevice: HomeKitDevice) => {
-    const infoService = platformAccessory.getService(AccessoryInformation) ?? platformAccessory.addService(AccessoryInformation);
+    const existingInfoService = platformAccessory.getService(AccessoryInformation);
+    if (existingInfoService) {
+      return existingInfoService;
+    } else {
+      const infoService = platformAccessory.addService(AccessoryInformation);
 
-    [Characteristic.Name, Characteristic.Manufacturer, Characteristic.Model, Characteristic.SerialNumber, Characteristic.FirmwareRevision]
-      .forEach(characteristic => {
-        if (!infoService.getCharacteristic(characteristic)) {
-          infoService.addCharacteristic(characteristic);
-        }
-      });
+      infoService
+        .setCharacteristic(Characteristic.Name, homekitDevice.name)
+        .setCharacteristic(Characteristic.Manufacturer, homekitDevice.manufacturer)
+        .setCharacteristic(Characteristic.Model, homekitDevice.model)
+        .setCharacteristic(Characteristic.SerialNumber, homekitDevice.serialNumber)
+        .setCharacteristic(Characteristic.FirmwareRevision, homekitDevice.firmwareRevision);
 
-    infoService
-      .setCharacteristic(Characteristic.Name, homekitDevice.name)
-      .setCharacteristic(Characteristic.Manufacturer, homekitDevice.manufacturer)
-      .setCharacteristic(Characteristic.Model, homekitDevice.model)
-      .setCharacteristic(Characteristic.SerialNumber, homekitDevice.serialNumber)
-      .setCharacteristic(Characteristic.FirmwareRevision, homekitDevice.firmwareRevision);
-
-    return infoService;
+      return infoService;
+    }
   };
 }

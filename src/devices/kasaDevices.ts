@@ -12,13 +12,10 @@ export interface SysInfo {
   hw_ver: string;
   hsv?: HSV;
   mac: string;
+  model: string;
   state?: boolean;
   sw_ver: string;
   [key: string]: string | number | boolean | ChildDevice[] | HSV | undefined;
-}
-
-export interface DiscoveryInfo {
-  model: string;
 }
 
 export interface FeatureInfo {
@@ -64,7 +61,6 @@ export interface ConfigDevice {
 
 export interface LightBulb {
   sys_info: SysInfo;
-  disc_info: DiscoveryInfo;
   feature_info: FeatureInfo;
   device_config: DeviceConfig;
   last_seen: Date;
@@ -73,7 +69,6 @@ export interface LightBulb {
 
 export interface Plug {
   sys_info: SysInfo;
-  disc_info: DiscoveryInfo;
   feature_info: FeatureInfo;
   device_config: DeviceConfig;
   last_seen: Date;
@@ -82,7 +77,6 @@ export interface Plug {
 
 export interface PowerStrip {
   sys_info: SysInfo;
-  disc_info: DiscoveryInfo;
   feature_info: FeatureInfo;
   device_config: DeviceConfig;
   last_seen: Date;
@@ -91,7 +85,6 @@ export interface PowerStrip {
 
 export interface Switch {
   sys_info: SysInfo;
-  disc_info: DiscoveryInfo;
   feature_info: FeatureInfo;
   device_config: DeviceConfig;
   last_seen: Date;
@@ -99,112 +92,100 @@ export interface Switch {
 }
 
 export const Plugs = [
-  'EP10(US)',
-  'EP25(US)',
-  'HS100(UK)',
-  'HS100(US)',
-  'HS103(US)',
-  'HS105(US)',
-  'HS110(EU)',
-  'HS110(US)',
-  'KP100(US)',
-  'KP105(UK)',
-  'KP115(EU)',
-  'KP115(US)',
-  'KP125(US)',
-  'KP125M(US)',
-  'KP401(US)',
-  'P100(US)',
-  'P110(EU)',
-  'P110(UK)',
-  'P110M(AU)',
-  'P115(US)',
-  'P115(EU)',
-  'P125M(US)',
-  'P135(US)',
-  'TP15(US)',
+  'EP10',
+  'EP25',
+  'HS100',
+  'HS103',
+  'HS105',
+  'HS110',
+  'KP100',
+  'KP105',
+  'KP115',
+  'KP125',
+  'KP125M',
+  'KP401',
+  'P100',
+  'P110',
+  'P110M',
+  'P115',
+  'P125M',
+  'P135',
+  'TP15',
 ];
 
 export const PowerStrips = [
-  'EP40(US)',
-  'EP40M(US)',
-  'HS107(US)',
-  'HS300(US)',
-  'KP200(US)',
-  'KP303(UK)',
-  'KP303(US)',
-  'KP400(US)',
-  'P300(EU)',
-  'P304M(UK)',
-  'TP25(US)',
+  'EP40',
+  'EP40M',
+  'HS107',
+  'HS300',
+  'KP200',
+  'KP303',
+  'KP400',
+  'P210M',
+  'P300',
+  'P304M',
+  'P306',
+  'TP25',
 ];
 
 export const Switches = [
-  'ES20M(US)',
-  'HS200(US)',
-  'HS210(US)',
-  'HS220(US)',
-  'KP405(US)',
-  'KS200(US)',
-  'KS200M(US)',
-  'KS205(US)',
-  'KS220(US)',
-  'KS220M(US)',
-  'KS225(US)',
-  'KS230(US)',
-  'KS240(US)',
-  'S500D(US)',
-  'S505(US)',
-  'S505D(US)',
+  'ES20M',
+  'HS200',
+  'HS210',
+  'HS220',
+  'KP405',
+  'KS200',
+  'KS200M',
+  'KS205',
+  'KS220',
+  'KS220M',
+  'KS225',
+  'KS230',
+  'KS240',
+  'S500D',
+  'S505',
+  'S505D',
 ];
 
 export const LightBulbs = [
-  'KL110(US)',
-  'KL120(US)',
-  'KL125(US)',
-  'KL130(EU)',
-  'KL130(US)',
-  'KL135(US)',
-  'KL50(US)',
-  'KL60(UN)',
-  'KL60(US)',
-  'LB110(US)',
-  'L510B(EU)',
-  'L510E(US)',
-  'L530E(EU)',
-  'L530E(US)',
-  'L630(EU)',
-  'KL400L5(US)',
-  'KL420L5(US)',
-  'KL430(UN)',
-  'KL430(US)',
-  'L900-10(EU)',
-  'L900-10(US)',
-  'L900-5(EU)',
-  'L920-5(EU)',
-  'L920-5(US)',
-  'L930-5(US)',
+  'KL110',
+  'KL120',
+  'KL125',
+  'KL130',
+  'KL135',
+  'KL50',
+  'KL60',
+  'LB110',
+  'L510B',
+  'L510E',
+  'L530E',
+  'L630',
+  'KL400L5',
+  'KL420L5',
+  'KL430',
+  'L900-10',
+  'L900-5',
+  'L920-5',
+  'L930-5',
 ];
 
 export const Unsupported = [
-  'KH100(EU)',
-  'KH100(UK)',
-  'H100(EU)',
-  'H200(EU)',
-  'H200(US)',
-  'KE100(EU)',
-  'KE100(UK)',
-  'S200B(EU)',
-  'S200B(US)',
-  'S200D(EU)',
-  'T100(EU)',
-  'T110(EU)',
-  'T110(US)',
-  'T300(EU)',
-  'T310(EU)',
-  'T310(US)',
-  'T315(EU)',
-  'T315(US)',
-  'C210(EU)',
+  'C100',
+  'C210',
+  'C225',
+  'C325WB',
+  'C520WS',
   'TC65',
+  'TC70',
+  'KH100',
+  'H100',
+  'H200',
+  'KE100',
+  'S200B',
+  'S200D',
+  'T100',
+  'T110',
+  'T300',
+  'T310',
+  'T315',
 ];

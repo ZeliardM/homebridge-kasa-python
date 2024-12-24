@@ -43,6 +43,7 @@ export interface KasaPythonConfigInput {
   additionalBroadcasts?: string[];
   manualDevices?: (string | ConfigDevice)[];
   waitTimeUpdate?: number;
+  advancedPythonLogging?: boolean;
 }
 
 export type KasaPythonConfig = {
@@ -59,6 +60,7 @@ export type KasaPythonConfig = {
   };
   advancedOptions: {
     waitTimeUpdate: number;
+    advancedPythonLogging: boolean;
   };
 };
 
@@ -76,6 +78,7 @@ export const defaultConfig: KasaPythonConfig = {
   },
   advancedOptions: {
     waitTimeUpdate: 100,
+    advancedPythonLogging: false,
   },
 };
 
@@ -99,47 +102,37 @@ function convertManualDevices(manualDevices: (string | ConfigDevice)[] | undefin
 function validateConfig(config: Record<string, unknown>): string[] {
   const errors: string[] = [];
 
-  if (typeof config.name !== 'string') {
-    errors.push('`name` should be a string.');
-  }
+  validateType(config, 'name', 'string', errors);
+  validateType(config, 'enableCredentials', 'boolean', errors);
+  validateType(config, 'username', 'string', errors);
+  validateType(config, 'password', 'string', errors);
+  validateType(config, 'pollingInterval', 'number', errors);
+  validateType(config, 'discoveryPollingInterval', 'number', errors);
+  validateType(config, 'offlineInterval', 'number', errors);
 
-  if (typeof config.enableCredentials !== 'boolean') {
-    errors.push('`enableCredentials` should be a boolean.');
-  }
-
-  if (config.username && typeof config.username !== 'string') {
-    errors.push('`username` should be a string.');
-  }
-
-  if (config.password && typeof config.password !== 'string') {
-    errors.push('`password` should be a string.');
-  }
-
-  if (config.pollingInterval && typeof config.pollingInterval !== 'number') {
-    errors.push('`pollingInterval` should be a number.');
-  }
-
-  if (config.discoveryPollingInterval && typeof config.discoveryPollingInterval !== 'number') {
-    errors.push('`discoveryPollingInterval` should be a number.');
-  }
-
-  if (config.offlineInterval && typeof config.offlineInterval !== 'number') {
-    errors.push('`offlineInterval` should be a number.');
-  }
-
-  if (config.additionalBroadcasts && !Array.isArray(config.additionalBroadcasts)) {
+  if (config.additionalBroadcasts !== undefined && !Array.isArray(config.additionalBroadcasts)) {
     errors.push('`additionalBroadcasts` should be an array of strings.');
   }
 
-  if (config.manualDevices && !Array.isArray(config.manualDevices)) {
+  if (config.manualDevices !== undefined && !Array.isArray(config.manualDevices)) {
     errors.push('`manualDevices` should be an array.');
   }
 
-  if (config.waitTimeUpdate && typeof config.waitTimeUpdate !== 'number') {
-    errors.push('`waitTimeUpdate` should be a number.');
-  }
+  validateType(config, 'waitTimeUpdate', 'number', errors);
+  validateType(config, 'advancedPythonLogging', 'boolean', errors);
 
   return errors;
+}
+
+function validateType(
+  config: Record<string, unknown>,
+  key: string,
+  expectedType: string,
+  errors: string[],
+) {
+  if (config[key] !== undefined && typeof config[key] !== expectedType) {
+    errors.push(`\`${key}\` should be a ${expectedType}.`);
+  }
 }
 
 export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
@@ -168,6 +161,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     },
     advancedOptions: {
       waitTimeUpdate: c.waitTimeUpdate ?? defaultConfig.advancedOptions.waitTimeUpdate,
+      advancedPythonLogging: c.advancedPythonLogging ?? defaultConfig.advancedOptions.advancedPythonLogging,
     },
   };
 }

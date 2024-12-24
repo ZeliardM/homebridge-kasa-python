@@ -11,6 +11,7 @@ import type {
 import { Logger } from 'homebridge/dist/logger.js';
 
 import axios from 'axios';
+import { EventEmitter } from 'node:events';
 import net from 'node:net';
 import path from 'node:path';
 import { ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -159,6 +160,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public periodicDeviceDiscovering: boolean = false;
   public isShuttingDown: boolean = false;
   public ongoingTasks: Promise<void>[] = [];
+  public periodicDeviceDiscoveryEmitter: EventEmitter = new EventEmitter();
 
   constructor(public readonly log: Logging, config: PlatformConfig, public readonly api: API) {
     this.Service = this.api.hap.Service;
@@ -319,6 +321,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       this.log.error('Error during periodic device discovery:', error);
     } finally {
       this.periodicDeviceDiscovering = false;
+      this.periodicDeviceDiscoveryEmitter.emit('periodicDeviceDiscoveryComplete');
       this.log.debug('Finished periodic device discovery');
     }
   }
@@ -479,8 +482,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         this.venvPythonExecutable,
         [scriptPath, this.port.toString()],
         undefined,
-        true,
-        true,
+        this.config.advancedOptions.advancedPythonLogging ? false: true,
+        this.config.advancedOptions.advancedPythonLogging ? false: true,
         true,
       );
 

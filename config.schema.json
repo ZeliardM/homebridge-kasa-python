@@ -95,6 +95,12 @@
         "type": "integer",
         "description": "The time to wait to combine similar commands for a device before sending a command to a device (milliseconds). Default: 100.",
         "default": 100
+      },
+      "advancedPythonLogging": {
+        "title": "Advanced Python Logging",
+        "type": "boolean",
+        "description": "Enable detailed logging for Python scripts.",
+        "default": false
       }
     }
   },
@@ -165,7 +171,8 @@
       "description": "Don't change these, unless you understand what you're doing.",
       "expandable": true,
       "items": [
-        "waitTimeUpdate"
+        "waitTimeUpdate",
+        "advancedPythonLogging"
       ]
     }
   ]
