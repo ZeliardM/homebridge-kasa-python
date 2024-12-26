@@ -9,6 +9,7 @@ from quart import Quart, jsonify, request
 app = Quart(__name__)
 
 UNSUPPORTED_TYPES = {
+    'IOT.IPCAMERA',
     'SMART.IPCAMERA',
     'SMART.KASAHUB',
     'SMART.TAPOHUB',
