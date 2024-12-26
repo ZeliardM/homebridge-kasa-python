@@ -3,7 +3,7 @@ import sys
 import uvicorn
 from typing import Any, Dict, List, Optional
 
-from kasa import Credentials, Device, Discover, Module
+from kasa import AuthenticationError, Credentials, Device, Discover, Module, UnsupportedDeviceError
 from quart import Quart, jsonify, request
 
 app = Quart(__name__)
@@ -111,22 +111,43 @@ async def discover_devices(
     creds = Credentials(username, password) if (username) and (password) else None
 
     async def on_discovered(device: Device):
-        await device.update()
+        try:
+            await device.update()
+        except AuthenticationError:
+            pass
+        except UnsupportedDeviceError:
+            pass
+        except Exception:
+            pass
 
     async def discover_on_broadcast(broadcast: str):
-        discovered = await Discover.discover(
-            target=broadcast,
-            credentials=creds,
-            on_discovered=on_discovered
-        )
-        devices.update(discovered)
+        try:
+            discovered = await Discover.discover(
+                target=broadcast,
+                credentials=creds,
+                on_discovered=on_discovered
+            )
+            devices.update(discovered)
+        except AuthenticationError:
+            pass
+        except UnsupportedDeviceError:
+            pass
+        except Exception:
+            pass
 
     async def discover_manual_device(host: str):
         if (host in devices):
             return
-        device = await Discover.discover_single(host=host, credentials=creds)
-        await on_discovered(device)
-        devices[host] = device
+        try:
+            device = await Discover.discover_single(host=host, credentials=creds)
+            await on_discovered(device)
+            devices[host] = device
+        except AuthenticationError:
+            pass
+        except UnsupportedDeviceError:
+            pass
+        except Exception:
+            pass
 
     discover_tasks = [discover_on_broadcast(bc) for bc in broadcasts]
     manual_discover_tasks = [discover_manual_device(host) for host in (manual_devices or [])]
