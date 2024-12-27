@@ -99,6 +99,7 @@ export async function runCommand(
   hideStdout: boolean = false,
   hideStderr: boolean = false,
   returnProcess: boolean = false,
+  suppressErrors: string[] = [],
 ): Promise<[string, string, number | null, (ChildProcessWithoutNullStreams | null)?]> {
   let stdout: string = '';
   let stderr: string = '';
@@ -122,14 +123,14 @@ export async function runCommand(
   p.stdout.setEncoding('utf8').on('data', data => {
     stdout += data;
     if (!hideStdout) {
-      logger.info(data.trim());
+      logger.info(`STDOUT: ${data.trim()}`);
     }
   });
 
   p.stderr.setEncoding('utf8').on('data', data => {
     stderr += data;
     if (!hideStderr) {
-      logger[data.startsWith('WARNING') ? 'warn' : 'error'](data.trim());
+      logger.error(`STDERR: ${data.trim()}`);
     }
   });
 
@@ -153,7 +154,11 @@ export async function runCommand(
       logger.debug(`Command closed with exit code: ${code}`);
       resolve(code);
     }).on('error', (error) => {
-      logger.error('Command encountered an error:', error);
+      const errorMessage = error.message.toLowerCase();
+      const shouldSuppress = suppressErrors.some(err => errorMessage.includes(err));
+      if (!shouldSuppress) {
+        logger.error('Command encountered an error:', error);
+      }
       reject(error);
     });
   });

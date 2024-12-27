@@ -15,23 +15,22 @@ class PythonChecker {
   private readonly log: Logger;
   private readonly platform: KasaPythonPlatform;
   private readonly advancedPythonLogging: boolean;
-  private readonly pythonExecutable: string;
+  private readonly pythonExecutables: string[];
   private readonly pluginDirPath: string;
   private readonly venvPath: string;
-  private readonly venvPipExecutable: string;
-  private readonly venvPythonExecutable: string;
   private readonly venvConfigPath: string;
   private readonly requirementsPath: string = path.join(__dirname, '..', '..', 'requirements.txt');
+  private pythonExecutable: string = '';
+  private venvPipExecutable: string = '';
+  private venvPythonExecutable: string = '';
 
   public constructor(platform: KasaPythonPlatform) {
     this.platform = platform;
     this.log = prefixLogger(this.platform.log, '[Python Check]');
     this.advancedPythonLogging = this.platform.config.advancedOptions.advancedPythonLogging ?? false;
-    this.pythonExecutable = 'python3';
+    this.pythonExecutables = ['python', 'python3', 'python3.11', 'python3.12', 'python3.13'];
     this.pluginDirPath = path.join(this.platform.storagePath, 'kasa-python');
     this.venvPath = path.join(this.pluginDirPath, '.venv');
-    this.venvPythonExecutable = path.join(this.venvPath, 'bin', 'python3');
-    this.venvPipExecutable = path.join(this.venvPath, 'bin', 'pip3');
     this.venvConfigPath = path.join(this.venvPath, 'pyvenv.cfg');
   }
 
@@ -58,9 +57,34 @@ class PythonChecker {
 
   private async ensurePythonVersion(): Promise<void> {
     this.log.debug('Ensuring system Python version is supported');
-    const version: string = await this.getSystemPythonVersion();
-    if (!SUPPORTED_PYTHON_VERSIONS.some(e => version.includes(e))) {
-      this.log.error(`Python ${version} is installed. However, only Python ${SUPPORTED_PYTHON_VERSIONS.join(', ')} is supported.`);
+    const versions: string[] = await this.getSystemPythonVersions();
+
+    const versionMap: { [key: string]: string } = {
+      '3.13': 'python3.13',
+      '3.12': 'python3.12',
+      '3.11': 'python3.11',
+    };
+
+    versions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+
+    let supported = false;
+    for (const version of versions) {
+      const majorMinorVersion = version.split('.').slice(0, 2).join('.');
+      if (SUPPORTED_PYTHON_VERSIONS.includes(majorMinorVersion)) {
+        supported = true;
+        if (versionMap[majorMinorVersion]) {
+          this.pythonExecutable = versionMap[majorMinorVersion];
+          this.venvPythonExecutable = path.join(this.venvPath, 'bin', versionMap[majorMinorVersion]);
+          this.venvPipExecutable = path.join(this.venvPath, 'bin', `pip${majorMinorVersion}`);
+          this.log.debug(`Using Python executable: ${this.pythonExecutable}`);
+        }
+        break;
+      }
+    }
+
+    if (!supported) {
+      this.log.error(`Python ${versions.join(', ')} is installed. However, only Python ` +
+        `${SUPPORTED_PYTHON_VERSIONS.join(', ')} is supported.`);
       await delay(300000);
     } else {
       this.log.debug('System Python version is supported');
@@ -203,18 +227,33 @@ class PythonChecker {
     this.log.debug('Requirements installed successfully');
   }
 
-  private async getSystemPythonVersion(): Promise<string> {
-    this.log.debug('Getting system Python version');
-    const [version] = await runCommand(
-      this.log,
-      this.pythonExecutable,
-      ['--version'],
-      undefined,
-      this.advancedPythonLogging ? false : true,
-      this.advancedPythonLogging ? false : true,
-    );
-    this.log.debug('System Python version:', version.trim().replace('Python ', ''));
-    return version.trim().replace('Python ', '');
+  private async getSystemPythonVersions(): Promise<string[]> {
+    this.log.debug('Getting system Python versions');
+
+    const suppressErrors = this.pythonExecutables.map(exec => `spawn ${exec.toLowerCase()}`);
+    const versionPromises = this.pythonExecutables.map(async (pythonExecutable) => {
+      try {
+        const [stdout] = await runCommand(
+          this.log,
+          pythonExecutable,
+          ['--version'],
+          undefined,
+          this.advancedPythonLogging ? false : true,
+          this.advancedPythonLogging ? false : true,
+          false,
+          suppressErrors,
+        );
+        return stdout.trim().replace('Python ', '');
+      } catch {
+        return null;
+      }
+    });
+
+    const versions = await Promise.all(versionPromises);
+    const validVersions = Array.from(new Set(versions.filter((version) => version !== null))) as string[];
+
+    this.log.debug('Found Python versions:', validVersions);
+    return validVersions;
   }
 
   private async getVenvPipVersion(): Promise<string> {
