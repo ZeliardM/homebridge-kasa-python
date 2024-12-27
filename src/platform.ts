@@ -193,6 +193,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       await Promise.all(this.ongoingTasks);
       this.stopKasaApi();
     });
+
+    this.periodicDeviceDiscoveryEmitter.setMaxListeners(150);
   }
 
   private createHomeKitDevice(kasaDevice: KasaDevice): HomeKitDevice | undefined {
@@ -317,6 +319,10 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
           this.foundDevice(device);
         }
       });
+
+      this.periodicDeviceDiscoveryEmitter.setMaxListeners(this.configuredAccessories.size + 10);
+      const maxListenerCount = this.periodicDeviceDiscoveryEmitter.getMaxListeners();
+      this.log.debug('periodicDeviceDiscoveryEmitter max listener count:', maxListenerCount);
     } catch (error) {
       this.log.error('Error during periodic device discovery:', error);
     } finally {
@@ -506,6 +512,10 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
           this.log.debug(`Processing discovered device: ${device.sys_info.device_id}`);
           this.foundDevice(device);
         });
+
+        this.periodicDeviceDiscoveryEmitter.setMaxListeners(this.configuredAccessories.size + 10);
+        const maxListenerCount = this.periodicDeviceDiscoveryEmitter.getMaxListeners();
+        this.log.debug('periodicDeviceDiscoveryEmitter max listener count:', maxListenerCount);
       } else {
         this.log.debug('No devices discovered');
       }
