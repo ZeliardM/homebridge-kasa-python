@@ -320,7 +320,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         }
       });
 
-      this.periodicDeviceDiscoveryEmitter.setMaxListeners(this.configuredAccessories.size + 10);
+      this.periodicDeviceDiscoveryEmitter.setMaxListeners(Object.keys(discoveredDevices).length + 10);
       const maxListenerCount = this.periodicDeviceDiscoveryEmitter.getMaxListeners();
       this.log.debug('periodicDeviceDiscoveryEmitter max listener count:', maxListenerCount);
     } catch (error) {
@@ -513,7 +513,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
           this.foundDevice(device);
         });
 
-        this.periodicDeviceDiscoveryEmitter.setMaxListeners(this.configuredAccessories.size + 10);
+        this.periodicDeviceDiscoveryEmitter.setMaxListeners(deviceCount + 10);
         const maxListenerCount = this.periodicDeviceDiscoveryEmitter.getMaxListeners();
         this.log.debug('periodicDeviceDiscoveryEmitter max listener count:', maxListenerCount);
       } else {
