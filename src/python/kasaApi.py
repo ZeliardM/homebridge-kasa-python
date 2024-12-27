@@ -1,6 +1,4 @@
 import asyncio
-import sys
-import uvicorn
 from typing import Any, Dict, List, Optional
 
 from kasa import AuthenticationError, Credentials, Device, Discover, Module, UnsupportedDeviceError
@@ -300,15 +298,3 @@ async def control_device_route():
 @app.route('/health', methods=['GET'])
 async def health_check():
     return jsonify({"status": "healthy"}), 200
-
-if (__name__ == '__main__'):
-    port = int(sys.argv[1])
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=port,
-        loop="asyncio",
-        workers=4,
-        timeout_keep_alive=120,
-        limit_concurrency=1000,
-    )

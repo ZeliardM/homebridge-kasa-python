@@ -479,7 +479,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   private async startKasaApi(): Promise<void> {
-    const scriptPath = path.join(__dirname, 'python', 'kasaApi.py');
+    const scriptPath = path.join(__dirname, 'python', 'startKasaApi.py');
     this.log.debug('Starting Kasa API with script:', scriptPath);
 
     try {
