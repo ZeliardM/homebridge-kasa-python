@@ -19,11 +19,11 @@ device_cache: Dict[str, Device] = {}
 def get_light_info(device: Device) -> Dict[str, Any]:
     light_module = device.modules.get(Module.Light)
     light_info = {}
-    if (light_module.has_feature("brightness")):
+    if light_module.has_feature("brightness"):
         light_info["brightness"] = light_module.brightness
-    if (light_module.has_feature("color_temp")):
+    if light_module.has_feature("color_temp"):
         light_info["color_temp"] = light_module.color_temp
-    if (light_module.has_feature("hsv")):
+    if light_module.has_feature("hsv"):
         hue, saturation, _ = light_module.hsv
         light_info["hsv"] = {"hue": hue, "saturation": saturation}
     return light_info
@@ -35,17 +35,17 @@ def serialize_child(child: Device) -> Dict[str, Any]:
         "state": child.features["state"].value
     }
     light_module = child.modules.get(Module.Light)
-    if (light_module):
+    if light_module:
         child_info.update(get_light_info(child))
     return child_info
 
 def custom_sysinfo_config_serializer(device: Device) -> Dict[str, Any]:
-    child_num = len(device.children) if (device.children) else 0
+    child_num = len(device.children) if device.children else 0
 
     sys_info = {
         "alias": device.alias or f'{device.device_type}_{device.host}',
         "child_num": child_num,
-        "device_id": device.device_id if (device.mac != device.device_id) else device.sys_info.get("deviceId"),
+        "device_id": device.device_id if device.mac != device.device_id else device.sys_info.get("deviceId"),
         "device_type": device.config.connection_type.device_family.value,
         "host": device.host,
         "hw_ver": device.device_info.hardware_version,
@@ -54,14 +54,14 @@ def custom_sysinfo_config_serializer(device: Device) -> Dict[str, Any]:
         "sw_ver": device.device_info.firmware_version,
     }
 
-    if (child_num > 0):
+    if child_num > 0:
         sys_info["children"] = [serialize_child(child) for child in device.children]
     else:
         sys_info.update({
             "state": device.features["state"].value
         })
         light_module = device.modules.get(Module.Light)
-        if (light_module):
+        if light_module:
             sys_info.update(get_light_info(device))
 
     device_config = {
@@ -71,7 +71,7 @@ def custom_sysinfo_config_serializer(device: Device) -> Dict[str, Any]:
         **({"credentials": {
             "username": device.config.credentials.username,
             "password": device.config.credentials.password
-        }} if (device.config.credentials) else {}),
+        }} if device.config.credentials else {}),
         "connection_type": {
             "device_family": device.config.connection_type.device_family.value,
             "encryption_type": device.config.connection_type.encryption_type.value,
@@ -87,7 +87,7 @@ def custom_sysinfo_config_serializer(device: Device) -> Dict[str, Any]:
 def custom_feature_serializer(device: Device) -> Dict[str, Any]:
     feature_info = {}
     light_module = device.modules.get(Module.Light)
-    if (light_module):
+    if light_module:
         feature_info = {
             "brightness": light_module.has_feature("brightness"),
             "color_temp": light_module.has_feature("color_temp"),
@@ -106,7 +106,7 @@ async def discover_devices(
 ) -> Dict[str, Any]:
     devices = {}
     broadcasts = ["255.255.255.255"] + (additional_broadcasts or [])
-    creds = Credentials(username, password) if (username) and (password) else None
+    creds = Credentials(username, password) if username and password else None
 
     async def on_discovered(device: Device):
         try:
@@ -134,7 +134,7 @@ async def discover_devices(
             pass
 
     async def discover_manual_device(host: str):
-        if (host in devices):
+        if host in devices:
             return
         try:
             device = await Discover.discover_single(host=host, credentials=creds)
@@ -160,21 +160,21 @@ async def discover_devices(
         try:
             homekit_component = dev.modules.get(Module.HomeKit)
             matter_component = dev.modules.get(Module.Matter)
-            if (homekit_component) or (matter_component):
+            if homekit_component or matter_component:
                 continue
         except Exception:
             pass
 
         dev_type = dev.sys_info.get("mic_type") or dev.sys_info.get("type")
-        if (dev_type) and (dev_type not in UNSUPPORTED_TYPES):
-            if (ip not in device_cache):
+        if dev_type and dev_type not in UNSUPPORTED_TYPES:
+            if ip not in device_cache:
                 device_cache[ip] = dev
             update_tasks.append(create_device_info(ip, dev))
 
     results = await asyncio.gather(*update_tasks, return_exceptions=True)
 
     for result in results:
-        if (isinstance(result, Exception)):
+        if isinstance(result, Exception):
             continue
         ip, info = result
         all_device_info[ip] = info
@@ -194,7 +194,7 @@ async def create_device_info(ip: str, dev: Device):
 async def get_sys_info(device_config: Dict[str, Any]) -> Dict[str, Any]:
     host = device_config["host"]
     dev = device_cache.get(host)
-    if (not dev):
+    if not dev:
         dev = await Device.connect(config=Device.Config.from_dict(device_config))
         device_cache[host] = dev
     else:
@@ -211,33 +211,44 @@ async def control_device(
 ) -> Dict[str, Any]:
     host = device_config["host"]
     dev = device_cache.get(host)
-    if (not dev):
+    if not dev:
         dev = await Device.connect(config=Device.Config.from_dict(device_config))
         device_cache[host] = dev
-
     try:
-        target = dev.children[child_num] if (child_num is not None) else dev
-        light = target.modules.get(Module.Light)
-
-        if (feature == "state"):
-            await getattr(target, action)()
-        elif (feature == "brightness") and (light.has_feature("brightness")):
-            await handle_brightness(target, action, value)
-        elif (feature == "color_temp") and (light.has_feature("color_temp")):
-            await handle_color_temp(target, action, value)
-        elif (feature in ["hue", "saturation"]) and (light.has_feature("hsv")):
-            await handle_hsv(target, action, feature, value)
-        else:
-            return {"status": "failed", "error": "Invalid feature or action"}
-        return {"status": "success"}
+        return await perform_device_action(dev, feature, action, value, child_num)
+    except ConnectionResetError:
+        dev.disconnect()
+        device_cache.pop(host, None)
+        dev = await Device.connect(config=Device.Config.from_dict(device_config))
+        device_cache[host] = dev
+        try:
+            return await perform_device_action(dev, feature, action, value, child_num)
+        except Exception as e:
+            return {"status": "failed", "error": str(e)}
     except Exception as e:
         return {"status": "failed", "error": str(e)}
 
+async def perform_device_action(dev: Device, feature: str, action: str, value: Any, child_num: Optional[int] = None) -> Dict[str, Any]:
+    target = dev.children[child_num] if child_num is not None else dev
+    light = target.modules.get(Module.Light)
+
+    if feature == "state":
+        await getattr(target, action)()
+    elif feature == "brightness" and light.has_feature("brightness"):
+        await handle_brightness(target, action, value)
+    elif feature == "color_temp" and light.has_feature("color_temp"):
+        await handle_color_temp(target, action, value)
+    elif feature in ["hue", "saturation"] and light.has_feature("hsv"):
+        await handle_hsv(target, action, feature, value)
+    else:
+        return {"status": "failed", "error": "Invalid feature or action"}
+    return {"status": "success"}
+
 async def handle_brightness(target: Device, action: str, value: int):
     light = target.modules.get(Module.Light)
-    if (value == 0):
+    if value == 0:
         await target.turn_off()
-    elif (0 < value <= 100):
+    elif 0 < value <= 100:
         await getattr(light, action)(value)
     else:
         await target.turn_on()
@@ -251,9 +262,9 @@ async def handle_color_temp(target: Device, action: str, value: int):
 async def handle_hsv(target: Device, action: str, feature: str, value: Dict[str, int]):
     light = target.modules.get(Module.Light)
     hsv = list(light.hsv)
-    if (feature == "hue"):
+    if feature == "hue":
         hsv[0] = value["hue"]
-    elif (feature == "saturation"):
+    elif feature == "saturation":
         hsv[1] = value["saturation"]
     await getattr(light, action)(tuple(hsv))
 
@@ -261,8 +272,8 @@ async def handle_hsv(target: Device, action: str, feature: str, value: Dict[str,
 async def discover_route():
     try:
         auth = request.authorization
-        username = auth.username if (auth) else None
-        password = auth.password if (auth) else None
+        username = auth.username if auth else None
+        password = auth.password if auth else None
         data = await request.get_json()
         additional_broadcasts = data.get('additionalBroadcasts', [])
         manual_devices = data.get('manualDevices', [])
