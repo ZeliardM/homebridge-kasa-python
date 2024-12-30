@@ -1,6 +1,7 @@
 import type {
   API,
   Characteristic,
+  CharacteristicValue,
   DynamicPlatformPlugin,
   Logging,
   PlatformAccessory,
@@ -159,7 +160,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private isUpgrade: boolean = false;
   public periodicDeviceDiscovering: boolean = false;
   public isShuttingDown: boolean = false;
-  public ongoingTasks: Promise<void>[] = [];
+  public ongoingTasks: (Promise<void> | Promise<CharacteristicValue>)[] = [];
   public periodicDeviceDiscoveryEmitter: EventEmitter = new EventEmitter();
 
   constructor(public readonly log: Logging, config: PlatformConfig, public readonly api: API) {
@@ -285,50 +286,55 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
 
     this.periodicDeviceDiscovering = true;
-    try {
-      const discoveredDevices = await this.deviceManager?.discoverDevices() || {};
-      const now = new Date();
-      const offlineInterval = this.config.discoveryOptions.offlineInterval;
+    const task = (async () => {
+      try {
+        const discoveredDevices = await this.deviceManager?.discoverDevices() || {};
+        const now = new Date();
+        const offlineInterval = this.config.discoveryOptions.offlineInterval;
 
-      this.log.info(`Discovered ${Object.keys(discoveredDevices).length} devices`);
+        this.log.info(`Discovered ${Object.keys(discoveredDevices).length} devices`);
 
-      this.configuredAccessories.forEach((platformAccessory, uuid) => {
-        const deviceId = platformAccessory.context.deviceId;
-        if (deviceId) {
-          const device = this.findDiscoveredDevice(discoveredDevices, platformAccessory);
-          if (device) {
-            this.updateAccessoryDeviceStatus(platformAccessory, device, now);
-            this.updateOrCreateHomeKitDevice(deviceId, device);
-          } else {
-            this.updateAccessoryStatus(platformAccessory);
-            this.handleOfflineAccessory(platformAccessory, uuid, now, offlineInterval);
+        this.configuredAccessories.forEach((platformAccessory, uuid) => {
+          const deviceId = platformAccessory.context.deviceId;
+          if (deviceId) {
+            const device = this.findDiscoveredDevice(discoveredDevices, platformAccessory);
+            if (device) {
+              this.updateAccessoryDeviceStatus(platformAccessory, device, now);
+              this.updateOrCreateHomeKitDevice(deviceId, device);
+            } else {
+              this.updateAccessoryStatus(platformAccessory);
+              this.handleOfflineAccessory(platformAccessory, uuid, now, offlineInterval);
+            }
           }
-        }
-      });
+        });
 
-      Object.values(discoveredDevices).forEach(device => {
-        device.last_seen = now;
-        device.offline = false;
-        const deviceId = device.sys_info.device_id;
-        const isConfigured = Array.from(this.configuredAccessories.values()).some(
-          platformAccessory => platformAccessory.context.deviceId === deviceId,
-        );
-        if (!isConfigured) {
-          this.log.debug(`New device [${deviceId}] found, adding to HomeKit`);
-          this.foundDevice(device);
-        }
-      });
+        Object.values(discoveredDevices).forEach(device => {
+          device.last_seen = now;
+          device.offline = false;
+          const deviceId = device.sys_info.device_id;
+          const isConfigured = Array.from(this.configuredAccessories.values()).some(
+            platformAccessory => platformAccessory.context.deviceId === deviceId,
+          );
+          if (!isConfigured) {
+            this.log.debug(`New device [${deviceId}] found, adding to HomeKit`);
+            this.foundDevice(device);
+          }
+        });
 
-      this.periodicDeviceDiscoveryEmitter.setMaxListeners(Object.keys(discoveredDevices).length + 10);
-      const maxListenerCount = this.periodicDeviceDiscoveryEmitter.getMaxListeners();
-      this.log.debug('periodicDeviceDiscoveryEmitter max listener count:', maxListenerCount);
-    } catch (error) {
-      this.log.error('Error during periodic device discovery:', error);
-    } finally {
-      this.periodicDeviceDiscovering = false;
-      this.periodicDeviceDiscoveryEmitter.emit('periodicDeviceDiscoveryComplete');
-      this.log.debug('Finished periodic device discovery');
-    }
+        this.periodicDeviceDiscoveryEmitter.setMaxListeners(Object.keys(discoveredDevices).length + 10);
+        const maxListenerCount = this.periodicDeviceDiscoveryEmitter.getMaxListeners();
+        this.log.debug('periodicDeviceDiscoveryEmitter max listener count:', maxListenerCount);
+      } catch (error) {
+        this.log.error('Error during periodic device discovery:', error);
+      } finally {
+        this.periodicDeviceDiscovering = false;
+        this.periodicDeviceDiscoveryEmitter.emit('periodicDeviceDiscoveryComplete');
+        this.log.debug('Finished periodic device discovery');
+      }
+    })();
+    this.ongoingTasks.push(task);
+    await task;
+    this.ongoingTasks = this.ongoingTasks.filter(t => t !== task);
   }
 
   private findDiscoveredDevice(

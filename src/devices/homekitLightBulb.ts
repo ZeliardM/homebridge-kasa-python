@@ -105,25 +105,31 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     characteristicType: WithUUID<new () => Characteristic>,
     characteristicName: string | undefined,
   ): Promise<CharacteristicValue> {
-    try {
-      if (this.kasaDevice.offline || this.platform.isShuttingDown) {
-        this.log.warn(`Device is offline or platform is shutting down, cannot get value for characteristic ${characteristicName}`);
-        return this.getDefaultValue(characteristicType);
-      }
-
-      let characteristicValue = service.getCharacteristic(characteristicType).value;
-      if (!characteristicValue) {
-        characteristicValue = this.getInitialValue(characteristicType);
-        service.getCharacteristic(characteristicType).updateValue(characteristicValue);
-      }
-      this.log.debug(`Got value for characteristic ${characteristicName}: ${characteristicValue}`);
-      return characteristicValue ?? this.getDefaultValue(characteristicType);
-    } catch (error) {
-      this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
-      this.kasaDevice.offline = true;
-      this.stopPolling();
+    if (this.kasaDevice.offline || this.platform.isShuttingDown) {
+      this.log.warn(`Device is offline or platform is shutting down, cannot get value for characteristic ${characteristicName}`);
+      return this.getDefaultValue(characteristicType);
     }
-    return this.getDefaultValue(characteristicType);
+
+    const task = (async () => {
+      try {
+        let characteristicValue = service.getCharacteristic(characteristicType).value;
+        if (!characteristicValue) {
+          characteristicValue = this.getInitialValue(characteristicType);
+          service.getCharacteristic(characteristicType).updateValue(characteristicValue);
+        }
+        this.log.debug(`Got value for characteristic ${characteristicName}: ${characteristicValue}`);
+        return characteristicValue ?? this.getDefaultValue(characteristicType);
+      } catch (error) {
+        this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
+        this.kasaDevice.offline = true;
+        this.stopPolling();
+      }
+      return this.getDefaultValue(characteristicType);
+    })();
+    this.platform.ongoingTasks.push(task);
+    const result = await task;
+    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
+    return result;
   }
 
   private getInitialValue(characteristicType: WithUUID<new () => Characteristic>): CharacteristicValue {
@@ -174,42 +180,47 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
       ]);
     }
 
-    if (this.deviceManager) {
-      try {
-        this.isUpdating = true;
-        this.log.debug(`Setting value for characteristic ${characteristicName} to ${value}`);
+    const task = (async () => {
+      if (this.deviceManager) {
+        try {
+          this.isUpdating = true;
+          this.log.debug(`Setting value for characteristic ${characteristicName} to ${value}`);
 
-        const characteristicMap: { [key: string]: string } = {
-          Brightness: 'brightness',
-          On: 'state',
-          ColorTemperature: 'color_temp',
-          Hue: 'hue',
-          Saturation: 'saturation',
-        };
+          const characteristicMap: { [key: string]: string } = {
+            Brightness: 'brightness',
+            On: 'state',
+            ColorTemperature: 'color_temp',
+            Hue: 'hue',
+            Saturation: 'saturation',
+          };
 
-        const characteristicKey = characteristicMap[characteristicName ?? ''];
-        if (!characteristicKey) {
-          throw new Error(`Characteristic key not found for ${characteristicName}`);
+          const characteristicKey = characteristicMap[characteristicName ?? ''];
+          if (!characteristicKey) {
+            throw new Error(`Characteristic key not found for ${characteristicName}`);
+          }
+
+          await this.deviceManager.controlDevice(this.deviceConfig, characteristicKey, value);
+          (this.kasaDevice.sys_info as unknown as Record<string, CharacteristicValue>)[characteristicKey] = value;
+
+          this.updateValue(service, service.getCharacteristic(characteristicType), this.name, value);
+
+          this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
+          this.log.debug(`Set value for characteristic ${characteristicName} to ${value} successfully`);
+        } catch (error) {
+          this.log.error(`Error setting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
+          this.kasaDevice.offline = true;
+          this.stopPolling();
+        } finally {
+          this.isUpdating = false;
+          this.updateEmitter.emit('updateComplete');
         }
-
-        await this.deviceManager.controlDevice(this.deviceConfig, characteristicKey, value);
-        (this.kasaDevice.sys_info as unknown as Record<string, CharacteristicValue>)[characteristicKey] = value;
-
-        this.updateValue(service, service.getCharacteristic(characteristicType), this.name, value);
-
-        this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
-        this.log.debug(`Set value for characteristic ${characteristicName} to ${value} successfully`);
-      } catch (error) {
-        this.log.error(`Error setting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
-        this.kasaDevice.offline = true;
-        this.stopPolling();
-      } finally {
-        this.isUpdating = false;
-        this.updateEmitter.emit('updateComplete');
+      } else {
+        throw new Error('Device manager is undefined.');
       }
-    } else {
-      throw new Error('Device manager is undefined.');
-    }
+    })();
+    this.platform.ongoingTasks.push(task);
+    await task;
+    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
   }
 
   protected async updateState() {

@@ -94,25 +94,31 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
     characteristicName: string | undefined,
     child: ChildDevice,
   ): Promise<CharacteristicValue> {
-    try {
-      if (this.kasaDevice.offline || this.platform.isShuttingDown) {
-        this.log.warn(`Device is offline or platform is shutting down, cannot get value for characteristic ${characteristicName}`);
-        return false;
-      }
-
-      let characteristicValue = service.getCharacteristic(characteristicType).value;
-      if (!characteristicValue) {
-        characteristicValue = this.getInitialValue(characteristicType, child);
-        service.getCharacteristic(characteristicType).updateValue(characteristicValue);
-      }
-      this.log.debug(`Got value for characteristic ${characteristicName}: ${characteristicValue}`);
-      return characteristicValue ?? false;
-    } catch (error) {
-      this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
-      this.kasaDevice.offline = true;
-      this.stopPolling();
+    if (this.kasaDevice.offline || this.platform.isShuttingDown) {
+      this.log.warn(`Device is offline or platform is shutting down, cannot get value for characteristic ${characteristicName}`);
+      return false;
     }
-    return false;
+
+    const task = (async () => {
+      try {
+        let characteristicValue = service.getCharacteristic(characteristicType).value;
+        if (!characteristicValue) {
+          characteristicValue = this.getInitialValue(characteristicType, child);
+          service.getCharacteristic(characteristicType).updateValue(characteristicValue);
+        }
+        this.log.debug(`Got value for characteristic ${characteristicName}: ${characteristicValue}`);
+        return characteristicValue ?? false;
+      } catch (error) {
+        this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
+        this.kasaDevice.offline = true;
+        this.stopPolling();
+      }
+      return false;
+    })();
+    this.platform.ongoingTasks.push(task);
+    const result = await task;
+    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
+    return result;
   }
 
   private getInitialValue(characteristicType: WithUUID<new () => Characteristic>, child: ChildDevice): CharacteristicValue {
@@ -141,45 +147,50 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
       ]);
     }
 
-    if (this.deviceManager) {
-      try {
-        this.isUpdating = true;
-        this.log.debug(`Setting value for characteristic ${characteristicName} to ${value}`);
+    const task = (async () => {
+      if (this.deviceManager) {
+        try {
+          this.isUpdating = true;
+          this.log.debug(`Setting value for characteristic ${characteristicName} to ${value}`);
 
-        const characteristicMap: { [key: string]: string } = {
-          On: 'state',
-        };
+          const characteristicMap: { [key: string]: string } = {
+            On: 'state',
+          };
 
-        const characteristicKey = characteristicMap[characteristicName ?? ''];
-        if (!characteristicKey) {
-          throw new Error(`Characteristic key not found for ${characteristicName}`);
-        }
+          const characteristicKey = characteristicMap[characteristicName ?? ''];
+          if (!characteristicKey) {
+            throw new Error(`Characteristic key not found for ${characteristicName}`);
+          }
 
-        const childNumber = parseInt(child.id.slice(-1), 10);
-        await this.deviceManager.controlDevice(this.deviceConfig, characteristicKey, value, childNumber);
-        (child[characteristicKey as keyof ChildDevice] as unknown as CharacteristicValue) = value;
+          const childNumber = parseInt(child.id.slice(-1), 10);
+          await this.deviceManager.controlDevice(this.deviceConfig, characteristicKey, value, childNumber);
+          (child[characteristicKey as keyof ChildDevice] as unknown as CharacteristicValue) = value;
 
-        const childIndex = this.kasaDevice.sys_info.children?.findIndex(c => c.id === child.id);
-        if (childIndex !== undefined && childIndex !== -1) {
+          const childIndex = this.kasaDevice.sys_info.children?.findIndex(c => c.id === child.id);
+          if (childIndex !== undefined && childIndex !== -1) {
           this.kasaDevice.sys_info.children![childIndex] = { ...child };
+          }
+
+          this.updateValue(service, service.getCharacteristic(characteristicType), child.alias, value);
+          this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, value);
+
+          this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
+          this.log.debug(`Set value for characteristic ${characteristicName} to ${value} successfully`);
+        } catch (error) {
+          this.log.error(`Error setting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
+          this.kasaDevice.offline = true;
+          this.stopPolling();
+        } finally {
+          this.isUpdating = false;
+          this.updateEmitter.emit('updateComplete');
         }
-
-        this.updateValue(service, service.getCharacteristic(characteristicType), child.alias, value);
-        this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, value);
-
-        this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
-        this.log.debug(`Set value for characteristic ${characteristicName} to ${value} successfully`);
-      } catch (error) {
-        this.log.error(`Error setting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
-        this.kasaDevice.offline = true;
-        this.stopPolling();
-      } finally {
-        this.isUpdating = false;
-        this.updateEmitter.emit('updateComplete');
+      } else {
+        throw new Error('Device manager is undefined.');
       }
-    } else {
-      throw new Error('Device manager is undefined.');
-    }
+    })();
+    this.platform.ongoingTasks.push(task);
+    await task;
+    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
   }
 
   protected async updateState() {
