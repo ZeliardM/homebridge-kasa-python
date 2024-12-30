@@ -92,7 +92,7 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
   ): Promise<CharacteristicValue> {
     try {
       if (this.kasaDevice.offline || this.platform.isShuttingDown) {
-        this.log.warn(`Device is offline or platform is shutting down, cannot set value for characteristic ${characteristicName}`);
+        this.log.warn(`Device is offline or platform is shutting down, cannot get value for characteristic ${characteristicName}`);
         return this.getDefaultValue(characteristicType);
       }
 
