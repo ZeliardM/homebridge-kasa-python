@@ -217,7 +217,6 @@ async def control_device(
     try:
         return await perform_device_action(dev, feature, action, value, child_num)
     except ConnectionResetError:
-        dev.disconnect()
         device_cache.pop(host, None)
         dev = await Device.connect(config=Device.Config.from_dict(device_config))
         device_cache[host] = dev
