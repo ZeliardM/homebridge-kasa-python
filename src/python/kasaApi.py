@@ -201,6 +201,8 @@ async def get_sys_info(device_config: Dict[str, Any]) -> Dict[str, Any]:
         try:
             await dev.update()
         except ConnectionResetError:
+            if dev:
+                dev.disconnect()
             device_cache.pop(host, None)
             dev = await Device.connect(config=Device.Config.from_dict(device_config))
             device_cache[host] = dev
@@ -222,6 +224,8 @@ async def control_device(
     try:
         return await perform_device_action(dev, feature, action, value, child_num)
     except ConnectionResetError:
+        if dev:
+            dev.disconnect()
         device_cache.pop(host, None)
         dev = await Device.connect(config=Device.Config.from_dict(device_config))
         device_cache[host] = dev
