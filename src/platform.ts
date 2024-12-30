@@ -168,6 +168,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.storagePath = this.api.user.storagePath();
     this.venvPythonExecutable = path.join(this.storagePath, 'kasa-python', '.venv', 'bin', 'python3');
     this.config = parseConfig(config);
+    this.periodicDeviceDiscoveryEmitter.setMaxListeners(150);
 
     this.platformInitialization = this.initializePlatform().catch((error) => {
       this.log.error('Platform initialization failed:', error);
@@ -193,8 +194,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       await Promise.all(this.ongoingTasks);
       this.stopKasaApi();
     });
-
-    this.periodicDeviceDiscoveryEmitter.setMaxListeners(150);
   }
 
   private createHomeKitDevice(kasaDevice: KasaDevice): HomeKitDevice | undefined {
