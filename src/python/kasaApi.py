@@ -198,7 +198,12 @@ async def get_sys_info(device_config: Dict[str, Any]) -> Dict[str, Any]:
         dev = await Device.connect(config=Device.Config.from_dict(device_config))
         device_cache[host] = dev
     else:
-        await dev.update()
+        try:
+            await dev.update()
+        except ConnectionResetError:
+            device_cache.pop(host, None)
+            dev = await Device.connect(config=Device.Config.from_dict(device_config))
+            device_cache[host] = dev
     device = custom_sysinfo_config_serializer(dev)
     return {"sys_info": device["sys_info"]}
 
