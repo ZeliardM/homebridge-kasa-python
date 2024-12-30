@@ -156,12 +156,12 @@ export default class DeviceManager {
         const statusCode = error.response.status;
         const errorMessage = error.response.data.error;
         if (statusCode === 500) {
-          this.log.error(`Exception during getSysInfo post request: ${errorMessage}`);
+          this.log.error(`Exception during discoverDevices post request: ${errorMessage}`);
         } else {
-          this.log.error(`Unexpected error during getSysInfo post request: ${errorMessage}`);
+          this.log.error(`Unexpected error during discoverDevices post request: ${errorMessage}`);
         }
       } else {
-        this.log.error('Error during getSysInfo post request:', error);
+        this.log.error('Error during discoverDevices post request:', error);
       }
       return {};
     }
@@ -251,12 +251,12 @@ export default class DeviceManager {
         const statusCode = error.response.status;
         const errorMessage = error.response.data.error;
         if (statusCode === 500) {
-          this.log.error(`Exception during getSysInfo post request: ${errorMessage}`);
+          this.log.error(`Exception during controlDevice post request: ${errorMessage}`);
         } else {
-          this.log.error(`Unexpected error during getSysInfo post request: ${errorMessage}`);
+          this.log.error(`Unexpected error during controlDevice post request: ${errorMessage}`);
         }
       } else {
-        this.log.error('Error during getSysInfo post request:', error);
+        this.log.error('Error during controlDevice post request:', error);
       }
     }
   }
