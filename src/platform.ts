@@ -24,7 +24,7 @@ import HomeKitDevice from './devices/index.js';
 import PythonChecker from './python/pythonChecker.js';
 import { parseConfig } from './config.js';
 import { TaskQueue } from './taskQueue.js';
-import { runCommand } from './utils.js';
+import { deferAndCombine, runCommand } from './utils.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { isObjectLike, lookup, lookupCharacteristicNameByUUID, prefixLogger } from './utils.js';
 import type { KasaPythonConfig } from './config.js';
@@ -193,7 +193,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         this.isShuttingDown = true;
       }
       this.log.debug('Waiting for tasks to complete');
-      await this.taskQueue;
+      await this.taskQueue.waitForEmptyQueue();
       this.stopKasaApi();
     });
   }
@@ -336,7 +336,10 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         this.log.debug('Finished periodic device discovery');
       }
     };
-    this.taskQueue.addTask(task);
+    const deferAndCombinedTask = deferAndCombine(task, this.config.advancedOptions.waitTimeUpdate);
+
+    this.taskQueue.addTask(deferAndCombinedTask);
+    await deferAndCombinedTask();
   }
 
   private findDiscoveredDevice(

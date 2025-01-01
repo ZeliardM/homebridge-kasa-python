@@ -4,6 +4,7 @@ export class TaskQueue<T = void> {
   private queue: (() => Promise<T>)[] = [];
   private running: boolean = false;
   private log: Logging;
+  private resolveEmptyQueue: (() => void) | null = null;
 
   constructor(log: Logging) {
     this.log = log;
@@ -30,5 +31,18 @@ export class TaskQueue<T = void> {
       }
     }
     this.running = false;
+    if (this.resolveEmptyQueue) {
+      this.resolveEmptyQueue();
+      this.resolveEmptyQueue = null;
+    }
+  }
+
+  public async waitForEmptyQueue(): Promise<void> {
+    if (this.queue.length === 0 && !this.running) {
+      return;
+    }
+    return new Promise<void>((resolve) => {
+      this.resolveEmptyQueue = resolve;
+    });
   }
 }

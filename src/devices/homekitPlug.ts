@@ -110,11 +110,12 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
         return false;
       }
     };
+    const deferAndCombinedTask = deferAndCombine(task, this.platform.config.advancedOptions.waitTimeUpdate);
 
     return await new Promise<CharacteristicValue>((resolve, reject) => {
       this.platform.taskQueue.addTask(async () => {
         try {
-          const result = await task();
+          const result = await deferAndCombinedTask();
           resolve(result);
         } catch (error) {
           reject(error);
@@ -183,8 +184,10 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
         throw new Error('Device manager is undefined.');
       }
     };
-    this.platform.taskQueue.addTask(task);
-    await task();
+    const deferAndCombinedTask = deferAndCombine(task, this.platform.config.advancedOptions.waitTimeUpdate);
+
+    this.platform.taskQueue.addTask(deferAndCombinedTask);
+    await deferAndCombinedTask();
   }
 
   protected async updateState() {
@@ -224,8 +227,10 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
         this.updateEmitter.emit('updateComplete');
       }
     };
-    this.platform.taskQueue.addTask(task);
-    await task();
+    const deferAndCombinedTask = deferAndCombine(task, this.platform.config.advancedOptions.waitTimeUpdate);
+
+    this.platform.taskQueue.addTask(deferAndCombinedTask);
+    await deferAndCombinedTask();
   }
 
   public startPolling() {
