@@ -1,22 +1,26 @@
-import asyncio
+import asyncio, sys
 from typing import Any, Dict, List, Optional
 
-from kasa import AuthenticationError, Credentials, Device, Discover, Module, UnsupportedDeviceError
+from kasa import AuthenticationError, Credentials, Device, DeviceType, Discover, Module, UnsupportedDeviceError
 from quart import Quart, jsonify, request
 
 app = Quart(__name__)
 
 UNSUPPORTED_TYPES = {
-    'IOT.IPCAMERA',
-    'SMART.IPCAMERA',
-    'SMART.KASAHUB',
-    'SMART.TAPOHUB',
-    'SMART.TAPOROBOVAC'
+    DeviceType.Camera.value,
+    DeviceType.Sensor.value,
+    DeviceType.Hub.value,
+    DeviceType.Fan.value,
+    DeviceType.Thermostat.value,
+    DeviceType.Vacuum.value,
+    DeviceType.Unknown.value,
 }
 
 device_cache: Dict[str, Device] = {}
+device_locks: Dict[str, asyncio.Lock] = {}
 
 def get_light_info(device: Device) -> Dict[str, Any]:
+    print(f"Getting light info for device {device.alias}")
     light_module = device.modules.get(Module.Light)
     light_info = {}
     if light_module.has_feature("brightness"):
@@ -29,6 +33,7 @@ def get_light_info(device: Device) -> Dict[str, Any]:
     return light_info
 
 def serialize_child(child: Device) -> Dict[str, Any]:
+    print(f"Serializing child device {child.alias}")
     child_info = {
         "alias": child.alias,
         "id": child.device_id.split("_", 1)[1],
@@ -40,13 +45,14 @@ def serialize_child(child: Device) -> Dict[str, Any]:
     return child_info
 
 def custom_sysinfo_config_serializer(device: Device) -> Dict[str, Any]:
+    print(f"Serializing sysinfo and config for device {device.alias}")
     child_num = len(device.children) if device.children else 0
 
     sys_info = {
         "alias": device.alias or f'{device.device_type}_{device.host}',
         "child_num": child_num,
         "device_id": device.device_id if device.mac != device.device_id else device.sys_info.get("deviceId"),
-        "device_type": device.config.connection_type.device_family.value,
+        "device_type": device.device_type.value,
         "host": device.host,
         "hw_ver": device.device_info.hardware_version,
         "mac": device.mac,
@@ -85,6 +91,7 @@ def custom_sysinfo_config_serializer(device: Device) -> Dict[str, Any]:
     }
 
 def custom_feature_serializer(device: Device) -> Dict[str, Any]:
+    print(f"Serializing features for device {device.alias}")
     feature_info = {}
     light_module = device.modules.get(Module.Light)
     if light_module:
@@ -109,16 +116,20 @@ async def discover_devices(
     creds = Credentials(username, password) if username and password else None
 
     async def on_discovered(device: Device):
+        print(f"Discovered device: {device.alias}")
         try:
             await device.update()
-        except AuthenticationError:
-            pass
         except UnsupportedDeviceError:
+            print(f"Unsupported device: {device.host}")
             pass
-        except Exception:
+        except AuthenticationError:
+            print(f"Authentication error: {device.host}")
             pass
+        except Exception as e:
+            print(f"Error during discovery: {e}", file=sys.stderr)
 
     async def discover_on_broadcast(broadcast: str):
+        print(f"Discovering on broadcast: {broadcast}")
         try:
             discovered = await Discover.discover(
                 target=broadcast,
@@ -130,12 +141,13 @@ async def discover_devices(
             pass
         except UnsupportedDeviceError:
             pass
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error during broadcast discovery: {e}", file=sys.stderr)
 
     async def discover_manual_device(host: str):
         if host in devices:
             return
+        print(f"Discovering manual device: {host}")
         try:
             device = await Discover.discover_single(host=host, credentials=creds)
             await on_discovered(device)
@@ -144,8 +156,8 @@ async def discover_devices(
             pass
         except UnsupportedDeviceError:
             pass
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error during manual device discovery: {e}", file=sys.stderr)
 
     discover_tasks = [discover_on_broadcast(bc) for bc in broadcasts]
     manual_discover_tasks = [discover_manual_device(host) for host in (manual_devices or [])]
@@ -158,30 +170,36 @@ async def discover_devices(
     dev: Device
     for ip, dev in devices.items():
         try:
-            homekit_component = dev.modules.get(Module.HomeKit)
-            matter_component = dev.modules.get(Module.Matter)
+            homekit_component = dev.modules.get(Module.HomeKit, None)
+            matter_component = dev.modules.get(Module.Matter, None)
             if homekit_component or matter_component:
+                print(f"Skipping device {dev.alias} due to Native HomeKit or Matter support")
                 continue
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error checking HomeKit and Matter modules: {e}", file=sys.stderr)
 
-        dev_type = dev.sys_info.get("mic_type") or dev.sys_info.get("type")
+        dev_type = dev.device_type.value
         if dev_type and dev_type not in UNSUPPORTED_TYPES:
             if ip not in device_cache:
                 device_cache[ip] = dev
+            if ip not in device_locks:
+                device_locks[ip] = asyncio.Lock()
             update_tasks.append(create_device_info(ip, dev))
 
     results = await asyncio.gather(*update_tasks, return_exceptions=True)
 
     for result in results:
         if isinstance(result, Exception):
+            print(f"Error creating device info: {result}", file=sys.stderr)
             continue
         ip, info = result
+        print(f"Device info created for IP: {ip}")
         all_device_info[ip] = info
 
     return all_device_info
 
 async def create_device_info(ip: str, dev: Device):
+    print("Creating device info for IP: ", ip)
     sys_info_data = custom_sysinfo_config_serializer(dev)
     feature_info_data = custom_feature_serializer(dev)
     device_info = {
@@ -193,21 +211,25 @@ async def create_device_info(ip: str, dev: Device):
 
 async def get_sys_info(device_config: Dict[str, Any]) -> Dict[str, Any]:
     host = device_config["host"]
-    dev = device_cache.get(host)
-    if not dev:
-        dev = await Device.connect(config=Device.Config.from_dict(device_config))
-        device_cache[host] = dev
-    else:
-        try:
-            await dev.update()
-        except ConnectionResetError:
-            if dev:
-                dev.disconnect()
-            device_cache.pop(host, None)
+    print("Getting sys_info for host: ", host)
+    lock = device_locks.get(host, asyncio.Lock())
+    async with lock:
+        dev = device_cache.get(host)
+        if not dev:
+            print("Device not in cache, connecting to device at host: ", host)
             dev = await Device.connect(config=Device.Config.from_dict(device_config))
             device_cache[host] = dev
-    device = custom_sysinfo_config_serializer(dev)
-    return {"sys_info": device["sys_info"]}
+        else:
+            try:
+                print("Updating device at host: ", host)
+                await dev.update()
+            except Exception as e:
+                print(f"Device update failed: {e}, reconnecting...")
+                device_cache.pop(host, None)
+                dev = await Device.connect(config=Device.Config.from_dict(device_config))
+                device_cache[host] = dev
+        device = custom_sysinfo_config_serializer(dev)
+        return {"sys_info": device["sys_info"]}
 
 async def control_device(
     device_config: Dict[str, Any],
@@ -217,29 +239,28 @@ async def control_device(
     child_num: Optional[int] = None
 ) -> Dict[str, Any]:
     host = device_config["host"]
-    dev = device_cache.get(host)
-    if not dev:
-        dev = await Device.connect(config=Device.Config.from_dict(device_config))
-        device_cache[host] = dev
-    try:
-        return await perform_device_action(dev, feature, action, value, child_num)
-    except ConnectionResetError:
-        if dev:
-            dev.disconnect()
-        device_cache.pop(host, None)
-        dev = await Device.connect(config=Device.Config.from_dict(device_config))
-        device_cache[host] = dev
+    print(f"Controlling device at host: {host}")
+    lock = device_locks.get(host, asyncio.Lock())
+    async with lock:
+        dev = device_cache.get(host)
+        if not dev:
+            print(f"Device not in cache, connecting to device at host: {host}")
+            dev = await Device.connect(config=Device.Config.from_dict(device_config))
+            device_cache[host] = dev
         try:
             return await perform_device_action(dev, feature, action, value, child_num)
         except Exception as e:
-            return {"status": "failed", "error": str(e)}
-    except Exception as e:
-        return {"status": "failed", "error": str(e)}
+            print(f"Action failed: {e}, reconnecting...")
+            device_cache.pop(host, None)
+            dev = await Device.connect(config=Device.Config.from_dict(device_config))
+            device_cache[host] = dev
+            return await perform_device_action(dev, feature, action, value, child_num)
 
 async def perform_device_action(dev: Device, feature: str, action: str, value: Any, child_num: Optional[int] = None) -> Dict[str, Any]:
     target = dev.children[child_num] if child_num is not None else dev
     light = target.modules.get(Module.Light)
 
+    print(f"Performing action={action} on feature={feature} for device {target.alias}")
     if feature == "state":
         await getattr(target, action)()
     elif feature == "brightness" and light.has_feature("brightness"):
@@ -249,10 +270,11 @@ async def perform_device_action(dev: Device, feature: str, action: str, value: A
     elif feature in ["hue", "saturation"] and light.has_feature("hsv"):
         await handle_hsv(target, action, feature, value)
     else:
-        return {"status": "failed", "error": "Invalid feature or action"}
+        raise ValueError("Invalid feature or action")
     return {"status": "success"}
 
 async def handle_brightness(target: Device, action: str, value: int):
+    print(f"Handling brightness: action={action}, value={value}")
     light = target.modules.get(Module.Light)
     if value == 0:
         await target.turn_off()
@@ -262,12 +284,14 @@ async def handle_brightness(target: Device, action: str, value: int):
         await target.turn_on()
 
 async def handle_color_temp(target: Device, action: str, value: int):
+    print(f"Handling color temperature: action={action}, value={value}")
     light = target.modules.get(Module.Light)
     min_temp, max_temp = light.valid_temperature_range
     value = max(min(value, max_temp), min_temp)
     await getattr(light, action)(value)
 
 async def handle_hsv(target: Device, action: str, feature: str, value: Dict[str, int]):
+    print(f"Handling HSV: action={action}, feature={feature}, value={value}")
     light = target.modules.get(Module.Light)
     hsv = list(light.hsv)
     if feature == "hue":
@@ -288,6 +312,7 @@ async def discover_route():
         devices_info = await discover_devices(username, password, additional_broadcasts, manual_devices)
         return jsonify(devices_info)
     except Exception as e:
+        print(f"Discover route error: {e}", file=sys.stderr)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/getSysInfo', methods=['POST'])
@@ -298,6 +323,7 @@ async def get_sys_info_route():
         sys_info = await get_sys_info(device_config)
         return jsonify(sys_info)
     except Exception as e:
+        print(f"GetSysInfo route error: {e}", file=sys.stderr)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/controlDevice', methods=['POST'])
@@ -312,6 +338,7 @@ async def control_device_route():
         result = await control_device(device_config, feature, action, value, child_num)
         return jsonify(result)
     except Exception as e:
+        print(f"ControlDevice route error: {e}", file=sys.stderr)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/health', methods=['GET'])

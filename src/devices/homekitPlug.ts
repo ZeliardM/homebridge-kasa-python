@@ -94,7 +94,7 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
       return false;
     }
 
-    const task = (async () => {
+    const task = async (): Promise<CharacteristicValue> => {
       try {
         let characteristicValue = service.getCharacteristic(characteristicType).value;
         if (!characteristicValue) {
@@ -107,13 +107,20 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
         this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
         this.kasaDevice.offline = true;
         this.stopPolling();
+        return false;
       }
-      return false;
-    })();
-    this.platform.ongoingTasks.push(task);
-    const result = await task;
-    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
-    return result;
+    };
+
+    return await new Promise<CharacteristicValue>((resolve, reject) => {
+      this.platform.taskQueue.addTask(async () => {
+        try {
+          const result = await task();
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
   }
 
   private getInitialValue(characteristicType: WithUUID<new () => Characteristic>): CharacteristicValue {
@@ -141,7 +148,7 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
       ]);
     }
 
-    const task = (async () => {
+    const task = async () => {
       if (this.deviceManager) {
         try {
           this.isUpdating = true;
@@ -175,10 +182,9 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
       } else {
         throw new Error('Device manager is undefined.');
       }
-    })();
-    this.platform.ongoingTasks.push(task);
-    await task;
-    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
+    };
+    this.platform.taskQueue.addTask(task);
+    await task();
   }
 
   protected async updateState() {
@@ -193,7 +199,7 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
       ]);
     }
     this.isUpdating = true;
-    const task = (async () => {
+    const task = async () => {
       try {
         await this.getSysInfo();
         const service = this.homebridgeAccessory.getService(this.platform.Service.Outlet);
@@ -217,10 +223,9 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
         this.isUpdating = false;
         this.updateEmitter.emit('updateComplete');
       }
-    })();
-    this.platform.ongoingTasks.push(task);
-    await task;
-    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
+    };
+    this.platform.taskQueue.addTask(task);
+    await task();
   }
 
   public startPolling() {

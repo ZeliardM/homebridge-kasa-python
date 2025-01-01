@@ -1,7 +1,6 @@
 import type {
   API,
   Characteristic,
-  CharacteristicValue,
   DynamicPlatformPlugin,
   Logging,
   PlatformAccessory,
@@ -12,10 +11,10 @@ import type {
 import { Logger } from 'homebridge/dist/logger.js';
 
 import axios from 'axios';
-import { EventEmitter } from 'node:events';
 import net from 'node:net';
 import path from 'node:path';
 import { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -24,6 +23,7 @@ import DeviceManager from './devices/deviceManager.js';
 import HomeKitDevice from './devices/index.js';
 import PythonChecker from './python/pythonChecker.js';
 import { parseConfig } from './config.js';
+import { TaskQueue } from './taskQueue.js';
 import { runCommand } from './utils.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { isObjectLike, lookup, lookupCharacteristicNameByUUID, prefixLogger } from './utils.js';
@@ -160,8 +160,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private isUpgrade: boolean = false;
   public periodicDeviceDiscovering: boolean = false;
   public isShuttingDown: boolean = false;
-  public ongoingTasks: (Promise<void> | Promise<CharacteristicValue>)[] = [];
-  public periodicDeviceDiscoveryEmitter: EventEmitter = new EventEmitter();
+  public taskQueue: TaskQueue;
+  public periodicDeviceDiscoveryEmitter: EventEmitter;
 
   constructor(public readonly log: Logging, config: PlatformConfig, public readonly api: API) {
     this.Service = this.api.hap.Service;
@@ -169,6 +169,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.storagePath = this.api.user.storagePath();
     this.venvPythonExecutable = path.join(this.storagePath, 'kasa-python', '.venv', 'bin', 'python3');
     this.config = parseConfig(config);
+    this.periodicDeviceDiscoveryEmitter = new EventEmitter();
+    this.taskQueue = new TaskQueue(this.log);
 
     this.platformInitialization = this.initializePlatform().catch((error) => {
       this.log.error('Platform initialization failed:', error);
@@ -190,8 +192,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       if (!this.isShuttingDown) {
         this.isShuttingDown = true;
       }
-      this.log.debug('Waiting for polling tasks to complete');
-      await Promise.all(this.ongoingTasks);
+      this.log.debug('Waiting for tasks to complete');
+      await this.taskQueue;
       this.stopKasaApi();
     });
   }
@@ -285,7 +287,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
 
     this.periodicDeviceDiscovering = true;
-    const task = (async () => {
+    const task = async () => {
       try {
         const discoveredDevices = await this.deviceManager?.discoverDevices() || {};
         const now = new Date();
@@ -333,10 +335,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         this.periodicDeviceDiscoveryEmitter.emit('periodicDeviceDiscoveryComplete');
         this.log.debug('Finished periodic device discovery');
       }
-    })();
-    this.ongoingTasks.push(task);
-    await task;
-    this.ongoingTasks = this.ongoingTasks.filter(t => t !== task);
+    };
+    this.taskQueue.addTask(task);
   }
 
   private findDiscoveredDevice(

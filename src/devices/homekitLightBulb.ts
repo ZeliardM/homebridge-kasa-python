@@ -110,7 +110,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
       return this.getDefaultValue(characteristicType);
     }
 
-    const task = (async () => {
+    const task = async (): Promise<CharacteristicValue> => {
       try {
         let characteristicValue = service.getCharacteristic(characteristicType).value;
         if (!characteristicValue) {
@@ -123,12 +123,12 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
         this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
         this.kasaDevice.offline = true;
         this.stopPolling();
+        return this.getDefaultValue(characteristicType);
       }
-      return this.getDefaultValue(characteristicType);
-    })();
-    this.platform.ongoingTasks.push(task);
-    const result = await task;
-    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
+    };
+
+    const result = await task();
+    this.platform.taskQueue.addTask(() => Promise.resolve());
     return result;
   }
 
@@ -180,7 +180,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
       ]);
     }
 
-    const task = (async () => {
+    const task = async () => {
       if (this.deviceManager) {
         try {
           this.isUpdating = true;
@@ -217,10 +217,9 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
       } else {
         throw new Error('Device manager is undefined.');
       }
-    })();
-    this.platform.ongoingTasks.push(task);
-    await task;
-    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
+    };
+    this.platform.taskQueue.addTask(task);
+    await task();
   }
 
   protected async updateState() {
@@ -235,7 +234,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
       ]);
     }
     this.isUpdating = true;
-    const task = (async () => {
+    const task = async () => {
       try {
         await this.getSysInfo();
         const service = this.homebridgeAccessory.getService(this.platform.Service.Lightbulb);
@@ -280,10 +279,9 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
         this.isUpdating = false;
         this.updateEmitter.emit('updateComplete');
       }
-    })();
-    this.platform.ongoingTasks.push(task);
-    await task;
-    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
+    };
+    this.platform.taskQueue.addTask(task);
+    await task();
   }
 
   public startPolling() {

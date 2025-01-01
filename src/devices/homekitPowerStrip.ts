@@ -99,7 +99,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
       return false;
     }
 
-    const task = (async () => {
+    const task = async (): Promise<CharacteristicValue> => {
       try {
         let characteristicValue = service.getCharacteristic(characteristicType).value;
         if (!characteristicValue) {
@@ -112,12 +112,12 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
         this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
         this.kasaDevice.offline = true;
         this.stopPolling();
+        return false;
       }
-      return false;
-    })();
-    this.platform.ongoingTasks.push(task);
-    const result = await task;
-    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
+    };
+
+    const result = await task();
+    this.platform.taskQueue.addTask(() => Promise.resolve());
     return result;
   }
 
@@ -147,7 +147,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
       ]);
     }
 
-    const task = (async () => {
+    const task = async () => {
       if (this.deviceManager) {
         try {
           this.isUpdating = true;
@@ -168,7 +168,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
 
           const childIndex = this.kasaDevice.sys_info.children?.findIndex(c => c.id === child.id);
           if (childIndex !== undefined && childIndex !== -1) {
-          this.kasaDevice.sys_info.children![childIndex] = { ...child };
+            this.kasaDevice.sys_info.children![childIndex] = { ...child };
           }
 
           this.updateValue(service, service.getCharacteristic(characteristicType), child.alias, value);
@@ -187,10 +187,9 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
       } else {
         throw new Error('Device manager is undefined.');
       }
-    })();
-    this.platform.ongoingTasks.push(task);
-    await task;
-    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
+    };
+    this.platform.taskQueue.addTask(task);
+    await task();
   }
 
   protected async updateState() {
@@ -205,7 +204,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
       ]);
     }
     this.isUpdating = true;
-    const task = (async () => {
+    const task = async () => {
       try {
         await this.getSysInfo();
         this.kasaDevice.sys_info.children?.forEach((child: ChildDevice) => {
@@ -232,10 +231,9 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
         this.isUpdating = false;
         this.updateEmitter.emit('updateComplete');
       }
-    })();
-    this.platform.ongoingTasks.push(task);
-    await task;
-    this.platform.ongoingTasks = this.platform.ongoingTasks.filter(t => t !== task);
+    };
+    this.platform.taskQueue.addTask(task);
+    await task();
   }
 
   public startPolling() {

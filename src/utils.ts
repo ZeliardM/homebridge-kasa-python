@@ -123,7 +123,7 @@ export async function runCommand(
   p.stdout.setEncoding('utf8').on('data', data => {
     stdout += data;
     if (!hideStdout) {
-      logger.info(`STDOUT: ${data.trim()}`);
+      logger.debug(`STDOUT: ${data.trim()}`);
     }
   });
 
