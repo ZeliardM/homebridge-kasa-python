@@ -113,28 +113,25 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
     characteristicName: string | undefined,
     child: ChildDevice,
   ): Promise<CharacteristicValue> {
-    const lockKey = `${this.kasaDevice.sys_info.device_id}:${child.id}`;
-    return this.withLock(lockKey, async () => {
-      if (this.kasaDevice.offline || this.platform.isShuttingDown) {
-        this.log.warn(`Device is offline or platform is shutting down, cannot get value for characteristic ${characteristicName}`);
-        return false;
-      }
+    if (this.kasaDevice.offline || this.platform.isShuttingDown) {
+      this.log.warn(`Device is offline or platform is shutting down, cannot get value for characteristic ${characteristicName}`);
+      return false;
+    }
 
-      try {
-        let characteristicValue = service.getCharacteristic(characteristicType).value;
-        if (!characteristicValue) {
-          characteristicValue = this.getInitialValue(characteristicType, child);
-          service.getCharacteristic(characteristicType).updateValue(characteristicValue);
-        }
-        this.log.debug(`Got value for characteristic ${characteristicName}: ${characteristicValue}`);
-        return characteristicValue ?? false;
-      } catch (error) {
-        this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
-        this.kasaDevice.offline = true;
-        this.stopPolling();
-        return false;
+    try {
+      let characteristicValue = service.getCharacteristic(characteristicType).value;
+      if (!characteristicValue) {
+        characteristicValue = this.getInitialValue(characteristicType, child);
+        service.getCharacteristic(characteristicType).updateValue(characteristicValue);
       }
-    });
+      this.log.debug(`Got value for characteristic ${characteristicName}: ${characteristicValue}`);
+      return characteristicValue ?? false;
+    } catch (error) {
+      this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
+      this.kasaDevice.offline = true;
+      this.stopPolling();
+      return false;
+    }
   }
 
   private getInitialValue(characteristicType: WithUUID<new () => Characteristic>, child: ChildDevice): CharacteristicValue {
