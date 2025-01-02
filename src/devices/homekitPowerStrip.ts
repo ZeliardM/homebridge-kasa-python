@@ -14,6 +14,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
   private getSysInfo: () => Promise<void>;
   private pollingInterval: NodeJS.Timeout | undefined;
   private updateEmitter: EventEmitter = new EventEmitter();
+  private static locks: Map<string, Promise<void>> = new Map();
 
   constructor(
     platform: KasaPythonPlatform,
@@ -45,6 +46,24 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
     platform.periodicDeviceDiscoveryEmitter.on('periodicDeviceDiscoveryComplete', () => {
       this.updateEmitter.emit('periodicDeviceDiscoveryComplete');
     });
+  }
+
+  private async withLock<T>(key: string, action: () => Promise<T>): Promise<T> {
+    let lock = HomeKitDevicePowerStrip.locks.get(key);
+    if (!lock) {
+      lock = Promise.resolve();
+    }
+    const currentLock = lock.then(async () => {
+      try {
+        return await action();
+      } finally {
+        if (HomeKitDevicePowerStrip.locks.get(key) === currentLock) {
+          HomeKitDevicePowerStrip.locks.delete(key);
+        }
+      }
+    });
+    HomeKitDevicePowerStrip.locks.set(key, currentLock.then(() => {}));
+    return currentLock;
   }
 
   private checkService(child: ChildDevice, index: number) {
@@ -94,25 +113,28 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
     characteristicName: string | undefined,
     child: ChildDevice,
   ): Promise<CharacteristicValue> {
-    if (this.kasaDevice.offline || this.platform.isShuttingDown) {
-      this.log.warn(`Device is offline or platform is shutting down, cannot get value for characteristic ${characteristicName}`);
-      return false;
-    }
-
-    try {
-      let characteristicValue = service.getCharacteristic(characteristicType).value;
-      if (!characteristicValue) {
-        characteristicValue = this.getInitialValue(characteristicType, child);
-        service.getCharacteristic(characteristicType).updateValue(characteristicValue);
+    const lockKey = `${this.kasaDevice.sys_info.device_id}:${child.id}`;
+    return this.withLock(lockKey, async () => {
+      if (this.kasaDevice.offline || this.platform.isShuttingDown) {
+        this.log.warn(`Device is offline or platform is shutting down, cannot get value for characteristic ${characteristicName}`);
+        return false;
       }
-      this.log.debug(`Got value for characteristic ${characteristicName}: ${characteristicValue}`);
-      return characteristicValue ?? false;
-    } catch (error) {
-      this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
-      this.kasaDevice.offline = true;
-      this.stopPolling();
-      return false;
-    }
+
+      try {
+        let characteristicValue = service.getCharacteristic(characteristicType).value;
+        if (!characteristicValue) {
+          characteristicValue = this.getInitialValue(characteristicType, child);
+          service.getCharacteristic(characteristicType).updateValue(characteristicValue);
+        }
+        this.log.debug(`Got value for characteristic ${characteristicName}: ${characteristicValue}`);
+        return characteristicValue ?? false;
+      } catch (error) {
+        this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
+        this.kasaDevice.offline = true;
+        this.stopPolling();
+        return false;
+      }
+    });
   }
 
   private getInitialValue(characteristicType: WithUUID<new () => Characteristic>, child: ChildDevice): CharacteristicValue {
@@ -129,109 +151,109 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
     child: ChildDevice,
     value: CharacteristicValue,
   ): Promise<void> {
-    if (this.kasaDevice.offline || this.platform.isShuttingDown) {
-      this.log.warn(`Device is offline or platform is shutting down, cannot set value for characteristic ${characteristicName}`);
-      return;
-    }
+    const lockKey = `${this.kasaDevice.sys_info.device_id}:${child.id}`;
+    await this.withLock(lockKey, async () => {
+      if (this.kasaDevice.offline || this.platform.isShuttingDown) {
+        this.log.warn(`Device is offline or platform is shutting down, cannot set value for characteristic ${characteristicName}`);
+        return;
+      }
 
-    if (this.isUpdating || this.platform.periodicDeviceDiscovering) {
-      await Promise.race([
-        new Promise<void>((resolve) => this.updateEmitter.once('updateComplete', resolve)),
-        new Promise<void>((resolve) => this.updateEmitter.once('periodicDeviceDiscoveryComplete', resolve)),
-      ]);
-    }
+      if (this.isUpdating || this.platform.periodicDeviceDiscovering) {
+        await Promise.race([
+          new Promise<void>((resolve) => this.updateEmitter.once('updateComplete', resolve)),
+          new Promise<void>((resolve) => this.updateEmitter.once('periodicDeviceDiscoveryComplete', resolve)),
+        ]);
+      }
 
-    const task = async () => {
-      if (this.deviceManager) {
+      const task = async () => {
+        if (this.deviceManager) {
+          try {
+            this.isUpdating = true;
+            this.log.debug(`Setting value for characteristic ${characteristicName} to ${value}`);
+
+            const characteristicMap: { [key: string]: string } = {
+              On: 'state',
+            };
+
+            const characteristicKey = characteristicMap[characteristicName ?? ''];
+            if (!characteristicKey) {
+              throw new Error(`Characteristic key not found for ${characteristicName}`);
+            }
+
+            const childNumber = parseInt(child.id.slice(-1), 10);
+            await this.deviceManager.controlDevice(this.deviceConfig, characteristicKey, value, childNumber);
+            (child[characteristicKey as keyof ChildDevice] as unknown as CharacteristicValue) = value;
+
+            const childIndex = this.kasaDevice.sys_info.children?.findIndex(c => c.id === child.id);
+            if (childIndex !== undefined && childIndex !== -1) {
+              this.kasaDevice.sys_info.children![childIndex] = { ...child };
+            }
+
+            this.updateValue(service, service.getCharacteristic(characteristicType), child.alias, value);
+            this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, value);
+
+            this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
+            this.log.debug(`Set value for characteristic ${characteristicName} to ${value} successfully`);
+          } catch (error) {
+            this.log.error(`Error setting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
+            this.kasaDevice.offline = true;
+            this.stopPolling();
+          } finally {
+            this.isUpdating = false;
+            this.updateEmitter.emit('updateComplete');
+          }
+        } else {
+          throw new Error('Device manager is undefined.');
+        }
+      };
+      await task();
+    });
+  }
+
+  protected async updateState() {
+    const lockKey = `${this.kasaDevice.sys_info.device_id}`;
+    await this.withLock(lockKey, async () => {
+      if (this.kasaDevice.offline || this.platform.isShuttingDown) {
+        this.stopPolling();
+        return;
+      }
+      if (this.isUpdating || this.platform.periodicDeviceDiscovering) {
+        await Promise.race([
+          new Promise<void>((resolve) => this.updateEmitter.once('updateComplete', resolve)),
+          new Promise<void>((resolve) => this.updateEmitter.once('periodicDeviceDiscoveryComplete', resolve)),
+        ]);
+      }
+      this.isUpdating = true;
+      const task = async () => {
         try {
-          this.isUpdating = true;
-          this.log.debug(`Setting value for characteristic ${characteristicName} to ${value}`);
-
-          const characteristicMap: { [key: string]: string } = {
-            On: 'state',
-          };
-
-          const characteristicKey = characteristicMap[characteristicName ?? ''];
-          if (!characteristicKey) {
-            throw new Error(`Characteristic key not found for ${characteristicName}`);
-          }
-
-          const childNumber = parseInt(child.id.slice(-1), 10);
-          await this.deviceManager.controlDevice(this.deviceConfig, characteristicKey, value, childNumber);
-          (child[characteristicKey as keyof ChildDevice] as unknown as CharacteristicValue) = value;
-
-          const childIndex = this.kasaDevice.sys_info.children?.findIndex(c => c.id === child.id);
-          if (childIndex !== undefined && childIndex !== -1) {
-            this.kasaDevice.sys_info.children![childIndex] = { ...child };
-          }
-
-          this.updateValue(service, service.getCharacteristic(characteristicType), child.alias, value);
-          this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, value);
-
-          this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
-          this.log.debug(`Set value for characteristic ${characteristicName} to ${value} successfully`);
+          await this.getSysInfo();
+          this.kasaDevice.sys_info.children?.forEach((child: ChildDevice) => {
+            const childNumber = parseInt(child.id.slice(-1), 10);
+            const service = this.homebridgeAccessory.getServiceById(this.platform.Service.Outlet, `outlet-${childNumber + 1}`);
+            if (service && this.previousKasaDevice) {
+              const previousChild = this.previousKasaDevice.sys_info.children?.find(c => c.id === child.id);
+              if (previousChild) {
+                if (previousChild.state !== child.state) {
+                  this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), child.alias, child.state);
+                  this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, child.state);
+                  this.log.debug(`Updated state for child device: ${child.alias} to ${child.state}`);
+                }
+              }
+            } else {
+              this.log.warn(`Service not found for child device: ${child.alias} or previous Kasa device is undefined`);
+            }
+          });
         } catch (error) {
-          this.log.error(`Error setting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
+          this.log.error('Error updating device state:', error);
           this.kasaDevice.offline = true;
           this.stopPolling();
         } finally {
           this.isUpdating = false;
           this.updateEmitter.emit('updateComplete');
         }
-      } else {
-        throw new Error('Device manager is undefined.');
-      }
-    };
-    const deferAndCombinedTask = deferAndCombine(task, this.platform.config.advancedOptions.waitTimeUpdate);
-
-    this.platform.taskQueue.addTask(deferAndCombinedTask);
-    await deferAndCombinedTask();
-  }
-
-  protected async updateState() {
-    if (this.kasaDevice.offline || this.platform.isShuttingDown) {
-      this.stopPolling();
-      return;
-    }
-    if (this.isUpdating || this.platform.periodicDeviceDiscovering) {
-      await Promise.race([
-        new Promise<void>((resolve) => this.updateEmitter.once('updateComplete', resolve)),
-        new Promise<void>((resolve) => this.updateEmitter.once('periodicDeviceDiscoveryComplete', resolve)),
-      ]);
-    }
-    this.isUpdating = true;
-    const task = async () => {
-      try {
-        await this.getSysInfo();
-        this.kasaDevice.sys_info.children?.forEach((child: ChildDevice) => {
-          const childNumber = parseInt(child.id.slice(-1), 10);
-          const service = this.homebridgeAccessory.getServiceById(this.platform.Service.Outlet, `outlet-${childNumber + 1}`);
-          if (service && this.previousKasaDevice) {
-            const previousChild = this.previousKasaDevice.sys_info.children?.find(c => c.id === child.id);
-            if (previousChild) {
-              if (previousChild.state !== child.state) {
-                this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), child.alias, child.state);
-                this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, child.state);
-                this.log.debug(`Updated state for child device: ${child.alias} to ${child.state}`);
-              }
-            }
-          } else {
-            this.log.warn(`Service not found for child device: ${child.alias} or previous Kasa device is undefined`);
-          }
-        });
-      } catch (error) {
-        this.log.error('Error updating device state:', error);
-        this.kasaDevice.offline = true;
-        this.stopPolling();
-      } finally {
-        this.isUpdating = false;
-        this.updateEmitter.emit('updateComplete');
-      }
-    };
-    const deferAndCombinedTask = deferAndCombine(task, this.platform.config.advancedOptions.waitTimeUpdate);
-
-    this.platform.taskQueue.addTask(deferAndCombinedTask);
-    await deferAndCombinedTask();
+      };
+      await task();
+    });
   }
 
   public startPolling() {
