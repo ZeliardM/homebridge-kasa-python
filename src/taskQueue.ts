@@ -1,7 +1,7 @@
 import type { Logging } from 'homebridge';
 
-export class TaskQueue<T = void> {
-  private queue: (() => Promise<T>)[] = [];
+export class TaskQueue {
+  private queue: (() => Promise<void>)[] = [];
   private running: boolean = false;
   private log: Logging;
   private resolveEmptyQueue: (() => void) | null = null;
@@ -10,7 +10,7 @@ export class TaskQueue<T = void> {
     this.log = log;
   }
 
-  public addTask(task: () => Promise<T>): void {
+  public addTask(task: () => Promise<void>): void {
     this.queue.push(task);
     this.processQueue();
   }

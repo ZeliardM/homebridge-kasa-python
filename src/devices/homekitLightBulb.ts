@@ -110,34 +110,20 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
       return this.getDefaultValue(characteristicType);
     }
 
-    const task = async (): Promise<CharacteristicValue> => {
-      try {
-        let characteristicValue = service.getCharacteristic(characteristicType).value;
-        if (!characteristicValue) {
-          characteristicValue = this.getInitialValue(characteristicType);
-          service.getCharacteristic(characteristicType).updateValue(characteristicValue);
-        }
-        this.log.debug(`Got value for characteristic ${characteristicName}: ${characteristicValue}`);
-        return characteristicValue ?? this.getDefaultValue(characteristicType);
-      } catch (error) {
-        this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
-        this.kasaDevice.offline = true;
-        this.stopPolling();
-        return this.getDefaultValue(characteristicType);
+    try {
+      let characteristicValue = service.getCharacteristic(characteristicType).value;
+      if (!characteristicValue) {
+        characteristicValue = this.getInitialValue(characteristicType);
+        service.getCharacteristic(characteristicType).updateValue(characteristicValue);
       }
-    };
-    const deferAndCombinedTask = deferAndCombine(task, this.platform.config.advancedOptions.waitTimeUpdate);
-
-    return await new Promise<CharacteristicValue>((resolve, reject) => {
-      this.platform.taskQueue.addTask(async () => {
-        try {
-          const result = await deferAndCombinedTask();
-          resolve(result);
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
+      this.log.debug(`Got value for characteristic ${characteristicName}: ${characteristicValue}`);
+      return characteristicValue ?? this.getDefaultValue(characteristicType);
+    } catch (error) {
+      this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
+      this.kasaDevice.offline = true;
+      this.stopPolling();
+      return this.getDefaultValue(characteristicType);
+    }
   }
 
   private getInitialValue(characteristicType: WithUUID<new () => Characteristic>): CharacteristicValue {
