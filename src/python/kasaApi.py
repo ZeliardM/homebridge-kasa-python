@@ -115,6 +115,21 @@ async def discover_devices(
     broadcasts = ["255.255.255.255"] + (additional_broadcasts or [])
     creds = Credentials(username, password) if username and password else None
 
+    if device_cache:
+        print("Disconnecting all devices in cache before discovery.")
+        disconnect_tasks = []
+        try:
+            for dev in device_cache.values():
+                disconnect_tasks.append(dev.disconnect())
+            await asyncio.gather(*disconnect_tasks, return_exceptions=True)
+        except Exception as e:
+            print(f"Error disconnecting devices: {e}", file=sys.stderr)
+        device_cache.clear()
+
+    if device_locks:
+        print("Clearing all device locks before discovery.")
+        device_locks.clear()
+
     async def on_discovered(device: Device):
         print(f"Discovered device: {device.alias}")
         try:
