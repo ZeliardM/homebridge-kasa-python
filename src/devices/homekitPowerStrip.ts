@@ -215,10 +215,19 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
         return;
       }
       if (this.isUpdating || this.platform.periodicDeviceDiscovering) {
+        let periodicDiscoveryComplete = false;
         await Promise.race([
           new Promise<void>((resolve) => this.updateEmitter.once('updateComplete', resolve)),
-          new Promise<void>((resolve) => this.updateEmitter.once('periodicDeviceDiscoveryComplete', resolve)),
+          new Promise<void>((resolve) => {
+            this.updateEmitter.once('periodicDeviceDiscoveryComplete', () => {
+              periodicDiscoveryComplete = true;
+              resolve();
+            });
+          }),
         ]);
+        if (periodicDiscoveryComplete) {
+          await new Promise((resolve) => setTimeout(resolve, this.platform.config.discoveryOptions.pollingInterval));
+        }
       }
       this.isUpdating = true;
       const task = async () => {
