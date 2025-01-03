@@ -116,19 +116,8 @@ async def discover_devices(
     creds = Credentials(username, password) if username and password else None
 
     if device_cache:
-        print("Disconnecting all devices in cache before discovery.")
-        disconnect_tasks = []
-        try:
-            for dev in device_cache.values():
-                disconnect_tasks.append(dev.disconnect())
-            await asyncio.gather(*disconnect_tasks, return_exceptions=True)
-        except Exception as e:
-            print(f"Error disconnecting devices: {e}", file=sys.stderr)
-        device_cache.clear()
-
-    if device_locks:
-        print("Clearing all device locks before discovery.")
-        device_locks.clear()
+        await close_all_connections()
+        print("All exisiting device connections closed.")
 
     async def on_discovered(device: Device):
         print(f"Discovered device: {device.alias}")
@@ -189,6 +178,7 @@ async def discover_devices(
             matter_component = dev.modules.get(Module.Matter, None)
             if homekit_component or matter_component:
                 print(f"Skipping device {dev.alias} due to Native HomeKit or Matter support")
+                dev.disconnect()
                 continue
         except Exception as e:
             print(f"Error checking HomeKit and Matter modules: {e}", file=sys.stderr)
@@ -200,6 +190,9 @@ async def discover_devices(
             if ip not in device_locks:
                 device_locks[ip] = asyncio.Lock()
             update_tasks.append(create_device_info(ip, dev))
+        else:
+            print(f"Skipping unsupported device: {ip}")
+            dev.disconnect()
 
     results = await asyncio.gather(*update_tasks, return_exceptions=True)
 
@@ -212,6 +205,13 @@ async def discover_devices(
         all_device_info[ip] = info
 
     return all_device_info
+
+async def close_all_connections():
+    print("Closing all existing device connections...")
+    disconnect_tasks = [dev.disconnect() for dev in device_cache.values()]
+    await asyncio.gather(*disconnect_tasks, return_exceptions=True)
+    device_cache.clear()
+    device_locks.clear()
 
 async def create_device_info(ip: str, dev: Device):
     print("Creating device info for IP: ", ip)
@@ -240,6 +240,8 @@ async def get_sys_info(device_config: Dict[str, Any]) -> Dict[str, Any]:
                 await dev.update()
             except Exception as e:
                 print(f"Device update failed: {e}, reconnecting...")
+                if dev:
+                    dev.disconnect()
                 device_cache.pop(host, None)
                 dev = await Device.connect(config=Device.Config.from_dict(device_config))
                 device_cache[host] = dev
@@ -266,6 +268,8 @@ async def control_device(
             return await perform_device_action(dev, feature, action, value, child_num)
         except Exception as e:
             print(f"Action failed: {e}, reconnecting...")
+            if dev:
+                dev.disconnect()
             device_cache.pop(host, None)
             dev = await Device.connect(config=Device.Config.from_dict(device_config))
             device_cache[host] = dev
@@ -359,3 +363,11 @@ async def control_device_route():
 @app.route('/health', methods=['GET'])
 async def health_check():
     return jsonify({"status": "healthy"}), 200
+
+@app.after_serving
+async def cleanup():
+    print("Cleaning up and disconnecting all devices.")
+    disconnect_tasks = [dev.disconnect() for dev in device_cache.values()]
+    await asyncio.gather(*disconnect_tasks, return_exceptions=True)
+    device_cache.clear()
+    device_locks.clear()
