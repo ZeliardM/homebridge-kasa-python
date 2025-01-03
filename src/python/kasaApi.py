@@ -208,10 +208,12 @@ async def discover_devices(
 
 async def close_all_connections():
     print("Closing all existing device connections...")
-    disconnect_tasks = [dev.disconnect() for dev in device_cache.values()]
-    await asyncio.gather(*disconnect_tasks, return_exceptions=True)
-    device_cache.clear()
-    device_locks.clear()
+    if device_cache:
+        disconnect_tasks = [dev.disconnect() for dev in device_cache.values()]
+        await asyncio.gather(*disconnect_tasks, return_exceptions=True)
+        device_cache.clear()
+    if device_locks:
+        device_locks.clear()
 
 async def create_device_info(ip: str, dev: Device):
     print("Creating device info for IP: ", ip)
@@ -367,7 +369,4 @@ async def health_check():
 @app.after_serving
 async def cleanup():
     print("Cleaning up and disconnecting all devices.")
-    disconnect_tasks = [dev.disconnect() for dev in device_cache.values()]
-    await asyncio.gather(*disconnect_tasks, return_exceptions=True)
-    device_cache.clear()
-    device_locks.clear()
+    await close_all_connections()
