@@ -64,19 +64,25 @@ export default abstract class HomeKitDevice {
   }
 
   private updateAccessory(platformAccessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
-    this.correctAccessoryProperty(platformAccessory, 'displayName', this.name);
-    this.correctAccessoryProperty(platformAccessory, 'category', this.category);
-    this.correctAccessoryProperty(platformAccessory.context, 'deviceId', this.id);
-    this.correctAccessoryProperty(platformAccessory.context, 'lastSeen', this.kasaDevice.last_seen);
-    this.correctAccessoryProperty(platformAccessory.context, 'offline', this.kasaDevice.offline);
+    this.correctAccessoryProperties(platformAccessory, {
+      displayName: this.name,
+      category: this.category,
+      context: {
+        deviceId: this.id,
+        lastSeen: this.kasaDevice.last_seen,
+        offline: this.kasaDevice.offline,
+      },
+    });
     this.platform.configuredAccessories.set(platformAccessory.UUID, platformAccessory);
     this.platform.api.updatePlatformAccessories([platformAccessory]);
   }
 
-  private correctAccessoryProperty<T, K extends keyof T>(obj: T, key: K, expectedValue: T[K]): void {
-    if (obj[key] !== expectedValue) {
-      this.log.debug(`Correcting Platform Accessory ${String(key)} from: ${String(obj[key])} to: ${String(expectedValue)}`);
-      obj[key] = expectedValue;
+  private correctAccessoryProperties<T>(obj: T, properties: Partial<T>): void {
+    for (const [key, expectedValue] of Object.entries(properties)) {
+      if (obj[key as keyof T] !== expectedValue) {
+        this.log.debug(`Correcting Platform Accessory ${key} from: ${String(obj[key as keyof T])} to: ${String(expectedValue)}`);
+        obj[key as keyof T] = expectedValue as T[keyof T];
+      }
     }
   }
 

@@ -149,17 +149,7 @@ export default class DeviceManager {
 
       return processedDevices;
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        const statusCode = error.response.status;
-        const errorMessage = error.response.data.error;
-        if (statusCode === 500) {
-          this.log.error(`Exception during discoverDevices post request: ${errorMessage}`);
-        } else {
-          this.log.error(`Unexpected error during discoverDevices post request: ${errorMessage}`);
-        }
-      } else {
-        this.log.error('Error during discoverDevices post request:', error);
-      }
+      this.handleAxiosError(error, 'discoverDevices');
       return {};
     }
   }
@@ -191,17 +181,7 @@ export default class DeviceManager {
       this.updateDeviceAlias(sysInfo);
       return sysInfo;
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        const statusCode = error.response.status;
-        const errorMessage = error.response.data.error;
-        if (statusCode === 500) {
-          this.log.error(`Exception during getSysInfo post request: ${errorMessage}`);
-        } else {
-          this.log.error(`Unexpected error during getSysInfo post request: ${errorMessage}`);
-        }
-      } else {
-        this.log.error('Error during getSysInfo post request:', error);
-      }
+      this.handleAxiosError(error, 'getSysInfo');
     }
   }
 
@@ -244,17 +224,21 @@ export default class DeviceManager {
         this.log.error(`Error performing action: ${response.data.message}`);
       }
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        const statusCode = error.response.status;
-        const errorMessage = error.response.data.error;
-        if (statusCode === 500) {
-          this.log.error(`Exception during controlDevice post request: ${errorMessage}`);
-        } else {
-          this.log.error(`Unexpected error during controlDevice post request: ${errorMessage}`);
-        }
+      this.handleAxiosError(error, 'controlDevice');
+    }
+  }
+
+  private handleAxiosError(error: unknown, context: string): void {
+    if (axios.isAxiosError(error) && error.response) {
+      const statusCode = error.response.status;
+      const errorMessage = error.response.data.error;
+      if (statusCode === 500) {
+        this.log.error(`Exception during ${context} post request: ${errorMessage}`);
       } else {
-        this.log.error('Error during controlDevice post request:', error);
+        this.log.error(`Unexpected error during ${context} post request: ${errorMessage}`);
       }
+    } else {
+      this.log.error(`Error during ${context} post request:`, error);
     }
   }
 }
