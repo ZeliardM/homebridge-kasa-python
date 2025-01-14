@@ -61,22 +61,25 @@ def custom_serializer(device: Device) -> Dict[str, Any]:
         "sw_ver": device.device_info.firmware_version,
     }
 
+    light_module = device.modules.get(Module.Light)
+
     if child_num > 0:
         sys_info["children"] = [serialize_child(child) for child in device.children]
     else:
         sys_info.update({
             "state": device.features["state"].value
         })
-        light_module = device.modules.get(Module.Light)
         if light_module:
-            feature_info = {
+            sys_info.update(get_light_info(device))
+
+    if light_module:
+        feature_info = {
                 "brightness": light_module.has_feature("brightness"),
                 "color_temp": light_module.has_feature("color_temp"),
                 "hsv": light_module.has_feature("hsv")
-            }
-            sys_info.update(get_light_info(device))
-        else:
-            feature_info = {}
+        }
+    else:
+        feature_info = {}
 
     device_config = {
         "host": device.config.host,
