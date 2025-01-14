@@ -62,7 +62,6 @@ export interface ConfigDevice {
 export interface LightBulb {
   sys_info: SysInfo;
   feature_info: FeatureInfo;
-  device_config: DeviceConfig;
   last_seen: Date;
   offline: boolean;
 }
@@ -70,7 +69,6 @@ export interface LightBulb {
 export interface Plug {
   sys_info: SysInfo;
   feature_info: FeatureInfo;
-  device_config: DeviceConfig;
   last_seen: Date;
   offline: boolean;
 }
@@ -78,7 +76,6 @@ export interface Plug {
 export interface PowerStrip {
   sys_info: SysInfo;
   feature_info: FeatureInfo;
-  device_config: DeviceConfig;
   last_seen: Date;
   offline: boolean;
 }
@@ -86,7 +83,6 @@ export interface PowerStrip {
 export interface Switch {
   sys_info: SysInfo;
   feature_info: FeatureInfo;
-  device_config: DeviceConfig;
   last_seen: Date;
   offline: boolean;
 }

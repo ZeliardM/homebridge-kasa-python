@@ -15,12 +15,11 @@ import AccessoryInformation from '../accessoryInformation.js';
 import DeviceManager from './deviceManager.js';
 import { prefixLogger } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { DeviceConfig, KasaDevice } from './kasaDevices.js';
+import type { KasaDevice } from './kasaDevices.js';
 import type { KasaPythonAccessoryContext } from '../platform.js';
 
 export default abstract class HomeKitDevice {
   readonly log: Logger;
-  readonly deviceConfig: DeviceConfig;
   protected deviceManager: DeviceManager | undefined;
   homebridgeAccessory: PlatformAccessory<KasaPythonAccessoryContext>;
   public isUpdating: boolean = false;
@@ -31,7 +30,6 @@ export default abstract class HomeKitDevice {
     readonly category: Categories,
     readonly categoryName: string,
   ) {
-    this.deviceConfig = kasaDevice.device_config;
     this.deviceManager = platform.deviceManager;
     this.log = prefixLogger(platform.log, `[${this.name}]`);
     this.homebridgeAccessory = this.initializeAccessory();

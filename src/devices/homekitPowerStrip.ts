@@ -34,7 +34,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
     this.getSysInfo = deferAndCombine(async () => {
       if (this.deviceManager) {
         this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
-        this.kasaDevice.sys_info = await this.deviceManager.getSysInfo(this.deviceConfig) as SysInfo;
+        this.kasaDevice.sys_info = await this.deviceManager.getSysInfo(this.kasaDevice.sys_info.host) as SysInfo;
         this.log.debug(`Updated sys_info for device: ${this.kasaDevice.sys_info.alias}`);
       } else {
         this.log.warn('Device manager is not available');
@@ -178,7 +178,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
             }
 
             const childNumber = parseInt(child.id.slice(-1), 10);
-            await this.deviceManager.controlDevice(this.deviceConfig, characteristicKey, value, childNumber);
+            await this.deviceManager.controlDevice(this.kasaDevice.sys_info.host, characteristicKey, value, childNumber);
             (child[characteristicKey as keyof ChildDevice] as unknown as CharacteristicValue) = value;
 
             const childIndex = this.kasaDevice.sys_info.children?.findIndex(c => c.id === child.id);

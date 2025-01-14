@@ -38,7 +38,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     this.getSysInfo = deferAndCombine(async () => {
       if (this.deviceManager) {
         this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
-        this.kasaDevice.sys_info = await this.deviceManager.getSysInfo(this.deviceConfig) as SysInfo;
+        this.kasaDevice.sys_info = await this.deviceManager.getSysInfo(this.kasaDevice.sys_info.host) as SysInfo;
         this.log.debug(`Updated sys_info for device: ${this.kasaDevice.sys_info.alias}`);
       } else {
         this.log.warn('Device manager is not available');
@@ -214,7 +214,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
               throw new Error(`Characteristic key not found for ${characteristicName}`);
             }
 
-            await this.deviceManager.controlDevice(this.deviceConfig, characteristicKey, value);
+            await this.deviceManager.controlDevice(this.kasaDevice.sys_info.host, characteristicKey, value);
             (this.kasaDevice.sys_info as unknown as Record<string, CharacteristicValue>)[characteristicKey] = value;
 
             this.updateValue(service, service.getCharacteristic(characteristicType), this.name, value);

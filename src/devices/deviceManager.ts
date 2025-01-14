@@ -92,7 +92,6 @@ export default class DeviceManager {
       const devices: Record<string, {
         sys_info: SysInfo;
         feature_info: FeatureInfo;
-        device_config: DeviceConfig;
       }> = response.data;
 
       if (!devices || Object.keys(devices).length === 0) {
@@ -130,12 +129,10 @@ export default class DeviceManager {
       Object.keys(devices).forEach(ip => {
         const deviceInfo = devices[ip].sys_info;
         const featureInfo = devices[ip].feature_info;
-        const deviceConfig = devices[ip].device_config;
 
         const device: KasaDevice = {
           sys_info: deviceInfo,
           feature_info: featureInfo,
-          device_config: deviceConfig,
           last_seen: new Date(),
           offline: false,
         };
@@ -187,9 +184,9 @@ export default class DeviceManager {
         manualDevices.some((device) => typeof device !== 'string'));
   }
 
-  async getSysInfo(deviceConfig: DeviceConfig): Promise<SysInfo | undefined> {
+  async getSysInfo(host: string): Promise<SysInfo | undefined> {
     try {
-      const response = await axios.post(`${this.apiUrl}/getSysInfo`, { device_config: deviceConfig });
+      const response = await axios.post(`${this.apiUrl}/getSysInfo`, { host });
       const sysInfo: SysInfo = response.data.sys_info;
       this.updateDeviceAlias(sysInfo);
       return sysInfo;
@@ -208,7 +205,7 @@ export default class DeviceManager {
     }
   }
 
-  async controlDevice(deviceConfig: DeviceConfig, feature: string, value: CharacteristicValue, child_num?: number): Promise<void> {
+  async controlDevice(host: string, feature: string, value: CharacteristicValue, child_num?: number): Promise<void> {
     let action: string;
     switch (feature) {
       case 'brightness':
@@ -226,15 +223,15 @@ export default class DeviceManager {
         throw new Error(`Unsupported feature: ${feature}`);
     }
 
-    await this.performDeviceAction(deviceConfig, feature, action, value, child_num);
+    await this.performDeviceAction(host, feature, action, value, child_num);
   }
 
   private async performDeviceAction(
-    deviceConfig: DeviceConfig, feature: string, action: string, value: CharacteristicValue, childNumber?: number,
+    host: string, feature: string, action: string, value: CharacteristicValue, childNumber?: number,
   ): Promise<void> {
     const url = `${this.apiUrl}/controlDevice`;
     const data = {
-      device_config: deviceConfig,
+      host,
       feature,
       action,
       value,
