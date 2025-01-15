@@ -1,7 +1,7 @@
 import asyncio, sys
 from typing import Any, Dict, List, Optional
 
-from kasa import AuthenticationError, Credentials, Device, DeviceType, Discover, Module, UnsupportedDeviceError
+from kasa import AuthenticationError, Credentials, Device, DeviceType, DeviceConfig, Discover, Module, UnsupportedDeviceError
 from quart import Quart, jsonify, request
 
 app = Quart(__name__)
@@ -18,7 +18,7 @@ UNSUPPORTED_TYPES = {
 
 device_cache: Dict[str, Device] = {}
 device_locks: Dict[str, asyncio.Lock] = {}
-device_configs: Dict[str, Dict[str, Any]] = {}
+device_configs: Dict[str, DeviceConfig] = {}
 
 def serialize_child(child: Device) -> Dict[str, Any]:
     print(f"Serializing child device {child.alias}")
@@ -81,25 +81,9 @@ def custom_serializer(device: Device) -> Dict[str, Any]:
     else:
         feature_info = {}
 
-    device_config = {
-        "host": device.config.host,
-        "timeout": device.config.timeout,
-        "uses_http": device.config.uses_http,
-        **({"credentials": {
-            "username": device.config.credentials.username,
-            "password": device.config.credentials.password
-        }} if device.config.credentials else {}),
-        "connection_type": {
-            "device_family": device.config.connection_type.device_family.value,
-            "encryption_type": device.config.connection_type.encryption_type.value,
-            "https": device.config.connection_type.https
-        }
-    }
-
     return {
         "sys_info": sys_info,
-        "feature_info": feature_info,
-        "device_config": device_config
+        "feature_info": feature_info
     }
 
 async def discover_devices(
@@ -217,7 +201,7 @@ async def close_all_connections():
 async def create_device_info(host: str, device: Device):
     print("Creating device info for host: ", host)
     device_info = custom_serializer(device)
-    device_configs[host] = device_info["device_config"]
+    device_configs[host] = device.config.to_dict()
     all_device_info = {
         "sys_info": device_info["sys_info"],
         "feature_info": device_info["feature_info"],
@@ -257,7 +241,7 @@ async def control_device(
             device = await reconnect_device(host, device_config)
             return await perform_device_action(device, feature, action, value, child_num)
 
-async def get_or_connect_device(host: str, device_config: Dict[str, Any]) -> Device:
+async def get_or_connect_device(host: str, device_config: DeviceConfig) -> Device:
     device = device_cache.get(host)
     if not device:
         print(f"Device not in cache, connecting to device at host: {host}")
@@ -265,7 +249,7 @@ async def get_or_connect_device(host: str, device_config: Dict[str, Any]) -> Dev
         device_cache[host] = device
     return device
 
-async def reconnect_device(host: str, device_config: Dict[str, Any]) -> Device:
+async def reconnect_device(host: str, device_config: DeviceConfig) -> Device:
     device = device_cache.pop(host, None)
     if device:
         await device.disconnect()
