@@ -16,9 +16,10 @@ UNSUPPORTED_TYPES = {
     DeviceType.Unknown.value,
 }
 
+credentials: Optional[Credentials] = None
 device_cache: Dict[str, Device] = {}
 device_locks: Dict[str, asyncio.Lock] = {}
-device_configs: Dict[str, DeviceConfig] = {}
+device_configs: Dict[str, dict[Any, Any]] = {}
 
 def serialize_child(child: Device) -> Dict[str, Any]:
     print(f"Serializing child device {child.alias}")
@@ -92,6 +93,7 @@ async def discover_devices(
     additional_broadcasts: Optional[List[str]] = None,
     manual_devices: Optional[List[str]] = None
 ) -> Dict[str, Any]:
+    global credentials
     devices = {}
     devices_to_remove = []
     broadcasts = ["255.255.255.255"] + (additional_broadcasts or [])
@@ -202,6 +204,8 @@ async def create_device_info(host: str, device: Device):
     print("Creating device info for host: ", host)
     device_info = custom_serializer(device)
     device_configs[host] = device.config.to_dict()
+    if not device_configs.get(host):
+        device_configs[host] = device.config.to_dict()
     all_device_info = {
         "sys_info": device_info["sys_info"],
         "feature_info": device_info["feature_info"],
@@ -210,14 +214,20 @@ async def create_device_info(host: str, device: Device):
 
 async def get_sys_info(host: str) -> Dict[str, Any]:
     print("Getting sys_info for host: ", host)
-    device_config = device_configs.get(host)
+    device_config_dict = device_configs.get(host)
+    if device_config_dict:
+        print("Device config found in cache")
+        device_config = DeviceConfig.from_dict(device_config_dict)
+    else:
+        print("Device config not found in cache, recreating...")
+        device_config = await recreate_device_config(host)
     lock = device_locks.get(host, asyncio.Lock())
     async with lock:
         device = await get_or_connect_device(host, device_config)
         try:
             await device.update()
         except Exception as e:
-            print(f"Action failed: {e}, reconnecting...")
+            print(f"GetSysInfo failed: {e}, reconnecting...")
             device = await reconnect_device(host, device_config)
         device_info = custom_serializer(device)
         return {"sys_info": device_info["sys_info"]}
@@ -230,7 +240,13 @@ async def control_device(
     child_num: Optional[int] = None
 ) -> Dict[str, Any]:
     print(f"Controlling device at host: {host}")
-    device_config = device_configs.get(host)
+    device_config_dict = device_configs.get(host)
+    if device_config_dict:
+        print("Device config found in cache")
+        device_config = DeviceConfig.from_dict(device_config_dict)
+    else:
+        print("Device config not found in cache, recreating...")
+        device_config = await recreate_device_config(host)
     lock = device_locks.get(host, asyncio.Lock())
     async with lock:
         device = await get_or_connect_device(host, device_config)
@@ -245,17 +261,30 @@ async def get_or_connect_device(host: str, device_config: DeviceConfig) -> Devic
     device = device_cache.get(host)
     if not device:
         print(f"Device not in cache, connecting to device at host: {host}")
-        device = await Device.connect(config=Device.Config.from_dict(device_config))
+        device = await Device.connect(config=device_config)
         device_cache[host] = device
+    else:
+        print(f"Device found in cache: {device.alias}")
     return device
 
 async def reconnect_device(host: str, device_config: DeviceConfig) -> Device:
     device = device_cache.pop(host, None)
     if device:
         await device.disconnect()
-    device = await Device.connect(config=Device.Config.from_dict(device_config))
+    device = await Device.connect(config=device_config)
     device_cache[host] = device
     return device
+
+async def recreate_device_config(host: str) -> DeviceConfig:
+    global credentials
+    device = await Discover.discover_single(host=host, credentials=credentials)
+    await device.update()
+    device_configs[host] = device.config.to_dict()
+    if not device_configs.get(host):
+        device_configs[host] = device.config.to_dict()
+    device_config = DeviceConfig.from_dict(device_configs[host])
+    await device.disconnect()
+    return device_config
 
 async def perform_device_action(device: Device, feature: str, action: str, value: Any, child_num: Optional[int] = None) -> Dict[str, Any]:
     target = device.children[child_num] if child_num is not None else device
