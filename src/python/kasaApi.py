@@ -1,10 +1,14 @@
 import asyncio, sys
-from typing import Any, Dict, List, Optional
 
 from kasa import AuthenticationError, Credentials, Device, DeviceType, DeviceConfig, Discover, Module, UnsupportedDeviceError
 from quart import Quart, jsonify, request
+from typing import Any, Dict, List, Optional
 
 app = Quart(__name__)
+
+device_cache: Dict[str, Device] = {}
+device_lock_cache: Dict[str, asyncio.Lock] = {}
+device_config_cache: Dict[str, dict] = {}
 
 UNSUPPORTED_TYPES = {
     DeviceType.Camera.value,
@@ -15,11 +19,6 @@ UNSUPPORTED_TYPES = {
     DeviceType.Vacuum.value,
     DeviceType.Unknown.value,
 }
-
-credentials: Optional[Credentials] = None
-device_cache: Dict[str, Device] = {}
-device_locks: Dict[str, asyncio.Lock] = {}
-device_configs: Dict[str, dict[Any, Any]] = {}
 
 def serialize_child(child: Device) -> Dict[str, Any]:
     print(f"Serializing child device {child.alias}")
@@ -93,7 +92,6 @@ async def discover_devices(
     additional_broadcasts: Optional[List[str]] = None,
     manual_devices: Optional[List[str]] = None
 ) -> Dict[str, Any]:
-    global credentials
     devices = {}
     devices_to_remove = []
     broadcasts = ["255.255.255.255"] + (additional_broadcasts or [])
@@ -170,8 +168,8 @@ async def discover_devices(
         if device_type and device_type not in UNSUPPORTED_TYPES:
             if host not in device_cache:
                 device_cache[host] = device
-            if host not in device_locks:
-                device_locks[host] = asyncio.Lock()
+            if host not in device_lock_cache:
+                device_lock_cache[host] = asyncio.Lock()
             update_tasks.append(create_device_info(host, device))
         else:
             print(f"Skipping unsupported device: {host}")
@@ -195,17 +193,13 @@ async def close_all_connections():
         disconnect_tasks = [device.disconnect() for device in device_cache.values()]
         await asyncio.gather(*disconnect_tasks, return_exceptions=True)
         device_cache.clear()
-    if device_locks:
-        device_locks.clear()
-    if device_configs:
-        device_configs.clear()
+    device_lock_cache.clear()
+    device_config_cache.clear()
 
 async def create_device_info(host: str, device: Device):
     print("Creating device info for host: ", host)
     device_info = custom_serializer(device)
-    device_configs[host] = device.config.to_dict()
-    if not device_configs.get(host):
-        device_configs[host] = device.config.to_dict()
+    device_config_cache[host] = device.config.to_dict()
     all_device_info = {
         "sys_info": device_info["sys_info"],
         "feature_info": device_info["feature_info"],
@@ -214,23 +208,30 @@ async def create_device_info(host: str, device: Device):
 
 async def get_sys_info(host: str) -> Dict[str, Any]:
     print("Getting sys_info for host: ", host)
-    device_config_dict = device_configs.get(host)
-    if device_config_dict:
-        print("Device config found in cache")
+    try:
+        device_config_dict = device_config_cache.get(host)
         device_config = DeviceConfig.from_dict(device_config_dict)
-    else:
-        print("Device config not found in cache, recreating...")
-        device_config = await recreate_device_config(host)
-    lock = device_locks.get(host, asyncio.Lock())
-    async with lock:
-        device = await get_or_connect_device(host, device_config)
-        try:
+        device_lock = device_lock_cache.get(host, asyncio.Lock())
+        async with device_lock:
+            device = await get_or_connect_device(host, device_config)
             await device.update()
-        except Exception as e:
-            print(f"GetSysInfo failed: {e}, reconnecting...")
-            device = await reconnect_device(host, device_config)
-        device_info = custom_serializer(device)
-        return {"sys_info": device_info["sys_info"]}
+            device_info = custom_serializer(device)
+            return {"sys_info": device_info["sys_info"]}
+    except Exception as e:
+        print(f"GetSysInfo failed: {e}", file=sys.stderr)
+        return {"error": str(e)}
+
+async def get_or_connect_device(host: str, device_config: DeviceConfig) -> Device:
+    try:
+        device = device_cache.get(host)
+        if not device:
+            print(f"Device not in cache, connecting to device at host: {host}")
+            device = await Device.connect(config=device_config)
+            device_cache[host] = device
+        return device
+    except Exception as e:
+        print(f"Failed to connect to device: {e}", file=sys.stderr)
+        raise
 
 async def control_device(
     host: str,
@@ -240,51 +241,16 @@ async def control_device(
     child_num: Optional[int] = None
 ) -> Dict[str, Any]:
     print(f"Controlling device at host: {host}")
-    device_config_dict = device_configs.get(host)
-    if device_config_dict:
-        print("Device config found in cache")
+    try:
+        device_config_dict = device_config_cache.get(host)
         device_config = DeviceConfig.from_dict(device_config_dict)
-    else:
-        print("Device config not found in cache, recreating...")
-        device_config = await recreate_device_config(host)
-    lock = device_locks.get(host, asyncio.Lock())
-    async with lock:
-        device = await get_or_connect_device(host, device_config)
-        try:
+        device_lock = device_lock_cache.get(host, asyncio.Lock())
+        async with device_lock:
+            device = await get_or_connect_device(host, device_config)
             return await perform_device_action(device, feature, action, value, child_num)
-        except Exception as e:
-            print(f"Action failed: {e}, reconnecting...")
-            device = await reconnect_device(host, device_config)
-            return await perform_device_action(device, feature, action, value, child_num)
-
-async def get_or_connect_device(host: str, device_config: DeviceConfig) -> Device:
-    device = device_cache.get(host)
-    if not device:
-        print(f"Device not in cache, connecting to device at host: {host}")
-        device = await Device.connect(config=device_config)
-        device_cache[host] = device
-    else:
-        print(f"Device found in cache: {device.alias}")
-    return device
-
-async def reconnect_device(host: str, device_config: DeviceConfig) -> Device:
-    device = device_cache.pop(host, None)
-    if device:
-        await device.disconnect()
-    device = await Device.connect(config=device_config)
-    device_cache[host] = device
-    return device
-
-async def recreate_device_config(host: str) -> DeviceConfig:
-    global credentials
-    device = await Discover.discover_single(host=host, credentials=credentials)
-    await device.update()
-    device_configs[host] = device.config.to_dict()
-    if not device_configs.get(host):
-        device_configs[host] = device.config.to_dict()
-    device_config = DeviceConfig.from_dict(device_configs[host])
-    await device.disconnect()
-    return device_config
+    except Exception as e:
+        print(f"ControlDevice failed: {e}", file=sys.stderr)
+        return {"error": str(e)}
 
 async def perform_device_action(device: Device, feature: str, action: str, value: Any, child_num: Optional[int] = None) -> Dict[str, Any]:
     target = device.children[child_num] if child_num is not None else device
