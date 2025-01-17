@@ -37,6 +37,7 @@ export interface KasaPythonConfigInput {
   enableCredentials?: boolean;
   username?: string;
   password?: string;
+  hideHomeKitMatter?: boolean;
   pollingInterval?: number;
   discoveryPollingInterval?: number;
   offlineInterval?: number;
@@ -51,6 +52,9 @@ export type KasaPythonConfig = {
   enableCredentials: boolean;
   username: string;
   password: string;
+  homekitOptions: {
+    hideHomeKitMatter: boolean;
+  };
   discoveryOptions: {
     pollingInterval: number;
     discoveryPollingInterval: number;
@@ -69,6 +73,9 @@ export const defaultConfig: KasaPythonConfig = {
   enableCredentials: false,
   username: '',
   password: '',
+  homekitOptions: {
+    hideHomeKitMatter: true,
+  },
   discoveryOptions: {
     pollingInterval: 5,
     discoveryPollingInterval: 300,
@@ -106,6 +113,7 @@ function validateConfig(config: Record<string, unknown>): string[] {
   validateType(config, 'enableCredentials', 'boolean', errors);
   validateType(config, 'username', 'string', errors);
   validateType(config, 'password', 'string', errors);
+  validateType(config, 'hideHomeKitMatter', 'boolean', errors);
   validateType(config, 'pollingInterval', 'number', errors);
   validateType(config, 'discoveryPollingInterval', 'number', errors);
   validateType(config, 'offlineInterval', 'number', errors);
@@ -152,6 +160,9 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     enableCredentials: c.enableCredentials ?? defaultConfig.enableCredentials,
     username: c.username ?? defaultConfig.username,
     password: c.password ?? defaultConfig.password,
+    homekitOptions: {
+      hideHomeKitMatter: c.hideHomeKitMatter ?? defaultConfig.homekitOptions.hideHomeKitMatter,
+    },
     discoveryOptions: {
       pollingInterval: (c.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
       discoveryPollingInterval: (c.discoveryPollingInterval ?? defaultConfig.discoveryOptions.discoveryPollingInterval) * 1000,

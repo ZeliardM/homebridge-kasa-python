@@ -13,6 +13,7 @@
         "enableCredentials": true,
         "username": "Username",
         "password": "Password",
+        "hideHomeKitMatter": true,
         "pollingInterval": 5,
         "discoveryPollingInterval": 300,
         "offlineInterval": 7,

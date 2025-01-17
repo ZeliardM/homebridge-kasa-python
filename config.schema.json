@@ -40,6 +40,12 @@
           "functionBody": "return model.enableCredentials && model.username && model.username !== '';"
         }
       },
+      "hideHomeKitMatter": {
+        "title": "Hide HomeKit or Matter Devices",
+        "type": "boolean",
+        "description": "Hide HomeKit or Matter Devices from Homebridge.",
+        "default": true
+      },
       "pollingInterval": {
         "title": "Polling Interval (seconds)",
         "type": "integer",
@@ -118,6 +124,15 @@
     {
       "type": "help",
       "helpvalue": "Username and Password will be required for specific devices only."
+    },
+    {
+      "type": "fieldset",
+      "title": "HomeKit (Optional)",
+      "description": "Customize HomeKit options.",
+      "expandable": true,
+      "items": [
+        "hideHomeKitMatter"
+      ]
     },
     {
       "type": "fieldset",
