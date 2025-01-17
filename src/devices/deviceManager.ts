@@ -4,7 +4,7 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import KasaPythonPlatform from '../platform.js';
 import { parseConfig } from '../config.js';
-import type { ConfigDevice, DeviceConfig, FeatureInfo, KasaDevice, SysInfo } from './kasaDevices.js';
+import type { ConfigDevice, FeatureInfo, KasaDevice, SysInfo } from './kasaDevices.js';
 
 export default class DeviceManager {
   private log: Logger;
@@ -37,7 +37,14 @@ export default class DeviceManager {
   }
 
   private updateDeviceAlias(device: KasaDevice | SysInfo): void {
-    const sysInfo = 'sys_info' in device ? device.sys_info as SysInfo : device;
+    let sysInfo: SysInfo;
+
+    if (this.isKasaDevice(device)) {
+      sysInfo = device.sys_info as SysInfo;
+    } else {
+      sysInfo = device as SysInfo;
+    }
+
     if (sysInfo.alias) {
       const aliasMappings: { [key: string]: string } = {
         'TP-LINK_Power Strip_': 'Power Strip',
@@ -52,6 +59,10 @@ export default class DeviceManager {
         }
       }
     }
+  }
+
+  private isKasaDevice(device: KasaDevice | SysInfo): device is KasaDevice {
+    return (device as KasaDevice).sys_info !== undefined;
   }
 
   private async readConfigFile(configPath: string): Promise<PlatformConfig> {
@@ -79,7 +90,6 @@ export default class DeviceManager {
       const response = await axios.post<Record<string, {
         sys_info: SysInfo;
         feature_info: FeatureInfo;
-        device_config: DeviceConfig;
       }>>(
         `${this.apiUrl}/discover`,
         {
