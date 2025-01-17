@@ -1,8 +1,11 @@
-import sys, uvicorn
+import os, sys, uvicorn
 
-def start_api(port: int):
+def start_api(port: int, hideHomeKitMatter: bool):
     try:
         print("Starting Kasa Api...")
+
+        os.environ["HIDE_HOMEKIT_MATTER"] = "true" if hideHomeKitMatter else "false"
+
         uvicorn.run(
             "kasaApi:app",
             host="0.0.0.0",
@@ -19,4 +22,5 @@ def start_api(port: int):
 
 if __name__ == '__main__':
     port = int(sys.argv[1])
-    start_api(port)
+    hideHomeKitMatter = sys.argv[2].lower == "true"
+    start_api(port, hideHomeKitMatter)

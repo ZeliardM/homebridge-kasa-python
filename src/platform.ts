@@ -153,15 +153,16 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public readonly venvPythonExecutable: string;
   public config: KasaPythonConfig;
   public deviceManager: DeviceManager | undefined;
+  public isShuttingDown: boolean = false;
+  public periodicDeviceDiscovering: boolean = false;
+  public periodicDeviceDiscoveryEmitter: EventEmitter;
   public port: number = 0;
+  public taskQueue: TaskQueue;
   private readonly homekitDevicesById: Map<string, HomeKitDevice> = new Map();
+  private hideHomeKitMatter: boolean = true;
+  private isUpgrade: boolean = false;
   private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
   private platformInitialization: Promise<void>;
-  private isUpgrade: boolean = false;
-  public periodicDeviceDiscovering: boolean = false;
-  public isShuttingDown: boolean = false;
-  public taskQueue: TaskQueue;
-  public periodicDeviceDiscoveryEmitter: EventEmitter;
 
   constructor(public readonly log: Logging, config: PlatformConfig, public readonly api: API) {
     this.Service = this.api.hap.Service;
@@ -490,13 +491,14 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
 
   private async startKasaApi(): Promise<void> {
     const scriptPath = path.join(__dirname, 'python', 'startKasaApi.py');
+    this.hideHomeKitMatter = this.config.homekitOptions.hideHomeKitMatter;
     this.log.debug('Starting Kasa API with script:', scriptPath);
 
     try {
       const [, , , process] = await runCommand(
         this.log,
         this.venvPythonExecutable,
-        [scriptPath, this.port.toString()],
+        [scriptPath, this.port.toString(), this.hideHomeKitMatter.toString()],
         undefined,
         this.config.advancedOptions.advancedPythonLogging ? false: true,
         this.config.advancedOptions.advancedPythonLogging ? false: true,

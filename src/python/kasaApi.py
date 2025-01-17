@@ -1,4 +1,4 @@
-import asyncio, sys
+import asyncio, os, sys
 
 from kasa import AuthenticationError, Credentials, Device, DeviceType, DeviceConfig, Discover, Module, UnsupportedDeviceError
 from quart import Quart, jsonify, request
@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 app = Quart(__name__)
 
+hide_homekit_matter = os.getenv("HIDE_HOMEKIT_MATTER", "false").lower() == "true"
 device_cache: Dict[str, Device] = {}
 device_lock_cache: Dict[str, asyncio.Lock] = {}
 device_config_cache: Dict[str, dict] = {}
@@ -155,12 +156,13 @@ async def discover_devices(
 
     for host, device in devices.items():
         try:
-            homekit_component = device.modules.get(Module.HomeKit, None)
-            matter_component = device.modules.get(Module.Matter, None)
-            if homekit_component or matter_component:
-                print(f"Skipping device {device.alias} due to Native HomeKit or Matter support")
-                await device.disconnect()
-                continue
+            if hide_homekit_matter:
+                homekit_component = device.modules.get(Module.HomeKit, None)
+                matter_component = device.modules.get(Module.Matter, None)
+                if homekit_component or matter_component:
+                    print(f"Skipping device {device.alias} due to Native HomeKit or Matter support")
+                    await device.disconnect()
+                    continue
         except Exception as e:
             print(f"Error checking HomeKit and Matter modules: {e}", file=sys.stderr)
 
