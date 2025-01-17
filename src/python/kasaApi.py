@@ -220,8 +220,18 @@ async def get_sys_info(host: str) -> Dict[str, Any]:
             device_info = custom_serializer(device)
             return {"sys_info": device_info["sys_info"]}
     except Exception as e:
-        print(f"GetSysInfo failed: {e}", file=sys.stderr)
-        return {"error": str(e)}
+        try:
+            if device:
+                await device.disconnect()
+            device_cache.pop(host, None)
+            device_lock = device_lock_cache.get(host, asyncio.Lock())
+            async with device_lock:
+                device = await get_or_connect_device(host, device_config)
+                device_info = custom_serializer(device)
+                return {"sys_info": device_info["sys_info"]}
+        except Exception as e:
+            print(f"GetSysInfo failed: {e}", file=sys.stderr)
+            return {"error": str(e)}
 
 async def get_or_connect_device(host: str, device_config: DeviceConfig) -> Device:
     try:
@@ -251,8 +261,17 @@ async def control_device(
             device = await get_or_connect_device(host, device_config)
             return await perform_device_action(device, feature, action, value, child_num)
     except Exception as e:
-        print(f"ControlDevice failed: {e}", file=sys.stderr)
-        return {"error": str(e)}
+        try:
+            if device:
+                await device.disconnect()
+            device_cache.pop(host, None)
+            device_lock = device_lock_cache.get(host, asyncio.Lock())
+            async with device_lock:
+                device = await get_or_connect_device(host, device_config)
+                return await perform_device_action(device, feature, action, value, child_num)
+        except Exception as e:
+            print(f"ControlDevice failed: {e}", file=sys.stderr)
+            return {"error": str(e)}
 
 async def perform_device_action(device: Device, feature: str, action: str, value: Any, child_num: Optional[int] = None) -> Dict[str, Any]:
     target = device.children[child_num] if child_num is not None else device
