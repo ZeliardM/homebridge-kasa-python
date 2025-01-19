@@ -14,7 +14,6 @@ def start_api(port: int, hideHomeKitMatter: bool):
             workers=1,
             timeout_keep_alive=120,
             limit_concurrency=1000,
-            reload=True
         )
     except Exception as e:
         print(f"Failed to start Kasa Api: {e}", file=sys.stderr)
