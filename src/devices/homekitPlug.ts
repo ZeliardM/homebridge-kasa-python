@@ -100,7 +100,7 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
     if (characteristicType === this.platform.Characteristic.On) {
       characteristic.onSet(this.handleOnSet.bind(this, service, characteristicType, characteristicName));
     }
-    return service;
+    return characteristic;
   }
 
   private async handleOnGet(

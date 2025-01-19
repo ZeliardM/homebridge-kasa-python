@@ -3,6 +3,7 @@ import HomeKitDeviceLightBulb from './homekitLightBulb.js';
 import HomeKitDevicePlug from './homekitPlug.js';
 import HomeKitDevicePowerStrip from './homekitPowerStrip.js';
 import HomeKitDeviceSwitch from './homekitSwitch.js';
+import HomeKitDeviceSwitchWithChildren from './homekitSwitchWithChildren.js';
 import { LightBulbs, Plugs, PowerStrips, Switches } from './kasaDevices.js';
 import type KasaPythonPlatform from '../platform.js';
 import type { KasaDevice, LightBulb, Plug, PowerStrip, Switch } from './kasaDevices.js';
@@ -49,7 +50,11 @@ export default function create(
   if (isSwitch(kasaDevice)) {
     const switchDevice = kasaDevice as Switch;
     platform.log.debug('HomeKit device is a Switch:', switchDevice.sys_info.model);
-    return new HomeKitDeviceSwitch(platform, switchDevice);
+    if (switchDevice.sys_info.child_num > 0) {
+      return new HomeKitDeviceSwitchWithChildren(platform, switchDevice);
+    } else {
+      return new HomeKitDeviceSwitch(platform, switchDevice);
+    }
   }
 
   platform.log.error('Unknown device type:', kasaDevice);

@@ -6,9 +6,9 @@ import { EventEmitter } from 'node:events';
 import HomeKitDevice from './index.js';
 import { deferAndCombine } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { ChildDevice, KasaDevice, PowerStrip, SysInfo } from './kasaDevices.js';
+import type { ChildDevice, KasaDevice, Switch, SysInfo } from './kasaDevices.js';
 
-export default class HomeKitDevicePowerStrip extends HomeKitDevice {
+export default class HomeKitDeviceSwitchWithChildren extends HomeKitDevice {
   public isUpdating: boolean = false;
   private previousKasaDevice: KasaDevice | undefined;
   private getSysInfo: () => Promise<void>;
@@ -18,15 +18,15 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
 
   constructor(
     platform: KasaPythonPlatform,
-    public kasaDevice: PowerStrip,
+    public kasaDevice: Switch,
   ) {
     super(
       platform,
       kasaDevice,
-      Categories.OUTLET,
-      'OUTLET',
+      Categories.SWITCH,
+      'SWITCH',
     );
-    this.log.debug(`Initializing HomeKitDevicePowerStrip for device: ${kasaDevice.sys_info.alias}`);
+    this.log.debug(`Initializing HomeKitDeviceSwitch for device: ${kasaDevice.sys_info.alias}`);
     this.kasaDevice.sys_info.children?.forEach((child: ChildDevice, index: number) => {
       this.checkService(child, index);
     });
@@ -49,7 +49,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
   }
 
   private async withLock<T>(key: string, action: () => Promise<T>): Promise<T> {
-    let lock = HomeKitDevicePowerStrip.locks.get(key);
+    let lock = HomeKitDeviceSwitchWithChildren.locks.get(key);
     if (!lock) {
       lock = Promise.resolve();
     }
@@ -57,33 +57,42 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
       try {
         return await action();
       } finally {
-        if (HomeKitDevicePowerStrip.locks.get(key) === currentLock) {
-          HomeKitDevicePowerStrip.locks.delete(key);
+        if (HomeKitDeviceSwitchWithChildren.locks.get(key) === currentLock) {
+          HomeKitDeviceSwitchWithChildren.locks.delete(key);
         }
       }
     });
-    HomeKitDevicePowerStrip.locks.set(key, currentLock.then(() => {}));
+    HomeKitDeviceSwitchWithChildren.locks.set(key, currentLock.then(() => {}));
     return currentLock;
   }
 
   private checkService(child: ChildDevice, index: number) {
-    const { Outlet } = this.platform.Service;
+    const { Lightbulb, Fanv2 } = this.platform.Service;
+    const serviceType = child.fan_speed_level ? Fanv2 : Lightbulb;
     const service: Service =
-      this.homebridgeAccessory.getServiceById(Outlet, `outlet-${index + 1}`) ??
-      this.addService(Outlet, child.alias, `outlet-${index + 1}`);
+      this.homebridgeAccessory.getServiceById(serviceType, `child-${index + 1}`) ??
+      this.addService(serviceType, child.alias, `child-${index + 1}`);
     this.checkCharacteristics(service, child);
     return service;
   }
 
   private checkCharacteristics(service: Service, child: ChildDevice) {
     const characteristics = [
-      {
-        type: this.platform.Characteristic.On,
-        name: this.platform.getCharacteristicName(this.platform.Characteristic.On),
+      child.fan_speed_level && {
+        type: this.platform.Characteristic.RotationSpeed,
+        name: this.platform.getCharacteristicName(this.platform.Characteristic.RotationSpeed),
       },
-      {
-        type: this.platform.Characteristic.OutletInUse,
-        name: this.platform.getCharacteristicName(this.platform.Characteristic.OutletInUse),
+      child.fan_speed_level && {
+        type: this.platform.Characteristic.Active,
+        name: this.platform.getCharacteristicName(this.platform.Characteristic.Active),
+      },
+      child.brightness && {
+        type: this.platform.Characteristic.On,
+        name: this.platform.getCharacteristicName(this.platform.Characteristic.Brightness),
+      },
+      child.brightness && {
+        type: this.platform.Characteristic.Brightness,
+        name: this.platform.getCharacteristicName(this.platform.Characteristic.Brightness),
       },
     ].filter(Boolean) as { type: WithUUID<new () => Characteristic>; name: string | undefined }[];
 
@@ -101,9 +110,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
     const characteristic: Characteristic = service.getCharacteristic(characteristicType) ??
       service.addCharacteristic(characteristicType);
     characteristic.onGet(this.handleOnGet.bind(this, service, characteristicType, characteristicName, child));
-    if (characteristicType === this.platform.Characteristic.On) {
-      characteristic.onSet(this.handleOnSet.bind(this, service, characteristicType, characteristicName, child));
-    }
+    characteristic.onSet(this.handleOnSet.bind(this, service, characteristicType, characteristicName, child));
     return characteristic;
   }
 
@@ -115,7 +122,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
   ): Promise<CharacteristicValue> {
     if (this.kasaDevice.offline || this.platform.isShuttingDown) {
       this.log.warn(`Device is offline or platform is shutting down, cannot get value for characteristic ${characteristicName}`);
-      return false;
+      return this.getDefaultValue(characteristicType);
     }
 
     try {
@@ -125,7 +132,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
         service.getCharacteristic(characteristicType).updateValue(characteristicValue);
       }
       this.log.debug(`Got value for characteristic ${characteristicName}: ${characteristicValue}`);
-      return characteristicValue ?? false;
+      return characteristicValue ?? this.getDefaultValue(characteristicType);
     } catch (error) {
       this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${child.alias}:`, error);
       this.kasaDevice.offline = true;
@@ -135,8 +142,27 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
   }
 
   private getInitialValue(characteristicType: WithUUID<new () => Characteristic>, child: ChildDevice): CharacteristicValue {
-    if (characteristicType === this.platform.Characteristic.On || characteristicType === this.platform.Characteristic.OutletInUse) {
+    if (characteristicType === this.platform.Characteristic.Active) {
+      return child.state ? 1 : 0;
+    } else if (characteristicType === this.platform.Characteristic.Brightness) {
+      return child.brightness ?? 0;
+    } else if (characteristicType === this.platform.Characteristic.RotationSpeed) {
+      return child.fan_speed_level ?? 0;
+    } else if (characteristicType === this.platform.Characteristic.On) {
       return child.state ?? false;
+    }
+    return false;
+  }
+
+  private getDefaultValue(characteristicType: WithUUID<new () => Characteristic>): CharacteristicValue {
+    const zeroValueCharacteristics: WithUUID<new () => Characteristic>[] = [
+      this.platform.Characteristic.Active,
+      this.platform.Characteristic.Brightness,
+      this.platform.Characteristic.RotationSpeed,
+    ];
+
+    if (zeroValueCharacteristics.includes(characteristicType)) {
+      return 0;
     }
     return false;
   }
@@ -169,6 +195,9 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
             this.log.debug(`Setting value for characteristic ${characteristicName} to ${value}`);
 
             const characteristicMap: { [key: string]: string } = {
+              Active: 'state',
+              Brightness: 'brightness',
+              RotationSpeed: 'fan_speed_level',
               On: 'state',
             };
 
@@ -178,16 +207,23 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
             }
 
             const childNumber = parseInt(child.id.slice(-1), 10);
-            await this.deviceManager.controlDevice(this.kasaDevice.sys_info.host, characteristicKey, value, childNumber);
-            (child[characteristicKey as keyof ChildDevice] as unknown as CharacteristicValue) = value;
+            let controlValue;
+            if (characteristicName === 'Active') {
+              controlValue = value === 1 ? true : false;
+            } else if (characteristicName === 'RotationSpeed') {
+              controlValue = this.mapValuetoRotationSpeed(value as number);
+            } else {
+              controlValue = value;
+            }
+            await this.deviceManager.controlDevice(this.kasaDevice.sys_info.host, characteristicKey, controlValue, childNumber);
+            (child[characteristicKey as keyof ChildDevice] as unknown as CharacteristicValue) = controlValue;
 
             const childIndex = this.kasaDevice.sys_info.children?.findIndex(c => c.id === child.id);
             if (childIndex !== undefined && childIndex !== -1) {
-              this.kasaDevice.sys_info.children![childIndex] = { ...child };
+                this.kasaDevice.sys_info.children![childIndex] = { ...child };
             }
 
             this.updateValue(service, service.getCharacteristic(characteristicType), child.alias, value);
-            this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, value);
 
             this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
             this.log.debug(`Set value for characteristic ${characteristicName} to ${value} successfully`);
@@ -205,6 +241,21 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
       };
       await task();
     });
+  }
+
+  private mapValuetoRotationSpeed(value: number): number {
+    if (value === 0) {
+      return 0;
+    } else if (value >= 1 && value <= 25) {
+      return 1;
+    } else if (value >= 26 && value <= 50) {
+      return 2;
+    } else if (value >= 51 && value <= 75) {
+      return 3;
+    } else if (value >= 76 && value <= 100) {
+      return 4;
+    }
+    return 0;
   }
 
   protected async updateState() {
@@ -235,14 +286,46 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
           await this.getSysInfo();
           this.kasaDevice.sys_info.children?.forEach((child: ChildDevice) => {
             const childNumber = parseInt(child.id.slice(-1), 10);
-            const service = this.homebridgeAccessory.getServiceById(this.platform.Service.Outlet, `outlet-${childNumber + 1}`);
-            if (service && this.previousKasaDevice) {
+            let service;
+            if (child.brightness) {
+              service = this.homebridgeAccessory.getServiceById(this.platform.Service.Lightbulb, `child-${childNumber + 1}`);
+            } else if (child.fan_speed_level) {
+              service = this.homebridgeAccessory.getServiceById(this.platform.Service.Fanv2, `child-${childNumber + 1}`);
+            }
+            if (service && service.UUID === this.platform.Service.Lightbulb.UUID && this.previousKasaDevice) {
               const previousChild = this.previousKasaDevice.sys_info.children?.find(c => c.id === child.id);
               if (previousChild) {
                 if (previousChild.state !== child.state) {
                   this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), child.alias, child.state);
-                  this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, child.state);
                   this.log.debug(`Updated state for child device: ${child.alias} to ${child.state}`);
+                }
+                if (child.brightness && previousChild.brightness !== child.brightness) {
+                  this.updateValue(
+                    service,
+                    service.getCharacteristic(this.platform.Characteristic.Brightness),
+                    child.alias,
+                    child.brightness,
+                  );
+                  this.log.debug(`Updated brightness for child device: ${child.alias} to ${child.brightness}`);
+                }
+              }
+            } else if (service && service.UUID === this.platform.Service.Fanv2.UUID && this.previousKasaDevice) {
+              const previousChild = this.previousKasaDevice.sys_info.children?.find(c => c.id === child.id);
+              if (previousChild) {
+                if (previousChild.state !== child.state) {
+                  this.updateValue(
+                    service, service.getCharacteristic(this.platform.Characteristic.Active), child.alias, child.state ? 1 : 0,
+                  );
+                  this.log.debug(`Updated state for child device: ${child.alias} to ${child.state}`);
+                }
+                if (child.fan_speed_level && previousChild.fan_speed_level !== child.fan_speed_level) {
+                  this.updateValue(
+                    service,
+                    service.getCharacteristic(this.platform.Characteristic.RotationSpeed),
+                    child.alias,
+                    child.fan_speed_level,
+                  );
+                  this.log.debug(`Updated fan speed for child device: ${child.alias} to ${child.fan_speed_level}`);
                 }
               }
             } else {

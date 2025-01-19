@@ -8,6 +8,7 @@ export interface SysInfo {
   color_temp?: number;
   device_id: string;
   device_type: string;
+  fan_speed_level?: number;
   host: string;
   hw_ver: string;
   hsv?: HSV;
@@ -22,12 +23,14 @@ export interface FeatureInfo {
   brightness?: boolean;
   color_temp?: boolean;
   hsv?: boolean;
+  fan?: boolean;
 }
 
 export interface ChildDevice {
   alias: string;
   brightness?: number;
   color_temp?: number;
+  fan_speed_level?: number;
   hsv?: HSV;
   id: string;
   state: boolean;

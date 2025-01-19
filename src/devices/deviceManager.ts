@@ -200,6 +200,7 @@ export default class DeviceManager {
     switch (feature) {
       case 'brightness':
       case 'color_temp':
+      case 'fan_speed_level':
         action = `set_${feature}`;
         break;
       case 'hue':

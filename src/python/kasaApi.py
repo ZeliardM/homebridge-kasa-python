@@ -25,12 +25,17 @@ def serialize_child(child: Device) -> Dict[str, Any]:
     print(f"Serializing child device {child.alias}")
     child_info = {
         "alias": child.alias,
-        "id": child.device_id.split("_", 1)[1],
+        "id": child.device_id.split("_", 1)[1] if "_" in child.device_id else child.device_id,
         "state": child.features["state"].value
     }
     light_module = child.modules.get(Module.Light)
     if light_module:
         child_info.update(get_light_info(child))
+    fan_module = child.modules.get(Module.Fan)
+    if fan_module:
+        child_info.update({
+            "fan_speed_level": fan_module.fan_speed_level,
+        })
     return child_info
 
 def get_light_info(device: Device) -> Dict[str, Any]:
@@ -63,6 +68,7 @@ def custom_serializer(device: Device) -> Dict[str, Any]:
     }
 
     light_module = device.modules.get(Module.Light)
+    fan_module = device.modules.get(Module.Fan)
 
     if child_num > 0:
         sys_info["children"] = [serialize_child(child) for child in device.children]
@@ -72,12 +78,20 @@ def custom_serializer(device: Device) -> Dict[str, Any]:
         })
         if light_module:
             sys_info.update(get_light_info(device))
+        if fan_module:
+            sys_info.update({
+                "fan_speed_level": fan_module.fan_speed_level,
+            })
 
     if light_module:
         feature_info = {
                 "brightness": light_module.has_feature("brightness"),
                 "color_temp": light_module.has_feature("color_temp"),
                 "hsv": light_module.has_feature("hsv")
+        }
+    elif fan_module:
+        feature_info = {
+            "fan": True if fan_module else False
         }
     else:
         feature_info = {}
@@ -316,6 +330,7 @@ async def control_device(
 async def perform_device_action(device: Device, feature: str, action: str, value: Any, child_num: Optional[int] = None) -> Dict[str, Any]:
     target = device.children[child_num] if child_num is not None else device
     light = target.modules.get(Module.Light)
+    fan = target.modules.get(Module.Fan)
 
     print(f"Performing action={action} on feature={feature} for device {target.alias}")
     if feature == "state":
@@ -326,6 +341,8 @@ async def perform_device_action(device: Device, feature: str, action: str, value
         await handle_color_temp(target, action, value)
     elif feature in ["hue", "saturation"] and light.has_feature("hsv"):
         await handle_hsv(target, action, feature, value)
+    elif feature == "fan_speed_level" and fan:
+        await getattr(fan, action)(value)
     else:
         raise ValueError("Invalid feature or action")
     return {"status": "success"}
