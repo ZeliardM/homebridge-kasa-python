@@ -101,6 +101,7 @@ export async function runCommand(
   returnProcess: boolean = false,
   suppressErrors: string[] = [],
 ): Promise<[string, string, number | null, (ChildProcessWithoutNullStreams | null)?]> {
+  const MAX_BUFFER_SIZE = 1024 * 1024;
   let stdout: string = '';
   let stderr: string = '';
   let outputFile: string | null = null;
@@ -122,6 +123,9 @@ export async function runCommand(
 
   p.stdout.setEncoding('utf8').on('data', data => {
     stdout += data;
+    if (stdout.length > MAX_BUFFER_SIZE) {
+      stdout = stdout.slice(-MAX_BUFFER_SIZE);
+    }
     if (!hideStdout) {
       logger.debug(`STDOUT: ${data.trim()}`);
     }
@@ -129,6 +133,9 @@ export async function runCommand(
 
   p.stderr.setEncoding('utf8').on('data', data => {
     stderr += data;
+    if (stderr.length > MAX_BUFFER_SIZE) {
+      stderr = stderr.slice(-MAX_BUFFER_SIZE);
+    }
     if (!hideStderr) {
       logger.error(`STDERR: ${data.trim()}`);
     }
