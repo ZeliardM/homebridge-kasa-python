@@ -29,6 +29,8 @@ UNSUPPORTED_TYPES = {
     DeviceType.Fan.value,
     DeviceType.Thermostat.value,
     DeviceType.Vacuum.value,
+    DeviceType.Chime.value,
+    DeviceType.Doorbell.value,
     DeviceType.Unknown.value,
 }
 
