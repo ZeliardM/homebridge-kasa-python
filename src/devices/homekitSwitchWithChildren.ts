@@ -193,12 +193,6 @@ export default class HomeKitDeviceSwitchWithChildren extends HomeKitDevice {
         this.log.warn(`Device is offline or platform is shutting down, cannot set value for characteristic ${characteristicName}`);
         return;
       }
-      if (this.isUpdating || this.platform.periodicDeviceDiscovering) {
-        await Promise.race([
-          new Promise<void>((resolve) => this.updateEmitter.once('updateComplete', resolve)),
-          new Promise<void>((resolve) => this.updateEmitter.once('periodicDeviceDiscoveryComplete', resolve)),
-        ]);
-      }
       const task = async () => {
         if (this.deviceManager) {
           try {
