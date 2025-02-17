@@ -162,10 +162,10 @@ export const LightBulbs = [
   'KL400L5',
   'KL420L5',
   'KL430',
-  'L900-10',
-  'L900-5',
-  'L920-5',
-  'L930-5',
+  'L900',
+  'L900',
+  'L920',
+  'L930',
 ];
 
 export const Unsupported = [
