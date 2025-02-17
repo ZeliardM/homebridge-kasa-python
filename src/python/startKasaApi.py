@@ -21,5 +21,5 @@ def start_api(port: int, hideHomeKitMatter: bool):
 
 if __name__ == '__main__':
     port = int(sys.argv[1])
-    hideHomeKitMatter = sys.argv[2].lower == "true"
+    hideHomeKitMatter = sys.argv[2].lower() == "true"
     start_api(port, hideHomeKitMatter)

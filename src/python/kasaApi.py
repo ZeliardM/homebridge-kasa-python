@@ -194,10 +194,13 @@ async def discover_devices(
 
         try:
             if hide_homekit_matter:
-                homekit_component = device.modules.get(Module.HomeKit, None)
-                matter_component = device.modules.get(Module.Matter, None)
+                homekit_component = device.modules.get(Module.HomeKit)
+                matter_component = device.modules.get(Module.Matter)
                 if homekit_component or matter_component:
-                    print(f"Skipping device {device.alias} due to Native HomeKit or Matter support")
+                    if homekit_component:
+                        print(f"Skipping device {device.alias} due to Native HomeKit support")
+                    if matter_component:
+                        print(f"Skipping device {device.alias} due to Matter support")
                     await device.disconnect()
                     continue
         except Exception as e:
