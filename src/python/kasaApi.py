@@ -114,6 +114,7 @@ async def discover_devices(
     password: Optional[str] = None,
     additional_broadcasts: Optional[List[str]] = None,
     manual_devices: Optional[List[str]] = None,
+    exlude_mac_addresses: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     devices = {}
     devices_to_remove = []
@@ -167,6 +168,11 @@ async def discover_devices(
     update_tasks = []
     host: str
     device: Device
+
+    for host in devices:
+        device = devices[host]
+        if device.mac in (exlude_mac_addresses or []):
+            devices_to_remove.append(host)
 
     for host in devices_to_remove:
         device = devices.pop(host, None)
@@ -415,7 +421,8 @@ async def discover_route():
         data: Dict[str, Any] = await request.get_json()
         additional_broadcasts = data.get('additionalBroadcasts', [])
         manual_devices = data.get('manualDevices', [])
-        devices_info = await discover_devices(username, password, additional_broadcasts, manual_devices)
+        exlude_mac_addresses = data.get('excludeMacAddresses', [])
+        devices_info = await discover_devices(username, password, additional_broadcasts, manual_devices, exlude_mac_addresses)
         return jsonify(devices_info)
     except Exception as e:
         print(f"Discover route error: {e}", file=sys.stderr)

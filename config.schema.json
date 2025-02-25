@@ -96,6 +96,15 @@
         },
         "description": "List of devices to manually add."
       },
+      "excludeMacAddresses": {
+        "title": "Exclude MAC Addresses",
+        "type": "array",
+        "items": {
+          "title": "MAC Address",
+          "type": "string"
+        },
+        "description": "List of MAC addresses to exclude from device discovery. Format: AA:BB:CC:11:22:33"
+      },
       "waitTimeUpdate": {
         "title": "Wait Time Update (milliseconds)",
         "type": "integer",
@@ -175,6 +184,22 @@
             {
               "type": "help",
               "helpvalue": "Before resorting to manually specifying devices. Try setting the broadcast address and check your router/switch/firewall configuration. You must assign static IP addresses to your devices to use this configuration."
+            }
+          ]
+        },
+        {
+          "type": "fieldset",
+          "title": "Exclude MAC Addresses",
+          "description": "Specify MAC addresses to exclude from device discovery.",
+          "expandable": true,
+          "items": [
+            {
+              "key": "excludeMacAddresses",
+              "type": "array",
+              "items": {
+                "title": "MAC Address",
+                "type": "string"
+              }
             }
           ]
         }

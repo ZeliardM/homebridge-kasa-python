@@ -13,6 +13,7 @@ export default class DeviceManager {
   private password: string;
   private additionalBroadcasts: string[];
   private manualDevices: string[];
+  private excludeMacAddresses: string[];
 
   constructor(private platform: KasaPythonPlatform) {
     this.log = platform.log;
@@ -21,6 +22,7 @@ export default class DeviceManager {
     this.apiUrl = `http://127.0.0.1:${platform.port}`;
     this.additionalBroadcasts = platform.config.discoveryOptions.additionalBroadcasts;
     this.manualDevices = platform.config.discoveryOptions.manualDevices.map(device => device.host);
+    this.excludeMacAddresses = platform.config.discoveryOptions.excludeMacAddresses;
   }
 
   private convertManualDevices(manualDevices: (string | ConfigDevice)[]): ConfigDevice[] {
@@ -95,6 +97,7 @@ export default class DeviceManager {
         {
           additionalBroadcasts: this.additionalBroadcasts,
           manualDevices: this.manualDevices,
+          excludeMacAddresses: this.excludeMacAddresses,
         },
         config,
       );
