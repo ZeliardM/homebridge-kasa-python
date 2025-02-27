@@ -169,6 +169,7 @@ export const LightBulbs = [
 
 export const Unsupported = [
   'C100',
+  'C110',
   'C210',
   'C225',
   'C325WB',
