@@ -114,7 +114,7 @@ async def discover_devices(
     password: Optional[str] = None,
     additional_broadcasts: Optional[List[str]] = None,
     manual_devices: Optional[List[str]] = None,
-    exlude_mac_addresses: Optional[List[str]] = None,
+    exclude_mac_addresses: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     devices = {}
     devices_to_remove = []
@@ -132,9 +132,11 @@ async def discover_devices(
         except (UnsupportedDeviceError, AuthenticationError) as e:
             print(f"{e.__class__.__name__}: {device.host}", file=sys.stderr)
             devices_to_remove.append(device.host)
+            await safe_disconnect(device)
         except Exception as e:
             print(f"Error during discovery: {e}", file=sys.stderr)
             devices_to_remove.append(device.host)
+            await safe_disconnect(device)
 
     async def discover_on_broadcast(broadcast: str):
         print(f"Discovering on broadcast: {broadcast}")
@@ -159,6 +161,8 @@ async def discover_devices(
             devices[host] = device
         except Exception as e:
             print(f"Error during manual device discovery: {e}", file=sys.stderr)
+            devices_to_remove.append(host)
+            await safe_disconnect(device)
 
     discover_tasks = [discover_on_broadcast(bc) for bc in broadcasts]
     manual_discover_tasks = [discover_manual_device(host) for host in (manual_devices or [])]
@@ -171,14 +175,14 @@ async def discover_devices(
 
     for host in devices:
         device = devices[host]
-        if device.mac in (exlude_mac_addresses or []):
+        if device.mac in (exclude_mac_addresses or []):
             devices_to_remove.append(host)
 
     for host in devices_to_remove:
         device = devices.pop(host, None)
         if device:
             print(f"Removing device: {device.alias}")
-            await device.disconnect()
+            await safe_disconnect(device)
 
     for host, device_config_dict in device_config_cache.items():
         device = devices.get(host)
@@ -194,8 +198,7 @@ async def discover_devices(
             await device.update()
         except Exception as e:
             print(f"Error checking device: {e}", file=sys.stderr)
-            if device:
-                await device.disconnect()
+            await safe_disconnect(device)
             continue
 
         try:
@@ -207,11 +210,11 @@ async def discover_devices(
                         print(f"Skipping device {device.alias} due to Native HomeKit support")
                     if matter_component:
                         print(f"Skipping device {device.alias} due to Matter support")
-                    await device.disconnect()
+                    await safe_disconnect(device)
                     continue
         except Exception as e:
             print(f"Error checking HomeKit and Matter modules: {e}", file=sys.stderr)
-            await device.disconnect()
+            await safe_disconnect(device)
             continue
 
         device_type = device.device_type.value
@@ -223,7 +226,7 @@ async def discover_devices(
             update_tasks.append(create_device_info(host, device))
         else:
             print(f"Skipping unsupported device: {host}")
-            await device.disconnect()
+            await safe_disconnect(device)
 
     results = await asyncio.gather(*update_tasks, return_exceptions=True)
 
@@ -231,26 +234,12 @@ async def discover_devices(
         host, info = result
         if isinstance(info, Exception):
             print(f"Error creating device info for host {host}: {info}", file=sys.stderr)
-            try:
-                device_config_dict = device_config_cache.get(host)
-                if device_config_dict:
-                    device_config = DeviceConfig.from_dict(device_config_dict)
-                    device = await get_or_connect_device(host, device_config)
-                    if device:
-                        await device.disconnect()
-                device_cache.pop(host, None)
-            except Exception as e:
-                print(f"Error disconnecting device: {e}", file=sys.stderr)
+            await handle_device_error(host)
             continue
         print(f"Device info created for device: {host}")
         all_device_info[host] = info
 
-    for host, device in devices.items():
-        try:
-            await device.disconnect()
-            print(f"Disconnected device: {host}")
-        except Exception as e:
-            print(f"Error disconnecting device {host}: {e}", file=sys.stderr)
+    await disconnect_all_devices(devices)
 
     return all_device_info
 
@@ -287,21 +276,7 @@ async def get_sys_info(host: str) -> Dict[str, Any]:
             device_info = custom_serializer(device)
             return {"sys_info": device_info["sys_info"]}
     except Exception as e:
-        try:
-            if device:
-                await device.disconnect()
-            device_cache.pop(host, None)
-            device_lock = device_lock_cache.get(host, asyncio.Lock())
-            async with device_lock:
-                device = await get_or_connect_device(host, device_config)
-                device_info = custom_serializer(device)
-                return {"sys_info": device_info["sys_info"]}
-        except Exception as e:
-            print(f"GetSysInfo failed: {e}", file=sys.stderr)
-            if device:
-                await device.disconnect()
-            device_cache.pop(host, None)
-            return {"error": str(e)}
+        return await handle_device_error(host, e)
 
 async def get_or_connect_device(host: str, device_config: DeviceConfig) -> Device:
     try:
@@ -313,9 +288,7 @@ async def get_or_connect_device(host: str, device_config: DeviceConfig) -> Devic
         return device
     except Exception as e:
         print(f"Failed to connect to device: {e}", file=sys.stderr)
-        if device:
-            await device.disconnect()
-        device_cache.pop(host, None)
+        await safe_disconnect(device)
         raise
 
 async def control_device(
@@ -334,20 +307,7 @@ async def control_device(
             device = await get_or_connect_device(host, device_config)
             return await perform_device_action(device, feature, action, value, child_num)
     except Exception as e:
-        try:
-            if device:
-                await device.disconnect()
-            device_cache.pop(host, None)
-            device_lock = device_lock_cache.get(host, asyncio.Lock())
-            async with device_lock:
-                device = await get_or_connect_device(host, device_config)
-                return await perform_device_action(device, feature, action, value, child_num)
-        except Exception as e:
-            print(f"ControlDevice failed: {e}", file=sys.stderr)
-            if device:
-                await device.disconnect()
-            device_cache.pop(host, None)
-            return {"error": str(e)}
+        return await handle_device_error(host, e)
 
 async def perform_device_action(
     device: Device,
@@ -421,8 +381,8 @@ async def discover_route():
         data: Dict[str, Any] = await request.get_json()
         additional_broadcasts = data.get('additionalBroadcasts', [])
         manual_devices = data.get('manualDevices', [])
-        exlude_mac_addresses = data.get('excludeMacAddresses', [])
-        devices_info = await discover_devices(username, password, additional_broadcasts, manual_devices, exlude_mac_addresses)
+        exclude_mac_addresses = data.get('excludeMacAddresses', [])
+        devices_info = await discover_devices(username, password, additional_broadcasts, manual_devices, exclude_mac_addresses)
         return jsonify(devices_info)
     except Exception as e:
         print(f"Discover route error: {e}", file=sys.stderr)
@@ -464,3 +424,28 @@ async def cleanup():
     await close_all_connections()
     device_lock_cache.clear()
     device_config_cache.clear()
+
+async def safe_disconnect(device: Optional[Device]):
+    if device:
+        try:
+            await device.disconnect()
+        except Exception as e:
+            print(f"Error disconnecting device: {e}", file=sys.stderr)
+
+async def handle_device_error(host: str, error: Optional[Exception] = None) -> Dict[str, Any]:
+    print(f"Handling device error for host {host}: {error}", file=sys.stderr)
+    try:
+        device_config_dict = device_config_cache.get(host)
+        if device_config_dict:
+            device_config = DeviceConfig.from_dict(device_config_dict)
+            device = await get_or_connect_device(host, device_config)
+            await safe_disconnect(device)
+        device_cache.pop(host, None)
+    except Exception as e:
+        print(f"Error during error handling: {e}", file=sys.stderr)
+    return {"error": str(error)}
+
+async def disconnect_all_devices(devices: Dict[str, Device]):
+    for host, device in devices.items():
+        await safe_disconnect(device)
+        print(f"Disconnected device: {host}")
