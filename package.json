@@ -50,9 +50,9 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.0",
     "@eslint/js": "^9.21.0",
-    "@types/node": "^22.13.5",
-    "@typescript-eslint/parser": "^8.25.0",
-    "@stylistic/eslint-plugin": "^4.1.0",
+    "@types/node": "^22.13.9",
+    "@typescript-eslint/parser": "^8.26.0",
+    "@stylistic/eslint-plugin": "^4.2.0",
     "eslint": "^9.21.0",
     "globals": "^16.0.0",
     "homebridge": "^2.0.0-beta.27",
@@ -60,7 +60,7 @@
     "nodemon": "^3.1.9",
     "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",
-    "typescript-eslint": "^8.25.0"
+    "typescript-eslint": "^8.26.0"
   },
   "homepage": "https://github.com/ZeliardM/homebridge-kasa-python#readme",
   "funding": [
@@ -74,9 +74,9 @@
     }
   ],
   "dependencies": {
-    "axios": "^1.8.1",
+    "axios": "^1.8.2",
     "ts-essentials": "^10.0.4",
-    "typescript": "^5.7.3"
+    "typescript": "^5.8.2"
   },
   "overrides": {
     "node-persist": "^4.0.4"
