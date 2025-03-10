@@ -140,6 +140,7 @@ async def discover_devices(
 
     async def discover_on_broadcast(broadcast: str):
         print(f"Discovering on broadcast: {broadcast}")
+        discovered = {}
         try:
             discovered = await Discover.discover(
                 target=broadcast, credentials=credentials, on_discovered=on_discovered
@@ -150,6 +151,11 @@ async def discover_devices(
             devices.update(discovered)
         except Exception as e:
             print(f"Error during broadcast discovery: {e}", file=sys.stderr)
+        finally:
+            for host in list(discovered.keys()):
+                if host in device_config_cache:
+                    del devices[host]
+            devices.update(discovered)
 
     async def discover_manual_device(host: str):
         if host in devices or host in device_config_cache:
