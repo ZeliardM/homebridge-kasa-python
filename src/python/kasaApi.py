@@ -172,7 +172,11 @@ async def discover_devices(
 
     discover_tasks = [discover_on_broadcast(bc) for bc in broadcasts]
     manual_discover_tasks = [discover_manual_device(host) for host in (manual_devices or [])]
-    await asyncio.gather(*discover_tasks, *manual_discover_tasks)
+    discovery_results = await asyncio.gather(*discover_tasks, *manual_discover_tasks, return_exceptions=True)
+
+    for discovery_result in discovery_results:
+        if isinstance(discovery_result, Exception):
+            print(f"Error during discovery tasks: {discovery_result}", file=sys.stderr)
 
     all_device_info = {}
     update_tasks = []
