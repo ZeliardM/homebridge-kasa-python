@@ -1,4 +1,4 @@
 python-kasa==0.10.2
 quart==0.20.0
-tzdata==2025.1
+tzdata==2025.2
 uvicorn==0.34.0
