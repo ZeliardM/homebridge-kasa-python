@@ -5,6 +5,10 @@ import { promises as fs } from 'node:fs';
 import KasaPythonPlatform from '../platform.js';
 import { parseConfig } from '../config.js';
 import type { ConfigDevice, FeatureInfo, KasaDevice, SysInfo } from './kasaDevices.js';
+import { EventEmitter } from 'events';
+import { EventSource } from 'eventsource';
+
+export const deviceEventEmitter = new EventEmitter();
 
 export default class DeviceManager {
   private log: Logger;
@@ -85,14 +89,14 @@ export default class DeviceManager {
     }
   }
 
-  async discoverDevices(): Promise<Record<string, KasaDevice>> {
-    this.log.info('Discovering devices...');
+  async discoverDevices(): Promise<void> {
+    this.log.info('Discovering devices using streaming...');
+
     try {
-      const config = this.username && this.password ? { auth: { username: this.username, password: this.password } } : {};
-      const response = await axios.post<Record<string, {
-        sys_info: SysInfo;
-        feature_info: FeatureInfo;
-      }>>(
+      const config = this.username && this.password
+        ? { auth: { username: this.username, password: this.password } }
+        : {};
+      const response = await axios.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
         `${this.apiUrl}/discover`,
         {
           additionalBroadcasts: this.additionalBroadcasts,
@@ -101,80 +105,82 @@ export default class DeviceManager {
         },
         config,
       );
-
-      const devices: Record<string, {
-        sys_info: SysInfo;
-        feature_info: FeatureInfo;
-      }> = response.data;
-
-      if (!devices || Object.keys(devices).length === 0) {
-        this.log.error('No devices found.');
-        return {};
-      }
+      this.log.info('Discovery initiated:', response.data);
 
       const configPath = path.join(this.platform.storagePath, 'config.json');
       const fileConfig = await this.readConfigFile(configPath);
-
-      const platformConfig = fileConfig.platforms.find((platformConfig: PlatformConfig) => platformConfig.platform === 'KasaPython');
+      const platformConfig = fileConfig.platforms.find((p: PlatformConfig) => p.platform === 'KasaPython');
       if (!platformConfig) {
         this.log.error('KasaPython configuration not found in config file.');
-        return {};
+      } else {
+        platformConfig.manualDevices = platformConfig.manualDevices || [];
       }
 
-      platformConfig.manualDevices = platformConfig.manualDevices || [];
-
-      platformConfig.manualDevices = platformConfig.manualDevices.filter((device: string | ConfigDevice) => {
-        if (typeof device === 'string') {
-          return true;
-        } else if (!device.host) {
-          this.log.warn(`Removing manual device without host: ${JSON.stringify(device)}`);
-          return false;
+      const eventSource = new EventSource(`${this.apiUrl}/stream`);
+      eventSource.onmessage = (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          this.log.debug('Received SSE event data:', data);
+          if (data.status === 'discovery_complete') {
+            this.log.info('Device discovery complete.');
+            eventSource.close();
+          } else {
+            if (!data.sys_info || !data.sys_info.host) {
+              this.log.error('Invalid device data received:', data);
+              return;
+            }
+            const device: KasaDevice = {
+              sys_info: data.sys_info,
+              feature_info: data.feature_info,
+              last_seen: new Date(),
+              offline: false,
+            };
+            this.log.info(`Received device info for ${device.sys_info.host}`);
+            this.processDevice(device, platformConfig);
+            deviceEventEmitter.emit('deviceDiscovered', device);
+          }
+        } catch (err) {
+          this.log.error('Error parsing SSE event data:', err);
         }
-        return true;
-      });
+      };
+      eventSource.onerror = (err: Event) => {
+        this.log.error('EventSource error:', err);
+        eventSource.close();
+      };
 
-      if (this.shouldConvertManualDevices(platformConfig.manualDevices)) {
-        platformConfig.manualDevices = this.convertManualDevices(platformConfig.manualDevices);
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      eventSource.close();
+
+      if (platformConfig) {
+        platformConfig.manualDevices = platformConfig.manualDevices.filter((device: string | ConfigDevice) => {
+          if (typeof device === 'string') {
+            return true;
+          } else if (!device.host) {
+            this.log.warn(`Removing manual device without host: ${JSON.stringify(device)}`);
+            return false;
+          }
+          return true;
+        });
+        if (this.shouldConvertManualDevices(platformConfig.manualDevices)) {
+          platformConfig.manualDevices = this.convertManualDevices(platformConfig.manualDevices);
+        }
+        await this.writeConfigFile(configPath, fileConfig);
+        this.platform.config = parseConfig(platformConfig);
       }
-
-      const processedDevices: { [key: string]: KasaDevice } = {};
-
-      Object.keys(devices).forEach(ip => {
-        const deviceInfo = devices[ip].sys_info;
-        const featureInfo = devices[ip].feature_info;
-
-        const device: KasaDevice = {
-          sys_info: deviceInfo,
-          feature_info: featureInfo,
-          last_seen: new Date(),
-          offline: false,
-        };
-        this.processDevice(device, platformConfig);
-        processedDevices[ip] = device;
-      });
-
-      if (!platformConfig.manualDevices.length) {
-        delete platformConfig.manualDevices;
-      }
-
-      await this.writeConfigFile(configPath, fileConfig);
-      this.platform.config = parseConfig(platformConfig);
-
-      return processedDevices;
     } catch (error) {
       this.handleAxiosError(error, 'discoverDevices');
-      return {};
     }
   }
 
   private processDevice(device: KasaDevice, platformConfig: PlatformConfig): void {
     try {
       this.updateDeviceAlias(device);
-
-      const existingDevice = platformConfig.manualDevices.find((d: ConfigDevice) => d.host === device.sys_info.host);
-      if (existingDevice) {
-        existingDevice.host = device.sys_info.host;
-        existingDevice.alias = device.sys_info.alias;
+      if (platformConfig.manualDevices) {
+        const existingDevice = platformConfig.manualDevices.find((d: ConfigDevice) => d.host === device.sys_info.host);
+        if (existingDevice) {
+          existingDevice.host = device.sys_info.host;
+          existingDevice.alias = device.sys_info.alias;
+        }
       }
     } catch (error) {
       this.log.error(`Error processing device: ${(error as Error).message}`);
@@ -216,7 +222,6 @@ export default class DeviceManager {
       default:
         throw new Error(`Unsupported feature: ${feature}`);
     }
-
     await this.performDeviceAction(host, feature, action, value, child_num);
   }
 
@@ -231,7 +236,6 @@ export default class DeviceManager {
       value,
       ...(childNumber !== undefined && { child_num: childNumber }),
     };
-
     try {
       const response = await axios.post(url, data);
       if (response.data.status !== 'success') {

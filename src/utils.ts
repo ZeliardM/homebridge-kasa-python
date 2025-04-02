@@ -5,8 +5,13 @@ import type {
   Logging,
 } from 'homebridge';
 
+import axios from 'axios';
 import { ChildProcessWithoutNullStreams, spawn, SpawnOptionsWithoutStdio } from 'node:child_process';
+import { promises as fs } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import net from 'node:net';
+import path from 'node:path';
 
 export function deferAndCombine<T, U>(
   fn: (requestCount: number) => Promise<T>,
@@ -115,10 +120,17 @@ export async function runCommand(
   });
 
   logger.debug(`Running command: ${command} ${filteredArgs.join(' ')}`);
+
+  const env = {
+    ...process.env,
+    ...(options?.env || {}),
+  };
+
   const p: ChildProcessWithoutNullStreams = spawn(command, filteredArgs, {
     ...options,
-    env: process.env,
+    env,
   });
+
   logger.debug(`Command PID: ${p.pid}`);
 
   p.stdout.setEncoding('utf8').on('data', data => {
@@ -181,4 +193,114 @@ export async function runCommand(
 
   logger.debug('Command finished.');
   return [stdout, stderr, exitCode];
+}
+
+export async function loadPackageConfig(logger: Logging): Promise<{ name: string; version: string; engines: { node: string } }> {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const packageConfigPath = path.join(__dirname, '..', 'package.json');
+  const log: Logger = prefixLogger(logger, '[Package Config]');
+  log.debug('Loading package configuration from:', packageConfigPath);
+
+  try {
+    const packageConfigData = await fs.readFile(packageConfigPath, 'utf8');
+    return JSON.parse(packageConfigData);
+  } catch (error) {
+    log.error(`Error reading package.json: ${error}`);
+    throw error;
+  }
+}
+
+export function satisfiesVersion(currentVersion: string, requiredVersion: string): boolean {
+  const versions = requiredVersion.split('||').map(v => v.trim());
+
+  return versions.some(version => {
+    const [requiredMajor, requiredMinor, requiredPatch] = version.replace('^', '').split('.').map(Number);
+    const [currentMajor, currentMinor, currentPatch] = currentVersion.replace('v', '').split('.').map(Number);
+
+    if (currentMajor > requiredMajor) {
+      return true;
+    }
+    if (currentMajor < requiredMajor) {
+      return false;
+    }
+    if (currentMinor > requiredMinor) {
+      return true;
+    }
+    if (currentMinor < requiredMinor) {
+      return false;
+    }
+    return currentPatch >= requiredPatch;
+  });
+}
+
+export async function checkForUpgrade(
+  packageConfig: { name: string; version: string; engines: { node: string } },
+  storagePath: string,
+  logger: Logging,
+): Promise<boolean> {
+  const versionDir = path.join(storagePath, 'kasa-python');
+  const versionFilePath = path.join(versionDir, 'kasa-python-version.json');
+  let storedVersion = '';
+
+  logger.debug('Checking for upgrade at path:', versionFilePath);
+
+  try {
+    await fs.access(versionFilePath);
+    const versionData = await fs.readFile(versionFilePath, 'utf8');
+    storedVersion = JSON.parse(versionData).version;
+    logger.debug('Stored version:', storedVersion);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      logger.info('Version file does not exist, treating as new install or version change.');
+    } else {
+      logger.error('Error reading version file:', error);
+    }
+  }
+
+  if (storedVersion !== packageConfig.version) {
+    try {
+      logger.debug('Updating version file to new version:', packageConfig.version);
+      await fs.mkdir(versionDir, { recursive: true });
+      await fs.writeFile(versionFilePath, JSON.stringify({ version: packageConfig.version }), 'utf8');
+      logger.info(`Version file updated to version ${packageConfig.version}`);
+    } catch (error) {
+      logger.error('Error writing version file:', error);
+    }
+    return true;
+  }
+
+  logger.debug('No upgrade needed, version is up to date.');
+  return false;
+}
+
+export async function waitForServer(url: string, log: Logging, timeout: number = 30000, interval: number = 1000): Promise<void> {
+  const startTime = Date.now();
+  log.debug(`Waiting for server at ${url} with timeout ${timeout}ms and interval ${interval}ms`);
+
+  while (Date.now() - startTime < timeout) {
+    try {
+      const response = await axios.get(url);
+      if (response.status === 200) {
+        log.debug('Server responded successfully');
+        return;
+      }
+    } catch {
+      log.debug('Server not responding yet, retrying...');
+    }
+    await new Promise(resolve => setTimeout(resolve, interval));
+  }
+
+  log.error(`Server did not respond within ${timeout / 1000} seconds`);
+  throw new Error(`Server did not respond within ${timeout / 1000} seconds`);
+}
+
+export async function getAvailablePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.listen(0, () => {
+      const port = (server.address() as net.AddressInfo).port;
+      server.close(() => resolve(port));
+    });
+    server.on('error', reject);
+  });
 }
