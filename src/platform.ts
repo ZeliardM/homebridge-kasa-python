@@ -96,8 +96,16 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       if (!this.isShuttingDown) {
         this.isShuttingDown = true;
       }
+      this.log.debug('Stopping all polling tasks');
+      for (const device of this.homekitDevicesById.values()) {
+        await device.stopPolling();
+      }
       this.log.debug('Waiting for tasks to complete');
-      await this.taskQueue.waitForEmptyQueue();
+      try {
+        await this.taskQueue.waitForEmptyQueue();
+      } catch (error) {
+        this.log.error('Error while waiting for task queue to empty during shutdown:', error);
+      }
       this.stopKasaApi();
     });
   }
@@ -106,16 +114,16 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     deviceEventEmitter.removeAllListeners('deviceDiscovered');
     this.log.debug(`Setting up device event emitter: ${name}`);
     if (name === 'periodicDiscovery' && discoveredDeviceIds) {
-      deviceEventEmitter.on('deviceDiscovered', (device: KasaDevice) => {
+      deviceEventEmitter.on('deviceDiscovered', async (device: KasaDevice) => {
         this.log.debug(`Device discovered during periodic discovery: ${device.sys_info.device_id}`);
         discoveredDeviceIds.add(device.sys_info.device_id);
         this.log.debug(`Added device ID to discoveredDeviceIds: ${device.sys_info.device_id}`);
-        this.processDevice(device);
+        await this.processDevice(device);
       });
     } else {
-      deviceEventEmitter.on('deviceDiscovered', (device: KasaDevice) => {
+      deviceEventEmitter.on('deviceDiscovered', async (device: KasaDevice) => {
         this.log.debug(`Device discovered during initial discovery: ${device.sys_info.device_id}`);
-        this.processDevice(device);
+        await this.processDevice(device);
       });
     }
   }
@@ -240,7 +248,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     await deferAndCombinedTask();
   }
 
-  private processDevice(device: KasaDevice): void {
+  private async processDevice(device: KasaDevice): Promise<void> {
     this.log.debug(`Processing device: ${device.sys_info.device_id}`);
     try {
       const now = new Date();
@@ -248,9 +256,9 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       device.offline = false;
       const platformAccessory = this.findPlatformAccessory(device.sys_info.device_id);
       if (platformAccessory) {
-        this.updateExistingDevice(platformAccessory, device, now);
+        await this.updateExistingDevice(platformAccessory, device, now);
       } else {
-        this.addNewDevice(device);
+        await this.addNewDevice(device);
       }
     } catch (error) {
       this.log.error(`Error processing device [${device.sys_info.device_id}]:`, error);
@@ -300,11 +308,11 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     return undefined;
   }
 
-  private updateExistingDevice(
+  private async updateExistingDevice(
     platformAccessory: PlatformAccessory<KasaPythonAccessoryContext>,
     device: KasaDevice,
     now: Date,
-  ): void {
+  ): Promise<void> {
     this.log.debug(`Device [${device.sys_info.device_id}] is already configured, updating status.`);
     this.updateAccessoryStatus(platformAccessory, now, false);
     const existingDevice = this.homekitDevicesById.get(device.sys_info.device_id);
@@ -324,13 +332,13 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         this.log.debug(`HomeKit device [${device.sys_info.device_id}] is currently updating. Skipping update.`);
       }
     } else {
-      this.addNewDevice(device);
+      await this.addNewDevice(device);
     }
   }
 
-  private addNewDevice(device: KasaDevice): void {
+  private async addNewDevice(device: KasaDevice): Promise<void> {
     this.log.debug(`New device [${device.sys_info.device_id}] found, adding to HomeKit.`);
-    this.foundDevice(device);
+    await this.foundDevice(device);
     const listenerCountBefore = this.periodicDeviceDiscoveryEmitter.listenerCount('periodicDeviceDiscoveryComplete');
     this.log.debug(`Emitter listener count before foundDevice: ${listenerCountBefore}`);
     this.periodicDeviceDiscoveryEmitter.setMaxListeners(this.periodicDeviceDiscoveryEmitter.getMaxListeners() + 1);
@@ -489,7 +497,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
   }
 
-  private foundDevice(device: KasaDevice): void {
+  private async foundDevice(device: KasaDevice): Promise<void> {
     const { sys_info: { alias: deviceAlias, device_id: deviceId, device_type: deviceType, host: deviceHost } } = device;
 
     if (!deviceId) {
@@ -503,7 +511,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
 
     this.log.info(`Adding HomeKit device: [${deviceAlias}] ${deviceType} [${deviceId}] at host [${deviceHost}]`);
-    const homekitDevice = this.createHomeKitDevice(device) as HomeKitDevice;
+    const homekitDevice = await this.createHomeKitDevice(device) as HomeKitDevice | undefined;
     if (homekitDevice) {
       this.homekitDevicesById.set(deviceId, homekitDevice);
       this.log.debug(`HomeKit device [${deviceAlias}] ${deviceType} [${deviceId}] successfully added`);
@@ -512,8 +520,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
   }
 
-  private createHomeKitDevice(kasaDevice: KasaDevice): HomeKitDevice | undefined {
+  private async createHomeKitDevice(kasaDevice: KasaDevice): Promise<HomeKitDevice | undefined> {
     this.log.debug('Creating HomeKit device for:', kasaDevice.sys_info);
-    return create(this, kasaDevice);
+    return await create(this, kasaDevice);
   }
 }

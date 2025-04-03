@@ -109,9 +109,13 @@ export default abstract class HomeKitDevice {
 
   abstract identify(): void;
 
+  abstract initialize(): Promise<void>;
+
   abstract updateAfterPeriodicDiscovery(): void;
 
-  abstract startPolling(): void;
+  abstract startPolling(): Promise<void>;
+
+  abstract stopPolling(): Promise<void>;
 
   addService(serviceConstructor: WithUUID<typeof this.platform.Service>, name: string, subType?: string): Service {
     const serviceName = this.platform.getServiceName(serviceConstructor);

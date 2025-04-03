@@ -24,39 +24,44 @@ function isSwitch(device: KasaDevice): device is Switch {
   return Switches.includes(device.sys_info.model);
 }
 
-export default function create(
+export default async function create(
   platform: KasaPythonPlatform,
   kasaDevice: KasaDevice,
-): HomeKitDevice | undefined {
+): Promise<HomeKitDevice | undefined> {
+  let homeKitDevice: HomeKitDevice | undefined;
 
   if (isLightBulb(kasaDevice)) {
     const lightBulb = kasaDevice as LightBulb;
     platform.log.debug('HomeKit device is a LightBulb:', lightBulb.sys_info.model);
-    return new HomeKitDeviceLightBulb(platform, lightBulb);
-  }
-
-  if (isPlug(kasaDevice)) {
+    homeKitDevice = new HomeKitDeviceLightBulb(platform, lightBulb);
+  } else if (isPlug(kasaDevice)) {
     const plug = kasaDevice as Plug;
     platform.log.debug('HomeKit device is a Plug:', plug.sys_info.model);
-    return new HomeKitDevicePlug(platform, plug);
-  }
-
-  if (isPowerStrip(kasaDevice)) {
+    homeKitDevice = new HomeKitDevicePlug(platform, plug);
+  } else if (isPowerStrip(kasaDevice)) {
     const powerStrip = kasaDevice as PowerStrip;
     platform.log.debug('HomeKit device is a PowerStrip:', powerStrip.sys_info.model);
-    return new HomeKitDevicePowerStrip(platform, powerStrip);
-  }
-
-  if (isSwitch(kasaDevice)) {
+    homeKitDevice = new HomeKitDevicePowerStrip(platform, powerStrip);
+  } else if (isSwitch(kasaDevice)) {
     const switchDevice = kasaDevice as Switch;
     platform.log.debug('HomeKit device is a Switch:', switchDevice.sys_info.model);
     if (switchDevice.sys_info.child_num > 0) {
-      return new HomeKitDeviceSwitchWithChildren(platform, switchDevice);
+      homeKitDevice = new HomeKitDeviceSwitchWithChildren(platform, switchDevice);
     } else {
-      return new HomeKitDeviceSwitch(platform, switchDevice);
+      homeKitDevice = new HomeKitDeviceSwitch(platform, switchDevice);
+    }
+  } else {
+    platform.log.error('Unknown device type:', kasaDevice);
+    return undefined;
+  }
+  if (homeKitDevice) {
+    try {
+      await homeKitDevice.initialize();
+    } catch (error) {
+      platform.log.error(`Error initializing device [${kasaDevice.sys_info.device_id}]:`, error);
+      return undefined;
     }
   }
 
-  platform.log.error('Unknown device type:', kasaDevice);
-  return undefined;
+  return homeKitDevice;
 }
