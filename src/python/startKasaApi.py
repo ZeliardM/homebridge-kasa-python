@@ -1,8 +1,13 @@
-import os, sys, uvicorn
+import os
+import sys
+import uvicorn
+
+def log(message: str, level: str = "INFO"):
+    print(f"[Kasa API] {level}: {message}", file=sys.stdout if level != "ERROR" else sys.stderr)
 
 def start_api(port: int, hideHomeKitMatter: bool):
     try:
-        print("Starting Kasa Api...")
+        log("Starting Kasa API...")
 
         os.environ["HIDE_HOMEKIT_MATTER"] = "true" if hideHomeKitMatter else "false"
 
@@ -16,10 +21,14 @@ def start_api(port: int, hideHomeKitMatter: bool):
             limit_concurrency=1000,
         )
     except Exception as e:
-        print(f"Failed to start Kasa Api: {e}", file=sys.stderr)
+        log(f"Failed to start Kasa API: {e}", level="ERROR")
         sys.exit(1)
 
 if __name__ == '__main__':
-    port = int(sys.argv[1])
-    hideHomeKitMatter = sys.argv[2].lower() == "true"
-    start_api(port, hideHomeKitMatter)
+    try:
+        port = int(sys.argv[1])
+        hideHomeKitMatter = sys.argv[2].lower() == "true"
+        start_api(port, hideHomeKitMatter)
+    except IndexError:
+        log("Missing arguments: python startKasaApi.py <port> <hideHomeKitMatter>", level="ERROR")
+        sys.exit(1)

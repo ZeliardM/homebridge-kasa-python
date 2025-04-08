@@ -35,12 +35,31 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     this.hasHSV = !!this.kasaDevice.feature_info.hsv;
     this.checkService();
     this.getSysInfo = deferAndCombine(async () => {
-      if (this.deviceManager) {
-        this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
-        this.kasaDevice.sys_info = await this.deviceManager.getSysInfo(this.kasaDevice.sys_info.host) as SysInfo;
-        this.log.debug(`Updated sys_info for device: ${this.kasaDevice.sys_info.alias}`);
-      } else {
-        this.log.warn('Device manager is not available');
+      if (!this.deviceManager) {
+        this.log.warn(`[${this.kasaDevice.sys_info?.alias ?? 'Unknown Device'}] Device manager is not available`);
+        return;
+      }
+      const host = this.kasaDevice.sys_info?.host;
+      if (!host) {
+        this.log.warn(`[${this.kasaDevice.sys_info?.alias ?? 'Unknown Device'}] No host found in sys_info for device`);
+        return;
+      }
+      try {
+        this.previousKasaDevice = { ...this.kasaDevice };
+        const updatedSysInfo = await this.deviceManager.getSysInfo(host) as SysInfo;
+        if (!updatedSysInfo) {
+          this.log.warn(`[${this.kasaDevice.sys_info?.alias ?? host}] getSysInfo returned undefined`);
+          return;
+        }
+        this.kasaDevice.sys_info = updatedSysInfo;
+        this.log.debug(`Updated sys_info for device: ${updatedSysInfo.alias ?? host}`);
+      } catch (err: unknown) {
+        const errorMsg = `[${this.kasaDevice.sys_info?.alias ?? 'Unknown Device'}] Error updating sys_info:`;
+        if (err instanceof Error) {
+          this.log.error(`${errorMsg} ${err.message}`);
+        } else {
+          this.log.error(`${errorMsg} ${String(err)}`);
+        }
       }
     }, platform.config.advancedOptions.waitTimeUpdate);
     platform.periodicDeviceDiscoveryEmitter.on('periodicDeviceDiscoveryComplete', () => {

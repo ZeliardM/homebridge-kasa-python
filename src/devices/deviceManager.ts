@@ -76,7 +76,7 @@ export default class DeviceManager {
       const configData = await fs.readFile(configPath, 'utf8');
       return JSON.parse(configData);
     } catch (error) {
-      this.log.error(`Error reading config file: ${error}`);
+      this.log.error(`Error reading config file: ${String(error)}`);
       throw error;
     }
   }
@@ -85,7 +85,7 @@ export default class DeviceManager {
     try {
       await fs.writeFile(configPath, JSON.stringify(fileConfig, null, 2), 'utf8');
     } catch (error) {
-      this.log.error(`Error writing config file: ${error}`);
+      this.log.error(`Error writing config file: ${String(error)}`);
     }
   }
 
@@ -183,7 +183,7 @@ export default class DeviceManager {
         }
       }
     } catch (error) {
-      this.log.error(`Error processing device: ${(error as Error).message}`);
+      this.log.error(`Error processing device: ${String(error)}`);
     }
   }
 
@@ -201,6 +201,7 @@ export default class DeviceManager {
       return sysInfo;
     } catch (error) {
       this.handleAxiosError(error, 'getSysInfo');
+      throw error;
     }
   }
 
@@ -251,12 +252,12 @@ export default class DeviceManager {
       const statusCode = error.response.status;
       const errorMessage = error.response.data.error;
       if (statusCode === 500) {
-        this.log.error(`Exception during ${context} post request: ${errorMessage}`);
+        this.log.error(`Error during ${context} request: ${errorMessage}`);
       } else {
-        this.log.error(`Unexpected error during ${context} post request: ${errorMessage}`);
+        this.log.error(`Unexpected error during ${context} request: ${errorMessage}`);
       }
     } else {
-      this.log.error(`Error during ${context} post request:`, error);
+      this.log.error(`Error during ${context} request: ${String(error)}`);
     }
   }
 }
