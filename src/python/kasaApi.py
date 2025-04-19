@@ -330,6 +330,8 @@ async def handle_hsv(target: Device, action: str, feature: str, value: Dict[str,
     log(f"Handling HSV: action={action}, feature={feature}, value={value}", alias=target.alias)
     light = target.modules.get(Module.Light)
     hsv = list(light.hsv)
+    if not isinstance(value, dict):
+        value = {feature: value}
     if feature == "hue":
         hsv[0] = value["hue"]
     elif feature == "saturation":
