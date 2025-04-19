@@ -197,6 +197,10 @@ export default class DeviceManager {
     try {
       const response = await axios.post(`${this.apiUrl}/getSysInfo`, { host });
       const sysInfo: SysInfo = response.data.sys_info;
+      if (!sysInfo) {
+        this.log.error(`No sys_info returned for host: ${host}`);
+        return undefined;
+      }
       this.updateDeviceAlias(sysInfo);
       return sysInfo;
     } catch (error) {
@@ -248,16 +252,29 @@ export default class DeviceManager {
   }
 
   private handleAxiosError(error: unknown, context: string): void {
-    if (axios.isAxiosError(error) && error.response) {
-      const statusCode = error.response.status;
-      const errorMessage = error.response.data.error;
-      if (statusCode === 500) {
-        this.log.error(`Error during ${context} request: ${errorMessage}`);
+    if (axios.isAxiosError(error)) {
+      if (error.response) {
+        const statusCode = error.response.status;
+        const errorMessage = error.response.data?.error || error.response.statusText || 'Unknown error';
+        if (statusCode === 500) {
+          this.log.error(`Error during ${context}: ${errorMessage}`);
+        } else {
+          this.log.error(`Error during ${context}: ${statusCode} - ${errorMessage}`);
+        }
+      } else if (error.code === 'ECONNREFUSED') {
+        this.log.error(`Connection refused during ${context} - device may be offline`);
+      } else if (error.code === 'ETIMEDOUT') {
+        this.log.error(`Connection timed out during ${context} - network may be down`);
       } else {
-        this.log.error(`Unexpected error during ${context} request: ${errorMessage}`);
+        this.log.error(`Axios error during ${context}: ${error.message}`);
+      }
+    } else if (error instanceof Error) {
+      this.log.error(`Error during ${context}: ${error.message}`);
+      if (error.stack) {
+        this.log.debug(error.stack);
       }
     } else {
-      this.log.error(`Error during ${context} request: ${String(error)}`);
+      this.log.error(`Unknown error during ${context}: ${JSON.stringify(error)}`);
     }
   }
 }

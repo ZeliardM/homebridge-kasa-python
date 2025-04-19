@@ -32,25 +32,25 @@ export default class HomeKitDeviceSwitchWithChildren extends HomeKitDevice {
     });
     this.getSysInfo = deferAndCombine(async () => {
       if (!this.deviceManager) {
-        this.log.warn(`[${this.kasaDevice.sys_info?.alias ?? 'Unknown Device'}] Device manager is not available`);
+        this.log.warn('Device manager is not available');
         return;
       }
       const host = this.kasaDevice.sys_info?.host;
       if (!host) {
-        this.log.warn(`[${this.kasaDevice.sys_info?.alias ?? 'Unknown Device'}] No host found in sys_info for device`);
+        this.log.warn('No host found in sys_info for device');
         return;
       }
       try {
         this.previousKasaDevice = { ...this.kasaDevice };
         const updatedSysInfo = await this.deviceManager.getSysInfo(host) as SysInfo;
         if (!updatedSysInfo) {
-          this.log.warn(`[${this.kasaDevice.sys_info?.alias ?? host}] getSysInfo returned undefined`);
+          this.log.warn('getSysInfo returned undefined');
           return;
         }
         this.kasaDevice.sys_info = updatedSysInfo;
         this.log.debug(`Updated sys_info for device: ${updatedSysInfo.alias ?? host}`);
       } catch (err: unknown) {
-        const errorMsg = `[${this.kasaDevice.sys_info?.alias ?? 'Unknown Device'}] Error updating sys_info:`;
+        const errorMsg = 'Error updating sys_info:';
         if (err instanceof Error) {
           this.log.error(`${errorMsg} ${err.message}`);
         } else {
