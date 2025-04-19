@@ -341,7 +341,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     await this.foundDevice(device);
     const listenerCountBefore = this.periodicDeviceDiscoveryEmitter.listenerCount('periodicDeviceDiscoveryComplete');
     this.log.debug(`Emitter listener count before foundDevice: ${listenerCountBefore}`);
-    this.periodicDeviceDiscoveryEmitter.setMaxListeners(this.periodicDeviceDiscoveryEmitter.getMaxListeners() + 1);
+    this.periodicDeviceDiscoveryEmitter.setMaxListeners(this.periodicDeviceDiscoveryEmitter.getMaxListeners() + 10);
     const listenerCountAfter = this.periodicDeviceDiscoveryEmitter.listenerCount('periodicDeviceDiscoveryComplete');
     this.log.debug(`Emitter listener count after foundDevice: ${listenerCountAfter}`);
   }
