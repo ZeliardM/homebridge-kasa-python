@@ -4,11 +4,13 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import KasaPythonPlatform from '../platform.js';
 import { parseConfig } from '../config.js';
-import type { ConfigDevice, FeatureInfo, KasaDevice, SysInfo } from './kasaDevices.js';
+import type { ConfigDevice, FeatureInfo, HSV, KasaDevice, SysInfo } from './kasaDevices.js';
 import { EventEmitter } from 'events';
 import { EventSource } from 'eventsource';
 
 export const deviceEventEmitter = new EventEmitter();
+
+type ControlDeviceValue = CharacteristicValue | HSV;
 
 export default class DeviceManager {
   private log: Logger;
@@ -209,7 +211,7 @@ export default class DeviceManager {
     }
   }
 
-  async controlDevice(host: string, feature: string, value: CharacteristicValue, child_num?: number): Promise<void> {
+  async controlDevice(host: string, feature: string, value: ControlDeviceValue, child_num?: number): Promise<void> {
     let action: string;
     switch (feature) {
       case 'brightness':
@@ -217,8 +219,7 @@ export default class DeviceManager {
       case 'fan_speed_level':
         action = `set_${feature}`;
         break;
-      case 'hue':
-      case 'saturation':
+      case 'hsv':
         action = 'set_hsv';
         break;
       case 'state':
@@ -231,7 +232,7 @@ export default class DeviceManager {
   }
 
   private async performDeviceAction(
-    host: string, feature: string, action: string, value: CharacteristicValue, childNumber?: number,
+    host: string, feature: string, action: string, value: ControlDeviceValue, childNumber?: number,
   ): Promise<void> {
     const url = `${this.apiUrl}/controlDevice`;
     const data = {

@@ -37,6 +37,12 @@ UNSUPPORTED_TYPES = {
     DeviceType.Unknown.value,
 }
 
+def kelvin_to_mired(kelvin: int) -> int:
+    return round(1_000_000 / kelvin)
+
+def mired_to_kelvin(mired: int) -> int:
+    return round(1_000_000 / mired)
+
 def log(message: str, level: str = "INFO", host: Optional[str] = None, alias: Optional[str] = None):
     context = []
     if host:
@@ -68,7 +74,7 @@ def get_light_info(device: Device) -> Dict[str, Any]:
     if light_module.has_feature("brightness"):
         light_info["brightness"] = light_module.brightness
     if light_module.has_feature("color_temp"):
-        light_info["color_temp"] = light_module.color_temp
+        light_info["color_temp"] = kelvin_to_mired(light_module.color_temp)
     if light_module.has_feature("hsv"):
         hue, saturation, _ = light_module.hsv
         light_info["hsv"] = {"hue": hue, "saturation": saturation}
@@ -280,23 +286,27 @@ async def perform_device_action(
     value: Any,
     child_num: Optional[int] = None,
 ) -> Dict[str, Any]:
-    target = device.children[child_num] if child_num is not None else device
-    log(f"Performing action={action} on feature={feature}", alias=target.alias)
-    light = target.modules.get(Module.Light)
-    fan = target.modules.get(Module.Fan)
-    if feature == "state":
-        await getattr(target, action)()
-    elif feature == "brightness" and light.has_feature("brightness"):
-        await handle_brightness(target, action, value)
-    elif feature == "color_temp" and light.has_feature("color_temp"):
-        await handle_color_temp(target, action, value)
-    elif feature == "fan_speed_level" and fan:
-        await handle_fan_speed_level(target, action, value)
-    elif feature in ["hue", "saturation"] and light.has_feature("hsv"):
-        await handle_hsv(target, action, feature, value)
-    else:
-        raise ValueError("Invalid feature or action")
-    return {"status": "success"}
+    try:
+        target = device.children[child_num] if child_num is not None else device
+        log(f"Performing action={action} on feature={feature}", alias=target.alias)
+        light = target.modules.get(Module.Light)
+        fan = target.modules.get(Module.Fan)
+        if feature == "state":
+            await getattr(target, action)()
+        elif feature == "brightness" and light.has_feature("brightness"):
+            await handle_brightness(target, action, value)
+        elif feature == "color_temp" and light.has_feature("color_temp"):
+            await handle_color_temp(target, action, value)
+        elif feature == "fan_speed_level" and fan:
+            await handle_fan_speed_level(target, action, value)
+        elif feature == 'hsv' and light.has_feature("hsv"):
+            await handle_hsv(target, action, feature, value)
+        else:
+            raise ValueError("Invalid feature or action")
+        return {"status": "success"}
+    except Exception as e:
+        log(f"Error performing action: {e}", level="ERROR", alias=device.alias)
+        return {"status": "error", "message": str(e)}
 
 async def handle_brightness(target: Device, action: str, value: int):
     log(f"Handling brightness: action={action}, value={value}", alias=target.alias)
@@ -313,6 +323,7 @@ async def handle_color_temp(target: Device, action: str, value: int):
     light = target.modules.get(Module.Light)
     color_temp = target.modules.get(Module.ColorTemperature)
     min_temp, max_temp = color_temp.valid_temperature_range
+    value = mired_to_kelvin(value)
     value = max(min(value, max_temp), min_temp)
     await getattr(light, action)(value)
 
@@ -326,17 +337,17 @@ async def handle_fan_speed_level(target: Device, action: str, value: int):
     else:
         await target.turn_on()
 
-async def handle_hsv(target: Device, action: str, feature: str, value: Dict[str, int]):
+async def handle_hsv(target: Device, action: str, feature: str, value: dict):
     log(f"Handling HSV: action={action}, feature={feature}, value={value}", alias=target.alias)
     light = target.modules.get(Module.Light)
     hsv = list(light.hsv)
-    if not isinstance(value, dict):
-        value = {feature: value}
-    if feature == "hue":
-        hsv[0] = value["hue"]
-    elif feature == "saturation":
-        hsv[1] = value["saturation"]
-    await getattr(light, action)(tuple(hsv))
+    h = int(value.get("hue", hsv[0]))
+    s = int(value.get("saturation", hsv[1]))
+    v = hsv[2]
+    hsv[0] = max(0, min(h, 360))
+    hsv[1] = max(0, min(s, 100))
+    hsv[2] = max(0, min(v, 100))
+    await getattr(light, action)(*hsv)
 
 @app.route('/discover', methods=['POST'])
 async def discover_route():

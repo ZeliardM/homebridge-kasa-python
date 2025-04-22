@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events';
 import HomeKitDevice from './index.js';
 import { deferAndCombine } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { KasaDevice, LightBulb, SysInfo } from './kasaDevices.js';
+import type { HSV, KasaDevice, LightBulb, SysInfo } from './kasaDevices.js';
 
 export default class HomeKitDeviceLightBulb extends HomeKitDevice {
   public isUpdating: boolean = false;
@@ -14,6 +14,8 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
   private hasBrightness: boolean;
   private hasColorTemp: boolean;
   private hasHSV: boolean;
+  private hsvUpdateTimeout: NodeJS.Timeout = setTimeout(() => {}, 0);
+  private pendingHSVUpdate: HSV = {hue: 0, saturation: 0};
   private previousKasaDevice: KasaDevice | undefined;
   private pollingInterval: NodeJS.Timeout | undefined;
   private updateEmitter: EventEmitter = new EventEmitter();
@@ -230,16 +232,41 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
         if (this.deviceManager) {
           try {
             this.isUpdating = true;
-            this.log.debug(`Setting value for characteristic ${characteristicName} to ${value}`);
             const characteristicKey = this.getCharacteristicKey(characteristicName);
             if (!characteristicKey) {
               throw new Error(`Characteristic key not found for ${characteristicName}`);
             }
-            await this.deviceManager.controlDevice(this.kasaDevice.sys_info.host, characteristicKey, value);
-            (this.kasaDevice.sys_info as Record<string, CharacteristicValue>)[characteristicKey] = value;
-            this.updateValue(service, service.getCharacteristic(characteristicType), this.name, value);
-            this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
-            this.log.debug(`Set value for characteristic ${characteristicName} to ${value} successfully`);
+            if (characteristicKey === 'hue' || characteristicKey === 'saturation') {
+              this.pendingHSVUpdate[characteristicKey] = value as number;
+              if (this.hsvUpdateTimeout) {
+                clearTimeout(this.hsvUpdateTimeout);
+              }
+              this.hsvUpdateTimeout = setTimeout(async () => {
+                const hue = this.pendingHSVUpdate.hue ?? this.kasaDevice.sys_info.hsv?.hue ?? 0;
+                const saturation = this.pendingHSVUpdate.saturation ?? this.kasaDevice.sys_info.hsv?.saturation ?? 0;
+                this.log.debug(`Setting value for characteristic Hue to ${hue} and Saturation to ${saturation}`);
+                if (this.deviceManager) {
+                  await this.deviceManager.controlDevice(
+                    this.kasaDevice.sys_info.host,
+                    'hsv',
+                    { hue, saturation },
+                  );
+                }
+                this.kasaDevice.sys_info.hsv = { hue, saturation };
+                this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.Hue), this.name, hue);
+                this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.Saturation), this.name, saturation);
+                this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
+                this.log.debug(`Set value for characteristic Hue to ${hue} and Saturation to ${saturation} successfully`);
+                this.pendingHSVUpdate = {hue: 0, saturation: 0};
+              }, 50);
+            } else {
+              this.log.debug(`Setting value for characteristic ${characteristicName} to ${value}`);
+              await this.deviceManager.controlDevice(this.kasaDevice.sys_info.host, characteristicKey, value);
+              (this.kasaDevice.sys_info as Record<string, CharacteristicValue>)[characteristicKey] = value;
+              this.updateValue(service, service.getCharacteristic(characteristicType), this.name, value);
+              this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
+              this.log.debug(`Set value for characteristic ${characteristicName} to ${value} successfully`);
+            }
           } catch (error) {
             this.log.error(`Error setting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
             this.kasaDevice.offline = true;
