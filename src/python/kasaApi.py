@@ -37,11 +37,18 @@ UNSUPPORTED_TYPES = {
     DeviceType.Unknown.value,
 }
 
+HOMEKIT_MIRED_RANGE = (140, 500)
+TPLINK_KELVIN_RANGE = (2500, 6500)
+
 def kelvin_to_mired(kelvin: int) -> int:
-    return round(1_000_000 / kelvin)
+    if not kelvin or kelvin <= 0:
+        return HOMEKIT_MIRED_RANGE[0]
+    return max(HOMEKIT_MIRED_RANGE[0], min(round(1_000_000 / kelvin), HOMEKIT_MIRED_RANGE[1]))
 
 def mired_to_kelvin(mired: int) -> int:
-    return round(1_000_000 / mired)
+    if not mired or mired <= 0:
+        return TPLINK_KELVIN_RANGE[0]
+    return max(TPLINK_KELVIN_RANGE[0], min(round(1_000_000 / mired), TPLINK_KELVIN_RANGE[1]))
 
 def log(message: str, level: str = "INFO", host: Optional[str] = None, alias: Optional[str] = None):
     context = []
@@ -74,7 +81,12 @@ def get_light_info(device: Device) -> Dict[str, Any]:
     if light_module.has_feature("brightness"):
         light_info["brightness"] = light_module.brightness
     if light_module.has_feature("color_temp"):
-        light_info["color_temp"] = kelvin_to_mired(light_module.color_temp)
+        kelvin = light_module.color_temp
+        if kelvin and kelvin > 0:
+            mired = kelvin_to_mired(kelvin)
+        else:
+            mired = HOMEKIT_MIRED_RANGE[0]
+        light_info["color_temp"] = mired
     if light_module.has_feature("hsv"):
         hue, saturation, _ = light_module.hsv
         light_info["hsv"] = {"hue": hue, "saturation": saturation}
@@ -322,10 +334,14 @@ async def handle_color_temp(target: Device, action: str, value: int):
     log(f"Handling color temperature: action={action}, value={value}", alias=target.alias)
     light = target.modules.get(Module.Light)
     color_temp = target.modules.get(Module.ColorTemperature)
-    min_temp, max_temp = color_temp.valid_temperature_range
-    value = mired_to_kelvin(value)
-    value = max(min(value, max_temp), min_temp)
-    await getattr(light, action)(value)
+    mired = max(HOMEKIT_MIRED_RANGE[0], min(value, HOMEKIT_MIRED_RANGE[1]))
+    kelvin = mired_to_kelvin(mired)
+    if color_temp and hasattr(color_temp, "valid_temperature_range"):
+        min_temp, max_temp = color_temp.valid_temperature_range
+    else:
+        min_temp, max_temp = TPLINK_KELVIN_RANGE
+    kelvin = max(min_temp, min(kelvin, max_temp))
+    await getattr(light, action)(kelvin)
 
 async def handle_fan_speed_level(target: Device, action: str, value: int):
     log(f"Handling fan speed level: action={action}, value={value}", alias=target.alias)
