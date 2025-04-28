@@ -325,10 +325,11 @@ async def handle_brightness(target: Device, action: str, value: int):
     light = target.modules.get(Module.Light)
     if value == 0:
         await target.turn_off()
-    elif 0 < value <= 100:
-        await getattr(light, action)(value)
     else:
-        await target.turn_on()
+        value = max(1, min(value, 100))
+        await getattr(light, action)(value)
+        if target.is_off:
+            await target.turn_on()
 
 async def handle_color_temp(target: Device, action: str, value: int):
     log(f"Handling color temperature: action={action}, value={value}", alias=target.alias)
@@ -348,10 +349,11 @@ async def handle_fan_speed_level(target: Device, action: str, value: int):
     fan = target.modules.get(Module.Fan)
     if value == 0:
         await target.turn_off()
-    elif 0 < value <= 100:
-        await getattr(fan, action)(value)
     else:
-        await target.turn_on()
+        value = max(1, min(value, 100))
+        await getattr(fan, action)(value)
+        if target.is_off:
+            await target.turn_on()
 
 async def handle_hsv(target: Device, action: str, feature: str, value: dict):
     log(f"Handling HSV: action={action}, feature={feature}, value={value}", alias=target.alias)
