@@ -189,17 +189,36 @@ class PythonChecker {
   }
 
   private async getUserPath(): Promise<string> {
-    this.log.debug('Attempting to retrieve user PATH from .zprofile or .bash_profile');
-    let shell: string | null = null;
-    let shellArgs: string[] = [];
+    this.log.debug('Attempting to retrieve user PATH');
+    let shell: string, shellArgs: string[];
     if (fs.existsSync('/bin/zsh')) {
       shell = '/bin/zsh';
-      shellArgs = ['--no-rcs', '-c', 'source ~/.zprofile ~/.bash_profile 2>/dev/null && echo $PATH'];
+      shellArgs = [
+        '--no-rcs',
+        '-c',
+        [
+          'eval "$(brew shellenv)" 2>/dev/null',
+          'source ~/.zprofile 2>/dev/null',
+          'source ~/.bash_profile 2>/dev/null',
+          'source ~/.profile 2>/dev/null',
+          'echo $PATH',
+        ].join(' && '),
+      ];
     } else if (fs.existsSync('/bin/bash')) {
       shell = '/bin/bash';
-      shellArgs = ['--noprofile', '--norc', '-c', 'source ~/.bash_profile 2>/dev/null && echo $PATH'];
+      shellArgs = [
+        '--noprofile',
+        '--norc',
+        '-c',
+        [
+          'eval "$(brew shellenv)" 2>/dev/null',
+          'source ~/.bash_profile 2>/dev/null',
+          'source ~/.profile 2>/dev/null',
+          'echo $PATH',
+        ].join(' && '),
+      ];
     } else {
-      this.log.debug('Neither /bin/zsh nor /bin/bash found, falling back to process.env.PATH');
+      this.log.debug('No user PATH found - falling back to process.env.PATH');
       return process.env.PATH || '';
     }
     try {
@@ -220,7 +239,7 @@ class PythonChecker {
         return process.env.PATH || '';
       }
     } catch (error) {
-      this.log.error('Failed to retrieve user PATH from .zprofile or .bash_profile:', error);
+      this.log.error('Failed to retrieve user PATH:', error);
       return process.env.PATH || '';
     }
   }
