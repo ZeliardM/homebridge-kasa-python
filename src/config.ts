@@ -45,6 +45,7 @@ export interface KasaPythonConfigInput {
   manualDevices?: (string | ConfigDevice)[];
   excludeMacAddresses?: string[];
   waitTimeUpdate?: number;
+  pythonPath?: string;
   advancedPythonLogging?: boolean;
 }
 
@@ -66,6 +67,7 @@ export type KasaPythonConfig = {
   };
   advancedOptions: {
     waitTimeUpdate: number;
+    pythonPath?: string;
     advancedPythonLogging: boolean;
   };
 };
@@ -88,6 +90,7 @@ export const defaultConfig: KasaPythonConfig = {
   },
   advancedOptions: {
     waitTimeUpdate: 100,
+    pythonPath: '',
     advancedPythonLogging: false,
   },
 };
@@ -134,6 +137,7 @@ function validateConfig(config: Record<string, unknown>): string[] {
   }
 
   validateType(config, 'waitTimeUpdate', 'number', errors);
+  validateType(config, 'pythonPath', 'string', errors);
   validateType(config, 'advancedPythonLogging', 'boolean', errors);
 
   return errors;
@@ -180,6 +184,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     },
     advancedOptions: {
       waitTimeUpdate: c.waitTimeUpdate ?? defaultConfig.advancedOptions.waitTimeUpdate,
+      pythonPath: c.pythonPath ?? defaultConfig.advancedOptions.pythonPath,
       advancedPythonLogging: c.advancedPythonLogging ?? defaultConfig.advancedOptions.advancedPythonLogging,
     },
   };

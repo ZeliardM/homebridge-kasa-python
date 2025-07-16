@@ -28,8 +28,21 @@ class PythonChecker {
   public constructor(platform: KasaPythonPlatform) {
     this.platform = platform;
     this.log = prefixLogger(this.platform.log, '[Python Check]');
-    this.advancedPythonLogging = this.platform.config.advancedOptions.advancedPythonLogging ?? false;
-    this.pythonExecutables = ['python', 'python3', 'python3.11', 'python3.12', 'python3.13'];
+    this.advancedPythonLogging = this.platform.config.advancedOptions?.advancedPythonLogging ?? false;
+
+    this.pythonExecutables = [
+      'python',
+      'python3',
+      'python3.11',
+      'python3.12',
+      'python3.13',
+      '/usr/bin/python3',
+      '/opt/homebrew/bin/python3',
+      '/usr/local/bin/python3',
+      `${process.env.HOME}/miniforge3/bin/python3`,
+      `${process.env.HOME}/miniconda3/bin/python3`,
+    ];
+
     this.pluginDirPath = path.join(this.platform.storagePath, 'kasa-python');
     this.venvPath = path.join(this.pluginDirPath, '.venv');
     this.venvConfigPath = path.join(this.venvPath, 'pyvenv.cfg');
@@ -59,40 +72,64 @@ class PythonChecker {
   }
 
   private async ensurePythonVersion(): Promise<void> {
-    this.log.debug('Ensuring system Python version is supported');
-    const versions: string[] = await this.getSystemPythonVersions();
-
-    const versionMap: { [key: string]: string } = {
-      '3.13': 'python3.13',
-      '3.12': 'python3.12',
-      '3.11': 'python3.11',
-    };
-
-    versions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
-
-    let supported = false;
-    for (const version of versions) {
-      const majorMinorVersion = version.split('.').slice(0, 2).join('.');
-      if (SUPPORTED_PYTHON_VERSIONS.includes(majorMinorVersion)) {
-        supported = true;
-        if (versionMap[majorMinorVersion]) {
-          this.pythonExecutable = versionMap[majorMinorVersion];
-          this.venvPythonExecutable = path.join(this.venvPath, 'bin', versionMap[majorMinorVersion]);
-          this.venvPipExecutable = path.join(this.venvPath, 'bin', `pip${majorMinorVersion}`);
-          this.log.debug(`Using Python executable: ${this.pythonExecutable}`);
-        }
-        break;
+    this.log.debug('Checking for supported Python version');
+    const userPythonPath = this.platform.config.advancedOptions.pythonPath ?? '';
+    if (userPythonPath) {
+      this.log.debug(`User configured pythonPath: ${userPythonPath}`);
+      if (await this.isPythonSupported(userPythonPath)) {
+        this.setPythonExecutables(userPythonPath);
+        return;
+      } else {
+        this.log.error(`Configured pythonPath (${userPythonPath}) is not supported`);
       }
     }
-
-    if (!supported) {
-      this.log.error(`Python ${versions.join(', ')} is installed. However, only Python ` +
-        `${SUPPORTED_PYTHON_VERSIONS.join(', ')} is supported.`);
-      this.log.error('Ensure the correct Python version is installed and available in your PATH.');
-      await delay(300000);
-    } else {
-      this.log.debug('System Python version is supported');
+    for (const executable of this.pythonExecutables) {
+      if (await this.isPythonSupported(executable)) {
+        this.setPythonExecutables(executable);
+        return;
+      }
     }
+    const fallback = '/usr/bin/python3';
+    this.log.warn(`Falling back to system Python: ${fallback}`);
+    if (await this.isPythonSupported(fallback)) {
+      this.setPythonExecutables(fallback);
+    } else {
+      this.log.error(`System Python (${fallback}) is unsupported`);
+      throw new Error('No supported Python version found. Install Python 3.11+ and restart Homebridge.');
+    }
+  }
+
+  private setPythonExecutables(pythonPath: string): void {
+    const majorMinor = this.getPythonMajorMinor(pythonPath);
+    const pipName = `pip${majorMinor}`;
+    const pyName = `python${majorMinor}`;
+
+    this.pythonExecutable = pythonPath;
+    this.venvPythonExecutable = path.join(this.venvPath, 'bin', pyName);
+    this.venvPipExecutable = path.join(this.venvPath, 'bin', pipName);
+
+    this.log.debug(`Selected Python executable: ${this.pythonExecutable}`);
+  }
+
+  private async isPythonSupported(executable: string): Promise<boolean> {
+    try {
+      const [stdout] = await runCommand(this.log, executable, ['--version']);
+      const version = stdout.trim().replace('Python ', '');
+      const majorMinor = version.split('.').slice(0, 2).join('.');
+      this.log.debug(`Detected Python version ${version} at ${executable}`);
+      return SUPPORTED_PYTHON_VERSIONS.includes(majorMinor);
+    } catch (err) {
+      this.log.debug(`Failed to check Python version for ${executable}: ${err}`);
+      return false;
+    }
+  }
+
+  private getPythonMajorMinor(pythonPath: string): string {
+    const match = pythonPath.match(/python(?:3)?\.(\d+)\.(\d+)/);
+    if (match) {
+      return `${match[1]}.${match[2]}`;
+    }
+    return '3';
   }
 
   private async ensureVenvCreated(isUpgrade: boolean): Promise<void> {
@@ -119,11 +156,11 @@ class PythonChecker {
       this.pythonExecutable,
       ['-m', 'venv', this.venvPath, '--clear', '--upgrade-deps'],
       { env: { ...process.env, PATH: this.userPath } },
-      this.advancedPythonLogging ? false : true,
-      this.advancedPythonLogging ? false : true,
+      !this.advancedPythonLogging,
+      !this.advancedPythonLogging,
     );
     if (stdout.includes('not created successfully') || !this.isVenvCreated()) {
-      this.log.error('virtualenv python module is not installed.');
+      this.log.error('Failed to create virtual environment.');
       await delay(300000);
     } else {
       this.log.debug('Virtual environment created successfully');
@@ -132,12 +169,10 @@ class PythonChecker {
 
   private async ensureVenvUsesCorrectPythonHome(): Promise<void> {
     this.log.debug('Ensuring virtual environment uses correct Python home');
-    const venvPythonHome: string = await this.getPythonHome(this.venvPythonExecutable);
-    const pythonHome: string = await this.getPythonHome(this.pythonExecutable);
-    this.log.debug('Virtual environment Python home:', venvPythonHome);
-    this.log.debug('System Python home:', pythonHome);
+    const venvPythonHome = await this.getPythonHome(this.venvPythonExecutable);
+    const pythonHome = await this.getPythonHome(this.pythonExecutable);
     if (venvPythonHome !== pythonHome) {
-      this.log.debug('Python homes do not match, recreating virtual environment');
+      this.log.debug('Python homes mismatch, recreating virtual environment');
       await this.createVenv();
     } else {
       this.log.debug('Python homes match');
@@ -151,104 +186,47 @@ class PythonChecker {
       executable,
       [path.join(__dirname, 'pythonHome.py')],
       { env: { ...process.env, PATH: this.userPath } },
-      this.advancedPythonLogging ? false : true,
-      this.advancedPythonLogging ? false : true,
+      !this.advancedPythonLogging,
+      !this.advancedPythonLogging,
     );
     return venvPythonHome.trim();
   }
 
-  private async getSystemPythonVersions(): Promise<string[]> {
-    this.log.debug('Getting system Python versions');
-
-    const suppressErrors = this.pythonExecutables.map(exec => `spawn ${exec.toLowerCase()}`);
-    const versionPromises = this.pythonExecutables.map(async (pythonExecutable) => {
-      try {
-        this.log.debug(`Checking Python version for: ${pythonExecutable}`);
-        const [stdout] = await runCommand(
-          this.log,
-          pythonExecutable,
-          ['--version'],
-          { env: { ...process.env, PATH: this.userPath } },
-          this.advancedPythonLogging ? false : true,
-          this.advancedPythonLogging ? false : true,
-          false,
-          suppressErrors,
-        );
-        return stdout.trim().replace('Python ', '');
-      } catch (error) {
-        this.log.debug(`Failed to get version for ${pythonExecutable}: ${error}`);
-        return null;
-      }
-    });
-
-    const versions = await Promise.all(versionPromises);
-    const validVersions = Array.from(new Set(versions.filter((version) => version !== null))) as string[];
-
-    this.log.debug('Found Python versions:', validVersions);
-    return validVersions;
-  }
-
   private async getUserPath(): Promise<string> {
     this.log.debug('Attempting to retrieve user PATH');
-    let shell: string, shellArgs: string[];
-    if (fs.existsSync('/bin/zsh')) {
-      shell = '/bin/zsh';
-      shellArgs = [
-        '--no-rcs',
-        '-c',
-        [
-          'eval "$(brew shellenv)" 2>/dev/null',
-          'source ~/.zprofile 2>/dev/null',
-          'source ~/.bash_profile 2>/dev/null',
-          'source ~/.profile 2>/dev/null',
-          'echo $PATH',
-        ].join(' && '),
-      ];
-    } else if (fs.existsSync('/bin/bash')) {
-      shell = '/bin/bash';
-      shellArgs = [
-        '--noprofile',
-        '--norc',
-        '-c',
-        [
-          'eval "$(brew shellenv)" 2>/dev/null',
-          'source ~/.bash_profile 2>/dev/null',
-          'source ~/.profile 2>/dev/null',
-          'echo $PATH',
-        ].join(' && '),
-      ];
-    } else {
-      this.log.debug('No user PATH found - falling back to process.env.PATH');
-      return process.env.PATH || '';
-    }
-    try {
-      const [stdout] = await runCommand(
-        this.log,
-        shell,
-        shellArgs,
-        undefined,
-        this.advancedPythonLogging ? false : true,
-        this.advancedPythonLogging ? false : true,
-      );
-      const userPath = stdout.trim();
-      if (userPath) {
-        this.log.debug('User PATH successfully retrieved:', userPath);
-        return userPath;
-      } else {
-        this.log.debug('User PATH is empty, falling back to process.env.PATH');
-        return process.env.PATH || '';
+    const shells = ['/bin/zsh', '/bin/bash'];
+    for (const shell of shells) {
+      if (fs.existsSync(shell)) {
+        const shellArgs = [
+          '--noprofile', '--norc', '-c',
+          [
+            'eval "$(brew shellenv)" 2>/dev/null',
+            'source ~/.zprofile 2>/dev/null',
+            'source ~/.bash_profile 2>/dev/null',
+            'source ~/.profile 2>/dev/null',
+            'echo $PATH',
+          ].join(' && '),
+        ];
+        try {
+          const [stdout] = await runCommand(this.log, shell, shellArgs);
+          const userPath = stdout.trim();
+          if (userPath) {
+            this.log.debug('User PATH retrieved:', userPath);
+            return userPath;
+          }
+        } catch (err) {
+          this.log.error(`Failed to retrieve PATH from ${shell}: ${err}`);
+        }
       }
-    } catch (error) {
-      this.log.error('Failed to retrieve user PATH:', error);
-      return process.env.PATH || '';
     }
+    this.log.debug('Falling back to process.env.PATH');
+    return process.env.PATH ?? '';
   }
 
   private async ensureVenvPipUpToDate(): Promise<void> {
-    this.log.debug('Ensuring virtual environment pip is up to date');
-    const venvPipVersion: string = await this.getVenvPipVersion();
-    const mostRecentPipVersion = await this.getMostRecentPipVersion();
-    if (venvPipVersion !== mostRecentPipVersion) {
+    const currentVersion = await this.getVenvPipVersion();
+    const latestVersion = await this.getMostRecentPipVersion();
+    if (currentVersion !== latestVersion) {
       await this.updatePip();
     } else {
       this.log.debug('Virtual environment pip is up to date');
@@ -262,8 +240,8 @@ class PythonChecker {
       this.venvPipExecutable,
       ['install', '--upgrade', 'pip'],
       { env: { ...process.env, PATH: this.userPath } },
-      this.advancedPythonLogging ? false : true,
-      this.advancedPythonLogging ? false : true,
+      !this.advancedPythonLogging,
+      !this.advancedPythonLogging,
     );
     this.log.debug('Pip updated successfully');
   }
@@ -272,36 +250,32 @@ class PythonChecker {
     if (!await this.areRequirementsSatisfied()) {
       await this.installRequirements();
     } else {
-      this.log.debug('Virtual environment requirements are already satisfied');
+      this.log.debug('Virtual environment requirements are satisfied');
     }
   }
 
   private async areRequirementsSatisfied(): Promise<boolean> {
-    this.log.debug('Checking if virtual environment requirements are satisfied');
     const [freezeStdout] = await runCommand(
       this.log,
       this.venvPipExecutable,
       ['freeze'],
       { env: { ...process.env, PATH: this.userPath } },
-      this.advancedPythonLogging ? false : true,
-      this.advancedPythonLogging ? false : true,
+      !this.advancedPythonLogging,
+      !this.advancedPythonLogging,
     );
-    const freeze = this.stringToObject(freezeStdout);
-    this.log.debug('Current virtual environment packages:', JSON.stringify(freeze, null, 2));
-    const requirementsStdout = fs.readFileSync(this.requirementsPath).toString();
-    const requirements = this.stringToObject(requirementsStdout);
-    this.log.debug('Required packages:', JSON.stringify(requirements, null, 2));
-    const requirementsSatisfied = Object.keys(requirements).every(pkg => freeze[pkg] === requirements[pkg]);
-    this.log.debug('Requirements satisfied:', requirementsSatisfied);
-    return requirementsSatisfied;
+    const installed = this.stringToObject(freezeStdout);
+    const required = this.stringToObject(fs.readFileSync(this.requirementsPath, 'utf8'));
+    return Object.keys(required).every(pkg => installed[pkg] === required[pkg]);
   }
 
   private stringToObject(value: string): Record<string, string> {
-    return value.trim().split('\n').reduce<Record<string, string>>((acc, line) => {
-      const [pkg, version] = line.split('==').map(part => part.trim());
-      acc[pkg.replaceAll('_', '-').toLowerCase()] = version;
+    return value.trim().split('\n').reduce((acc, line) => {
+      const [pkg, version] = line.split('==').map(x => x.trim());
+      if (pkg && version) {
+        acc[pkg.toLowerCase()] = version;
+      }
       return acc;
-    }, {});
+    }, {} as Record<string, string>);
   }
 
   private async installRequirements(): Promise<void> {
@@ -311,35 +285,31 @@ class PythonChecker {
       this.venvPipExecutable,
       ['install', '-r', this.requirementsPath],
       { env: { ...process.env, PATH: this.userPath } },
-      this.advancedPythonLogging ? false : true,
-      this.advancedPythonLogging ? false : true,
+      !this.advancedPythonLogging,
+      !this.advancedPythonLogging,
     );
     this.log.debug('Requirements installed successfully');
   }
 
   private async getVenvPipVersion(): Promise<string> {
-    this.log.debug('Getting virtual environment pip version');
-    const [version] = await runCommand(
+    const [stdout] = await runCommand(
       this.log,
       this.venvPipExecutable,
       ['--version'],
       { env: { ...process.env, PATH: this.userPath } },
-      this.advancedPythonLogging ? false : true,
-      this.advancedPythonLogging ? false : true,
+      !this.advancedPythonLogging,
+      !this.advancedPythonLogging,
     );
-    this.log.debug('Virtual environment pip version:', version.trim().split(' ')[1]);
-    return version.trim().split(' ')[1];
+    return stdout.trim().split(' ')[1];
   }
 
   private async getMostRecentPipVersion(): Promise<string> {
-    this.log.debug('Fetching most recent pip version from PyPI');
     try {
       const response = await axios.get<{ info: { version: string } }>('https://pypi.org/pypi/pip/json');
-      this.log.debug('Most recent pip version fetched:', response.data.info.version);
       return response.data.info.version;
-    } catch (e) {
-      this.log.error(`Error fetching most recent pip version: ${e}`);
-      return 'error';
+    } catch (err) {
+      this.log.error(`Error fetching latest pip version: ${err}`);
+      return '';
     }
   }
 }
