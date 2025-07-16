@@ -18,6 +18,7 @@
         "discoveryPollingInterval": 300,
         "offlineInterval": 7,
         "waitTimeUpdate": 100,
+        "pythonPath": "/usr/bin/python3",
         "advancedPythonLogging": false,
         "additionalBroadcasts": [
           "192.168.1.255",
