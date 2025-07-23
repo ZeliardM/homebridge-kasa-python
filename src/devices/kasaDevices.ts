@@ -144,6 +144,7 @@ export const Switches = [
   'S500D',
   'S505',
   'S505D',
+  'TS15',
 ];
 
 export const LightBulbs = [
