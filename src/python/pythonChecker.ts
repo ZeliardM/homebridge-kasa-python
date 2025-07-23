@@ -195,18 +195,20 @@ class PythonChecker {
   private async getUserPath(): Promise<string> {
     this.log.debug('Attempting to retrieve user PATH');
     const shells = ['/bin/zsh', '/bin/bash'];
+    const brewExists = fs.existsSync('/opt/homebrew/bin/brew') || fs.existsSync('/usr/local/bin/brew');
     for (const shell of shells) {
       if (fs.existsSync(shell)) {
-        const shellArgs = [
-          '--noprofile', '--norc', '-c',
-          [
-            'eval "$(brew shellenv)" 2>/dev/null',
-            'source ~/.zprofile 2>/dev/null',
-            'source ~/.bash_profile 2>/dev/null',
-            'source ~/.profile 2>/dev/null',
-            'echo $PATH',
-          ].join(' && '),
-        ];
+        const shellCommands = [];
+        if (brewExists) {
+          shellCommands.push('eval "$(brew shellenv)" 2>/dev/null');
+        }
+        shellCommands.push(
+          'source ~/.zprofile 2>/dev/null',
+          'source ~/.bash_profile 2>/dev/null',
+          'source ~/.profile 2>/dev/null',
+          'echo $PATH',
+        );
+        const shellArgs = ['--noprofile', '--norc', '-c', shellCommands.join(' && ')];
         try {
           const [stdout] = await runCommand(this.log, shell, shellArgs);
           const userPath = stdout.trim();
