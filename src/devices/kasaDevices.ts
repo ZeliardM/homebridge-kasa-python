@@ -159,6 +159,7 @@ export const LightBulbs = [
   'L510',
   'L510 Series',
   'L530',
+  'L535',
   'L630',
   'KL400L5',
   'KL420L5',
