@@ -226,6 +226,10 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       this.log.debug('Periodic device discovery already in progress');
       return;
     }
+    if (this.isShuttingDown) {
+      this.log.debug('Platform is shutting down, skipping periodic device discovery');
+      return;
+    }
     this.periodicDeviceDiscovering = true;
     discoveredDeviceIds.clear();
     this.log.debug('Cleared discoveredDeviceIds set before discovery.');
