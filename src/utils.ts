@@ -172,9 +172,13 @@ export async function runCommand(
     p.on('close', (code) => {
       logger.debug(`Command closed with exit code: ${code}`);
       resolve(code);
-    }).on('error', (error) => {
+    }).on('error', (error: NodeJS.ErrnoException) => {
       const errorMessage = error.message.toLowerCase();
-      const shouldSuppress = suppressErrors.some(err => errorMessage.includes(err));
+      const shouldSuppress =
+    suppressErrors.some(err =>
+      (error.code && error.code.toString().toLowerCase() === err.toLowerCase()) ||
+      errorMessage.includes(err.toLowerCase()),
+    );
       if (!shouldSuppress) {
         logger.error('Command encountered an error:', error);
       }

@@ -31,7 +31,6 @@ class PythonChecker {
     this.advancedPythonLogging = this.platform.config.advancedOptions?.advancedPythonLogging ?? false;
 
     this.pythonExecutables = [
-      'python',
       'python3',
       'python3.11',
       'python3.12',
@@ -121,6 +120,8 @@ class PythonChecker {
         undefined,
         false,
         true,
+        false,
+        ['ENOENT'],
       );
       const version = stdout.trim().replace('Python ', '');
       const majorMinor = version.split('.').slice(0, 2).join('.');
