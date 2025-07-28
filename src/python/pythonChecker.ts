@@ -36,6 +36,7 @@ class PythonChecker {
       'python3.11',
       'python3.12',
       'python3.13',
+      'python3.14',
       '/usr/bin/python3',
       '/opt/homebrew/bin/python3',
       '/usr/local/bin/python3',
@@ -113,13 +114,20 @@ class PythonChecker {
 
   private async isPythonSupported(executable: string): Promise<boolean> {
     try {
-      const [stdout] = await runCommand(this.log, executable, ['--version']);
+      const [stdout] = await runCommand(
+        this.log,
+        executable,
+        ['--version'],
+        undefined,
+        false,
+        true,
+      );
       const version = stdout.trim().replace('Python ', '');
       const majorMinor = version.split('.').slice(0, 2).join('.');
       this.log.debug(`Detected Python version ${version} at ${executable}`);
       return SUPPORTED_PYTHON_VERSIONS.includes(majorMinor);
     } catch (err) {
-      this.log.debug(`Failed to check Python version for ${executable}: ${err}`);
+      this.log.error(`Failed to check Python version for ${executable}: ${err}`);
       return false;
     }
   }
@@ -208,9 +216,21 @@ class PythonChecker {
           'source ~/.profile 2>/dev/null',
           'echo $PATH',
         );
-        const shellArgs = ['--noprofile', '--norc', '-c', shellCommands.join(' && ')];
+        let shellArgs: string[];
+        if (shell.endsWith('zsh')) {
+          shellArgs = ['-f', '-c', shellCommands.join(' && ')];
+        } else {
+          shellArgs = ['--noprofile', '--norc', '-c', shellCommands.join(' && ')];
+        }
         try {
-          const [stdout] = await runCommand(this.log, shell, shellArgs);
+          const [stdout] = await runCommand(
+            this.log,
+            shell,
+            shellArgs,
+            undefined,
+            false,
+            true,
+          );
           const userPath = stdout.trim();
           if (userPath) {
             this.log.debug('User PATH retrieved:', userPath);
