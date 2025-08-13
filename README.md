@@ -194,6 +194,8 @@ Some newer Kasa devices require authentication. These are marked with [*] in the
 - **KL400L5**
   - Hardware: 1.0 (US) / Firmware: 1.0.5
   - Hardware: 1.0 (US) / Firmware: 1.0.8
+  **KL400L10**
+  - Hardware: 1.0 (US) / Firmware: 1.0.10
 - **KL420L5**
   - Hardware: 1.0 (US) / Firmware: 1.0.2
 - **KL430**
