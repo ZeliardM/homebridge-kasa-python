@@ -124,6 +124,7 @@ export const PowerStrips = [
   'P300',
   'P304M',
   'P306',
+  'P400M',
   'TP25',
 ];
 
