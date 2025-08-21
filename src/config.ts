@@ -44,6 +44,7 @@ export interface KasaPythonConfigInput {
   additionalBroadcasts?: string[];
   manualDevices?: (string | ConfigDevice)[];
   excludeMacAddresses?: string[];
+  includeMacAddresses?: string[];
   waitTimeUpdate?: number;
   pythonPath?: string;
   advancedPythonLogging?: boolean;
@@ -64,6 +65,7 @@ export type KasaPythonConfig = {
     additionalBroadcasts: string[];
     manualDevices: ConfigDevice[];
     excludeMacAddresses: string[];
+    includeMacAddresses: string[];
   };
   advancedOptions: {
     waitTimeUpdate: number;
@@ -87,6 +89,7 @@ export const defaultConfig: KasaPythonConfig = {
     additionalBroadcasts: [],
     manualDevices: [],
     excludeMacAddresses: [],
+    includeMacAddresses: [],
   },
   advancedOptions: {
     waitTimeUpdate: 100,
@@ -136,6 +139,10 @@ function validateConfig(config: Record<string, unknown>): string[] {
     errors.push('`excludeMacAddresses` should be an array of strings.');
   }
 
+  if (config.includeMacAddresses !== undefined && !Array.isArray(config.includeMacAddresses)) {
+    errors.push('`includeMacAddresses` should be an array of strings.');
+  }
+
   validateType(config, 'waitTimeUpdate', 'number', errors);
   validateType(config, 'pythonPath', 'string', errors);
   validateType(config, 'advancedPythonLogging', 'boolean', errors);
@@ -181,6 +188,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
       additionalBroadcasts: c.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
       manualDevices: c.manualDevices ? convertManualDevices(c.manualDevices) : defaultConfig.discoveryOptions.manualDevices,
       excludeMacAddresses: c.excludeMacAddresses ?? defaultConfig.discoveryOptions.excludeMacAddresses,
+      includeMacAddresses: c.includeMacAddresses ?? defaultConfig.discoveryOptions.includeMacAddresses,
     },
     advancedOptions: {
       waitTimeUpdate: c.waitTimeUpdate ?? defaultConfig.advancedOptions.waitTimeUpdate,

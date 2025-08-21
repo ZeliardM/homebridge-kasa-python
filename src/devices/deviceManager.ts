@@ -20,6 +20,7 @@ export default class DeviceManager {
   private additionalBroadcasts: string[];
   private manualDevices: string[];
   private excludeMacAddresses: string[];
+  private includeMacAddresses: string[];
 
   constructor(private platform: KasaPythonPlatform) {
     this.log = platform.log;
@@ -29,6 +30,7 @@ export default class DeviceManager {
     this.additionalBroadcasts = platform.config.discoveryOptions.additionalBroadcasts;
     this.manualDevices = platform.config.discoveryOptions.manualDevices.map(device => device.host);
     this.excludeMacAddresses = platform.config.discoveryOptions.excludeMacAddresses;
+    this.includeMacAddresses = platform.config.discoveryOptions.includeMacAddresses;
   }
 
   private convertManualDevices(manualDevices: (string | ConfigDevice)[]): ConfigDevice[] {
@@ -104,6 +106,7 @@ export default class DeviceManager {
           additionalBroadcasts: this.additionalBroadcasts,
           manualDevices: this.manualDevices,
           excludeMacAddresses: this.excludeMacAddresses,
+          includeMacAddresses: this.includeMacAddresses,
         },
         config,
       );

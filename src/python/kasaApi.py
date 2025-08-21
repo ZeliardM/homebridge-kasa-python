@@ -138,6 +138,7 @@ async def discover_devices(
     additional_broadcasts: Optional[List[str]] = None,
     manual_devices: Optional[List[str]] = None,
     exclude_mac_addresses: Optional[List[str]] = None,
+    include_mac_addresses: Optional[List[str]] = None,
 ) -> None:
     broadcasts = ["255.255.255.255"] + (additional_broadcasts or [])
     credentials = Credentials(username, password) if username and password else None
@@ -163,7 +164,11 @@ async def discover_devices(
 
     async def process_device(device: Device) -> Optional[Dict[str, Any]]:
         log("Processing device", host=device.host, alias=device.alias)
-        if device.mac in (exclude_mac_addresses or []):
+        if include_mac_addresses and device.mac not in include_mac_addresses:
+            log("Excluding device due to MAC address inclusion", host=device.host, alias=device.alias)
+            await safe_disconnect(device)
+            return None
+        if exclude_mac_addresses and device.mac in exclude_mac_addresses:
             log("Excluding device due to MAC address exclusion", host=device.host, alias=device.alias)
             await safe_disconnect(device)
             return None
@@ -377,8 +382,9 @@ async def discover_route():
         additional_broadcasts = data.get('additionalBroadcasts', [])
         manual_devices = data.get('manualDevices', [])
         exclude_mac_addresses = data.get('excludeMacAddresses', [])
+        include_mac_addresses = data.get('includeMacAddresses', [])
         asyncio.create_task(discover_devices(
-            username, password, additional_broadcasts, manual_devices, exclude_mac_addresses
+            username, password, additional_broadcasts, manual_devices, exclude_mac_addresses, include_mac_addresses
         ))
         return jsonify({"status": "discovery started"})
     except Exception as e:

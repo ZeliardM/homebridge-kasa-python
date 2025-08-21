@@ -27,16 +27,20 @@
         "manualDevices": [
           {
             "host": "192.168.1.100",
-            "alias": "Living Room Power Strip"
+            "alias": "Living Room Plug"
           },
           {
-            "host": "192.168.1.101",
+            "host": "192.168.2.100",
             "alias": "Bedroom Power Strip"
           }
         ],
         "excludeMacAddresses": [
           "AA:BB:CC:11:22:33",
-          "AA:BB:CC:33:22:11"
+          "CC:BB:AA:33:22:11"
+        ],
+        "includeMacAddresses": [
+          "AA:BB:CC:44:55:66",
+          "CC:BB:AA:66:55:44"
         ]
       }
     ],
