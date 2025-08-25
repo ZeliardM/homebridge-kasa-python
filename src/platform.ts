@@ -50,7 +50,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public readonly offlineAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
   public readonly Service: typeof Service;
   public readonly storagePath: string;
-  public readonly venvPythonExecutable: string;
+  public venvPythonExecutable: string = '';
   public config: KasaPythonConfig;
   public deviceManager: DeviceManager | undefined;
   public isShuttingDown: boolean = false;
@@ -58,7 +58,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public periodicDeviceDiscoveryEmitter: EventEmitter;
   public port: number = 0;
   public taskQueue: TaskQueue;
-  public userPath: string = '';
   private readonly homekitDevicesById: Map<string, HomeKitDevice> = new Map();
   private hideHomeKitMatter: boolean = true;
   private isUpgrade: boolean = false;
@@ -69,7 +68,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.Service = this.api.hap.Service;
     this.Characteristic = this.api.hap.Characteristic;
     this.storagePath = this.api.user.storagePath();
-    this.venvPythonExecutable = path.join(this.storagePath, 'kasa-python', '.venv', 'bin', 'python3');
     this.config = parseConfig(config);
     this.periodicDeviceDiscoveryEmitter = new EventEmitter();
     this.taskQueue = new TaskQueue(this.log);
@@ -380,7 +378,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         this.log,
         this.venvPythonExecutable,
         [scriptPath, this.port.toString(), this.hideHomeKitMatter.toString()],
-        { env: { ...process.env, PATH: this.userPath } },
+        undefined,
         this.config.advancedOptions.advancedPythonLogging ? false : true,
         this.config.advancedOptions.advancedPythonLogging ? false : true,
         true,

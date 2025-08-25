@@ -124,14 +124,14 @@
       "pythonPath": {
         "title": "Python Path",
         "type": "string",
-        "description": "Path to the Python executable. If not set, the plugin will use the default Python path.",
-        "placeholder": "Enter a custom Python path if needed.",
+        "description": "Full Path to the Python executable. If not set, the plugin will try to find the Python executable or default to the System Path.",
+        "placeholder": "Enter custom Full Python Path if needed, i.e. /usr/bin/python3.11",
         "minLength": 1
       },
       "advancedPythonLogging": {
         "title": "Advanced Python Logging",
         "type": "boolean",
-        "description": "Enable detailed logging for Python scripts.",
+        "description": "Enable detailed logging for Python scripts. Only shows logs when Debug Mode in Homebridge is enabled.",
         "default": false
       }
     }
