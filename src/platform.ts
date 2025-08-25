@@ -159,10 +159,20 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       }
 
       this.log.debug('Checking Homebridge version');
-      if (this.api.versionGreaterOrEqual && !this.api.versionGreaterOrEqual('1.8.4')) {
-        throw new Error(`homebridge-kasa-python requires homebridge >= 1.8.4. Currently running: ${this.api.serverVersion}`);
+      if (
+        this.api.versionGreaterOrEqual &&
+        !(
+          this.api.versionGreaterOrEqual('1.11') ||
+          this.api.versionGreaterOrEqual('2.0')
+        )
+      ) {
+        throw new Error(
+          `homebridge-kasa-python requires Homebridge ^1.11 || ^2.0. Currently running: ${this.api.serverVersion}`,
+        );
       } else {
-        this.log.debug(`Homebridge version ${this.api.serverVersion} satisfies the requirement >= 1.8.4`);
+        this.log.debug(
+          `Homebridge version ${this.api.serverVersion} satisfies the requirement ^1.11 || ^2.0`,
+        );
       }
     } catch (error) {
       this.log.error('Error verifying environment:', error);
