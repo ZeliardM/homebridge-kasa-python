@@ -192,7 +192,9 @@ class PythonChecker {
   private async ensureVenvUsesCorrectPythonHome(): Promise<void> {
     this.log.debug('Ensuring virtual environment uses correct Python home');
     const venvPythonHome = await this.getPythonHome(this.venvPythonExecutable);
+    this.log.debug('Virtual environment Python home:', venvPythonHome);
     const pythonHome = await this.getPythonHome(this.pythonExecutable);
+    this.log.debug('System Python home:', pythonHome);
     if (venvPythonHome !== pythonHome) {
       this.log.debug('Python homes mismatch, recreating virtual environment');
       await this.createVenv();
