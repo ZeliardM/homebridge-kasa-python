@@ -67,11 +67,14 @@ def serialize_child(child: Device) -> Dict[str, Any]:
         "state": child.features["state"].value,
     }
     light_module = child.modules.get(Module.Light)
+    fan_module = child.modules.get(Module.Fan)
+    energy_module = child.modules.get(Module.Energy)
     if light_module:
         child_info.update(get_light_info(child))
-    fan_module = child.modules.get(Module.Fan)
     if fan_module:
         child_info.update({"fan_speed_level": fan_module.fan_speed_level})
+    if energy_module:
+        child_info.update(get_energy_info(child))
     return child_info
 
 def get_light_info(device: Device) -> Dict[str, Any]:
@@ -92,6 +95,20 @@ def get_light_info(device: Device) -> Dict[str, Any]:
         light_info["hsv"] = {"hue": hue, "saturation": saturation}
     return light_info
 
+def get_energy_info(device: Device) -> Dict[str, Any]:
+    log("Getting energy info for device", alias=device.alias)
+    energy_module = device.modules.get(Module.Energy)
+    energy_fields = (
+        ("current", "current"),
+        ("voltage", "voltage"),
+        ("power", "current_consumption"),
+        ("total", "consumption_total"),
+        ("today", "consumption_today"),
+        ("month", "consumption_this_month"),
+    )
+    energy_dict = {key: getattr(energy_module, attr) for key, attr in energy_fields}
+    return {"energy": energy_dict}
+
 def custom_serializer(device: Device) -> Dict[str, Any]:
     log("Serializing device", host=device.host, alias=device.alias)
     child_num = len(device.children) if device.children else 0
@@ -108,6 +125,7 @@ def custom_serializer(device: Device) -> Dict[str, Any]:
     }
     light_module = device.modules.get(Module.Light)
     fan_module = device.modules.get(Module.Fan)
+    energy_module = device.modules.get(Module.Energy)
     if child_num > 0:
         sys_info["children"] = [serialize_child(child) for child in device.children]
     else:
@@ -116,11 +134,14 @@ def custom_serializer(device: Device) -> Dict[str, Any]:
             sys_info.update(get_light_info(device))
         if fan_module:
             sys_info.update({"fan_speed_level": fan_module.fan_speed_level})
+        if energy_module:
+            sys_info.update(get_energy_info(device))
     feature_info = {
         "brightness": False,
         "color_temp": False,
-        "hsv": False,
+        "energy": False,
         "fan": False,
+        "hsv": False,
     }
     if light_module:
         feature_info.update({
@@ -130,6 +151,8 @@ def custom_serializer(device: Device) -> Dict[str, Any]:
         })
     if fan_module:
         feature_info.update({"fan": True})
+    if energy_module:
+        feature_info.update({"energy": True})
     return {"sys_info": sys_info, "feature_info": feature_info}
 
 async def discover_devices(

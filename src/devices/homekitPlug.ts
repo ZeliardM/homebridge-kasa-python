@@ -157,8 +157,17 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
   }
 
   private getInitialValue(characteristicType: WithUUID<new () => Characteristic>): CharacteristicValue {
-    if (characteristicType === this.platform.Characteristic.On || characteristicType === this.platform.Characteristic.OutletInUse) {
-      return this.kasaDevice.sys_info.state ?? false;
+    if (this.kasaDevice.feature_info.energy && this.kasaDevice.feature_info.energy === true && this.kasaDevice.sys_info.energy) {
+      if (characteristicType === this.platform.Characteristic.On) {
+        return this.kasaDevice.sys_info.state ?? false;
+      }
+      if (characteristicType === this.platform.Characteristic.OutletInUse) {
+        return (this.kasaDevice.sys_info.energy.power ?? 0) > 1;
+      }
+    } else {
+      if (characteristicType === this.platform.Characteristic.On || characteristicType === this.platform.Characteristic.OutletInUse) {
+        return this.kasaDevice.sys_info.state ?? false;
+      }
     }
     return false;
   }
@@ -187,7 +196,12 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
             await this.deviceManager.controlDevice(this.kasaDevice.sys_info.host, characteristicKey, value);
             (this.kasaDevice.sys_info as Record<string, CharacteristicValue>)[characteristicKey] = value;
             this.updateValue(service, service.getCharacteristic(characteristicType), this.name, value);
-            this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), this.name, value);
+            if (this.kasaDevice.feature_info.energy && this.kasaDevice.feature_info.energy === true && this.kasaDevice.sys_info.energy) {
+              const outlet_in_use: CharacteristicValue = (Number(this.kasaDevice.sys_info.energy.power ?? 0) > 1) as CharacteristicValue;
+              this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), this.name, outlet_in_use);
+            } else {
+              this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), this.name, value);
+            }
             this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
             this.log.debug(`Set value for characteristic ${characteristicName} to ${value} successfully`);
           } catch (error) {
@@ -273,9 +287,17 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
         this.updateValue(
           service, service.getCharacteristic(this.platform.Characteristic.On), this.name, this.kasaDevice.sys_info.state ?? false,
         );
-        this.updateValue(
-          service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), this.name, this.kasaDevice.sys_info.state ?? false,
-        );
+        if (this.kasaDevice.feature_info.energy && this.kasaDevice.feature_info.energy === true && this.kasaDevice.sys_info.energy) {
+          const outlet_in_use: CharacteristicValue = (Number(this.kasaDevice.sys_info.energy.power ?? 0) > 1) as CharacteristicValue;
+          this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), this.name, outlet_in_use);
+        } else {
+          this.updateValue(
+            service,
+            service.getCharacteristic(this.platform.Characteristic.OutletInUse),
+            this.name,
+            this.kasaDevice.sys_info.state ?? false,
+          );
+        }
         this.log.debug(`Updated state for child device: ${this.name} to ${this.kasaDevice.sys_info.state}`);
       }
     }
@@ -302,7 +324,17 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
             const value = this.kasaDevice.sys_info[characteristicKey as keyof SysInfo] as unknown as CharacteristicValue;
             this.log.debug(`Setting value for characteristic ${name} to ${value}`);
             this.updateValue(service, characteristic, this.name, value);
-            this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), this.name, value);
+            if (this.kasaDevice.feature_info.energy && this.kasaDevice.feature_info.energy === true && this.kasaDevice.sys_info.energy) {
+              const outlet_in_use: CharacteristicValue = (Number(this.kasaDevice.sys_info.energy.power ?? 0) > 1) as CharacteristicValue;
+              this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), this.name, outlet_in_use);
+            } else {
+              this.updateValue(
+                service,
+                service.getCharacteristic(this.platform.Characteristic.OutletInUse),
+                this.name,
+                this.kasaDevice.sys_info.state ?? false,
+              );
+            }
           }
         }
       }

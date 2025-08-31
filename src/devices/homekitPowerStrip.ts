@@ -166,8 +166,17 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
   }
 
   private getInitialValue(characteristicType: WithUUID<new () => Characteristic>, child: ChildDevice): CharacteristicValue {
-    if (characteristicType === this.platform.Characteristic.On || characteristicType === this.platform.Characteristic.OutletInUse) {
-      return child.state ?? false;
+    if (this.kasaDevice.feature_info.energy && this.kasaDevice.feature_info.energy === true && child.energy) {
+      if (characteristicType === this.platform.Characteristic.On) {
+        return child.state ?? false;
+      }
+      if (characteristicType === this.platform.Characteristic.OutletInUse) {
+        return (child.energy.power ?? 0) > 1;
+      }
+    } else {
+      if (characteristicType === this.platform.Characteristic.On || characteristicType === this.platform.Characteristic.OutletInUse) {
+        return child.state ?? false;
+      }
     }
     return false;
   }
@@ -202,7 +211,17 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
               this.kasaDevice.sys_info.children![childIndex] = { ...child };
             }
             this.updateValue(service, service.getCharacteristic(characteristicType), child.alias, value);
-            this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, value);
+            if (this.kasaDevice.feature_info.energy && this.kasaDevice.feature_info.energy === true && child.energy) {
+              const outlet_in_use: CharacteristicValue = (Number(child.energy.power ?? 0) > 1) as CharacteristicValue;
+              this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, outlet_in_use);
+            } else {
+              this.updateValue(
+                service,
+                service.getCharacteristic(this.platform.Characteristic.OutletInUse),
+                child.alias,
+                child.state ?? false,
+              );
+            }
             this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
             this.log.debug(`Set value for characteristic ${characteristicName} to ${value} successfully`);
           } catch (error) {
@@ -289,7 +308,12 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
     if (previousChild) {
       if (previousChild.state !== child.state) {
         this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.On), child.alias, child.state);
-        this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, child.state);
+        if (this.kasaDevice.feature_info.energy && this.kasaDevice.feature_info.energy === true && child.energy) {
+          const outlet_in_use: CharacteristicValue = (Number(child.energy.power ?? 0) > 1) as CharacteristicValue;
+          this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, outlet_in_use);
+        } else {
+          this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, child.state ?? false);
+        }
         this.log.debug(`Updated state for child device: ${child.alias} to ${child.state}`);
       }
     }
@@ -319,7 +343,17 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
             const value = child[characteristicKey as keyof ChildDevice] as unknown as CharacteristicValue;
             this.log.debug(`Setting value for characteristic ${name} to ${value}`);
             this.updateValue(service, characteristic, child.alias, value);
-            this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, value);
+            if (this.kasaDevice.feature_info.energy && this.kasaDevice.feature_info.energy === true && child.energy) {
+              const outlet_in_use: CharacteristicValue = (Number(child.energy.power ?? 0) > 1) as CharacteristicValue;
+              this.updateValue(service, service.getCharacteristic(this.platform.Characteristic.OutletInUse), child.alias, outlet_in_use);
+            } else {
+              this.updateValue(
+                service,
+                service.getCharacteristic(this.platform.Characteristic.OutletInUse),
+                child.alias,
+                child.state ?? false,
+              );
+            }
           }
         }
       }
