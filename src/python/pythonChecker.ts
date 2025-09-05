@@ -29,7 +29,6 @@ class PythonChecker {
     this.log = prefixLogger(this.platform.log, '[Python Check]');
     this.advancedPythonLogging = this.platform.config.advancedOptions?.advancedPythonLogging ?? false;
     this.pythonExecutables = [
-      'python3.14',
       'python3.13',
       'python3.12',
       'python3.11',

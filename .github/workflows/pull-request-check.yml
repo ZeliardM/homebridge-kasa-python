@@ -1,0 +1,15 @@
+name: Pull Request Check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches:
+      - latest
+
+jobs:
+  prepare-beta:
+    uses: homebridge/.github/.github/workflows/update-beta-version.yml@latest
+    with:
+      base-branch: latest
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
