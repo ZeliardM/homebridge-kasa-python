@@ -31,18 +31,41 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
     this.hasBrightness = !!this.kasaDevice.feature_info.brightness;
     this.checkService();
     this.getSysInfo = deferAndCombine(async () => {
-      if (this.deviceManager) {
-        this.previousKasaDevice = JSON.parse(JSON.stringify(this.kasaDevice));
-        this.kasaDevice.sys_info = await this.deviceManager.getSysInfo(this.kasaDevice.sys_info.host) as SysInfo;
-        this.log.debug(`Updated sys_info for device: ${this.kasaDevice.sys_info.alias}`);
-      } else {
+      if (!this.deviceManager) {
         this.log.warn('Device manager is not available');
+        return;
+      }
+      const host = this.kasaDevice.sys_info?.host;
+      if (!host) {
+        this.log.warn('No host found in sys_info for device');
+        return;
+      }
+      try {
+        this.previousKasaDevice = { ...this.kasaDevice };
+        const updatedSysInfo = await this.deviceManager.getSysInfo(host) as SysInfo;
+        if (!updatedSysInfo) {
+          this.log.warn('getSysInfo returned undefined');
+          return;
+        }
+        this.kasaDevice.sys_info = updatedSysInfo;
+        this.log.debug(`Updated sys_info for device: ${updatedSysInfo.alias ?? host}`);
+      } catch (err: unknown) {
+        const errorMsg = 'Error updating sys_info:';
+        if (err instanceof Error) {
+          this.log.error(`${errorMsg} ${err.message}`);
+        } else {
+          this.log.error(`${errorMsg} ${String(err)}`);
+        }
       }
     }, platform.config.advancedOptions.waitTimeUpdate);
-    this.startPolling();
     platform.periodicDeviceDiscoveryEmitter.on('periodicDeviceDiscoveryComplete', () => {
       this.updateEmitter.emit('periodicDeviceDiscoveryComplete');
     });
+  }
+
+  public async initialize(): Promise<void> {
+    this.log.debug(`Initializing polling for device: ${this.kasaDevice.sys_info.alias}`);
+    await this.startPolling();
   }
 
   private async withLock<T>(key: string, action: () => Promise<T>): Promise<T> {
@@ -132,7 +155,7 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
     } catch (error) {
       this.log.error(`Error getting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
       this.kasaDevice.offline = true;
-      this.stopPolling();
+      await this.stopPolling();
       return this.getDefaultValue(characteristicType);
     }
   }
@@ -182,7 +205,7 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
           } catch (error) {
             this.log.error(`Error setting current value for characteristic ${characteristicName} for device: ${this.name}:`, error);
             this.kasaDevice.offline = true;
-            this.stopPolling();
+            await this.stopPolling();
           } finally {
             this.isUpdating = false;
             this.updateEmitter.emit('updateComplete');
@@ -207,7 +230,7 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
     const lockKey = `${this.kasaDevice.sys_info.device_id}`;
     await this.withLock(lockKey, async () => {
       if (this.kasaDevice.offline || this.platform.isShuttingDown) {
-        this.stopPolling();
+        await this.stopPolling();
         return;
       }
       if (this.isUpdating || this.platform.periodicDeviceDiscovering) {
@@ -242,7 +265,7 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
         } catch (error) {
           this.log.error('Error updating device state:', error);
           this.kasaDevice.offline = true;
-          this.stopPolling();
+          await this.stopPolling();
         } finally {
           this.isUpdating = false;
           this.updateEmitter.emit('updateComplete');
@@ -296,9 +319,9 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
     });
   }
 
-  public startPolling() {
+  public async startPolling(): Promise<void> {
     if (this.kasaDevice.offline || this.platform.isShuttingDown) {
-      this.stopPolling();
+      await this.stopPolling();
       return;
     }
     if (this.pollingInterval) {
@@ -311,18 +334,25 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
           this.isUpdating = false;
           this.updateEmitter.emit('updateComplete');
         }
-        this.stopPolling();
+        await this.stopPolling();
       } else {
         await this.updateState();
       }
     }, this.platform.config.discoveryOptions.pollingInterval);
   }
 
-  public stopPolling() {
+  public async stopPolling(): Promise<void> {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
       this.pollingInterval = undefined;
       this.log.debug('Stopped polling');
+    }
+    if (this.isUpdating) {
+      this.log.debug('Waiting for ongoing polling task to complete for device:', this.name);
+      await new Promise<void>((resolve) => {
+        this.isUpdating = false;
+        this.updateEmitter.once('updateComplete', resolve);
+      });
     }
   }
 

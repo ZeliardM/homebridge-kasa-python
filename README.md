@@ -194,6 +194,8 @@ Some newer Kasa devices require authentication. These are marked with [*] in the
 - **KL400L5**
   - Hardware: 1.0 (US) / Firmware: 1.0.5
   - Hardware: 1.0 (US) / Firmware: 1.0.8
+  **KL400L10**
+  - Hardware: 1.0 (US) / Firmware: 1.0.10
 - **KL420L5**
   - Hardware: 1.0 (US) / Firmware: 1.0.2
 - **KL430**
@@ -259,6 +261,7 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (UK) / Firmware: 1.0.3
 - **P306**
   - Hardware: 1.0 (US) / Firmware: 1.1.2
+- **P400M**
 - **TP25**
   - Hardware: 1.0 (US) / Firmware: 1.0.2
 
@@ -268,12 +271,15 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (EU) / Firmware: 1.9.0
 - **S220**
   - Hardware: 1.0 (EU) / Firmware: 1.9.0
+- **S500**
+  - Hardware: 1.0 (US) / Firmware: 1.2.0
 - **S500D**
   - Hardware: 1.0 (US) / Firmware: 1.0.5
 - **S505**
   - Hardware: 1.0 (US) / Firmware: 1.0.2
 - **S505D**
   - Hardware: 1.0 (US) / Firmware: 1.1.0
+- **TS15**
 
 ### Bulbs
 
@@ -290,6 +296,8 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 3.0 (EU) / Firmware: 1.1.6
   - Hardware: 2.0 (TW) / Firmware: 1.1.1
   - Hardware: 2.0 (US) / Firmware: 1.1.0
+- **L535E**
+  - Hardware: 3.0 (EU) / Firmware: 1.1.8
 - **L630**
   - Hardware: 1.0 (EU) / Firmware: 1.1.2
 

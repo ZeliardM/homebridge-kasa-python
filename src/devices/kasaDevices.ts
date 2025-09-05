@@ -8,6 +8,7 @@ export interface SysInfo {
   color_temp?: number;
   device_id: string;
   device_type: string;
+  energy?: Energy;
   fan_speed_level?: number;
   host: string;
   hw_ver: string;
@@ -16,25 +17,36 @@ export interface SysInfo {
   model: string;
   state?: boolean;
   sw_ver: string;
-  [key: string]: string | number | boolean | ChildDevice[] | HSV | undefined;
+  [key: string]: string | number | boolean | ChildDevice[] | Energy | HSV | undefined;
 }
 
 export interface FeatureInfo {
   brightness?: boolean;
   color_temp?: boolean;
-  hsv?: boolean;
+  energy?: boolean;
   fan?: boolean;
+  hsv?: boolean;
 }
 
 export interface ChildDevice {
   alias: string;
   brightness?: number;
   color_temp?: number;
+  energy?: Energy;
   fan_speed_level?: number;
   hsv?: HSV;
   id: string;
   state: boolean;
-  [key: string]: string | number | boolean | HSV | undefined;
+  [key: string]: string | number | boolean | Energy | HSV | undefined;
+}
+
+export interface Energy {
+  current: number;
+  voltage: number;
+  power: number;
+  total: number;
+  today: number;
+  month: number;
 }
 
 export interface HSV {
@@ -124,6 +136,7 @@ export const PowerStrips = [
   'P300',
   'P304M',
   'P306',
+  'P400M',
   'TP25',
 ];
 
@@ -141,9 +154,11 @@ export const Switches = [
   'KS225',
   'KS230',
   'KS240',
+  'S500',
   'S500D',
   'S505',
   'S505D',
+  'TS15',
 ];
 
 export const LightBulbs = [
@@ -159,8 +174,10 @@ export const LightBulbs = [
   'L510',
   'L510 Series',
   'L530',
+  'L535',
   'L630',
   'KL400L5',
+  'KL400L10',
   'KL420L5',
   'KL430',
   'L900',
