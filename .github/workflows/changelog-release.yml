@@ -1,5 +1,13 @@
 name: Changelog to Release
 
+# This workflow syncs CHANGELOG.md with GitHub releases when a release is published.
+# It uses the Homebridge shared workflow which runs the changerelease tool.
+# 
+# If CHANGELOG.md is missing entries after a release:
+# 1. Check that the GitHub release has proper content (not empty body)
+# 2. Manually add missing entries to CHANGELOG.md following the existing format
+# 3. The workflow should work correctly for future releases if releases have content
+
 on:
   release:
     types: [published]
