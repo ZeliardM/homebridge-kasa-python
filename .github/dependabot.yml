@@ -1,0 +1,77 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: friday
+      time: "15:00"
+      timezone: "America/New_York"
+    target-branch: development
+    labels:
+      - dependency
+    assignees:
+      - ZeliardM
+    commit-message:
+      prefix: "npm"
+    versioning-strategy: increase
+    groups:
+      typescript-eslint:
+        patterns:
+          - "@typescript-eslint/*"
+          - "typescript"
+          - "ts-essentials"
+      eslint:
+        patterns:
+          - "@eslint/js"
+          - "eslint"
+      stylistic:
+        patterns:
+          - "@stylistic/eslint-plugin"
+      md5:
+        patterns:
+          - "@types/md5"
+          - "md5"
+
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: friday
+      time: "15:00"
+      timezone: "America/New_York"
+    target-branch: development
+    labels:
+      - dependency
+    assignees:
+      - ZeliardM
+    commit-message:
+      prefix: "pip"
+    versioning-strategy: increase
+    groups:
+      pydantic:
+        patterns:
+          - "pydantic"
+          - "pydantic_core"
+          - "pydantic-core"
+      crypt:
+        patterns:
+          - "cryptography"
+          - "chacha20poly1305-reuseable"
+      aio:
+        patterns:
+          - "aiosignal"
+          - "aiohttp"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: friday
+      time: "15:00"
+      timezone: "America/New_York"
+    target-branch: development
+    assignees:
+      - ZeliardM
+    commit-message:
+      prefix: "ci"

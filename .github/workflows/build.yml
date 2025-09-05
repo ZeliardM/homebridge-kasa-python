@@ -1,6 +1,8 @@
-name: Build and Lint
+name: Build, Lint, and Test
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
 
 jobs:
   build:
@@ -9,30 +11,44 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # the Node.js versions to build on
-        node-version: [18.x, 20.x]
+        node-version: [20.x, 22.x, 24.x]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Use Node.js ${{ matrix.node-version }} 
-        uses: actions/setup-node@v3
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+          cache: npm
 
-      - name: Install dependencies
-        run: npm install
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
 
-      - name: Lint the project
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Lint project
         run: npm run lint
 
-      - name: Build the project
+      - name: Build project
         run: npm run build
 
-      - name: List, audit, fix outdated dependencies and build again
+      - name: Smoke test plugin
         run: |
-          npm list --outdated
-          npm audit || true  # ignore failures
+          node -e "import('./dist/index.js').then(()=>console.log('Import OK')).catch(err=>{console.error(err);process.exit(1)})"
+
+      - name: Check outdated and audit (non-blocking)
+        run: |
+          npm list --outdated || true
+          npm audit || true
           npm audit fix || true
-          npm list --outdated
-          npm run build
