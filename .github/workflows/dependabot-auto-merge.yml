@@ -15,7 +15,6 @@ permissions:
 
 jobs:
   auto-merge:
-    if: github.actor == 'dependabot[bot]' || github.event.inputs.simulate-dependabot == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Dependabot metadata
