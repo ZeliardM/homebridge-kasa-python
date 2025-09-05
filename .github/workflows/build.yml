@@ -71,20 +71,17 @@ jobs:
       - name: Test Python Dependencies
         run: |
           if [ -f requirements.txt ]; then
-            python - <<'PY'
-            import sys
-            for line in open('requirements.txt').read().splitlines():
-                pkg = line.strip()
-                if not pkg or pkg.startswith('#'):
-                    continue
-                mod = pkg.split('==')[0].replace('-', '_')
-                __import__(mod)
-            print('Python Imports OK')
-            PY
+            set -e
+            while IFS= read -r line || [ -n "$line" ]; do
+              pkg=$(echo "$line" | sed 's/#.*//' | xargs)
+              [ -z "$pkg" ] && continue
+              mod=$(echo "$pkg" | cut -d'=' -f1 | tr '-' '_')
+              python -c "import ${mod}"
+            done < requirements.txt
+            echo "Python Imports OK"
           fi
 
-      - name: Check outdated and audit (non-blocking)
+      - name: Check outdated and audit
         run: |
           npm list --outdated || true
           npm audit || true
-          npm audit fix || true
