@@ -15,13 +15,17 @@
   "engines": {
     "homebridge": "^1.11.0 || ^2.0.0",
     "node": "^20 || ^22 || ^24",
-    "python": "^3.11 || ^3.12 || ^3.13 || ^3.14"
+    "python": "^3.11 || ^3.12 || ^3.13"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "main": "dist/index.js",
   "scripts": {
-    "build": "npm ci && rimraf -I ./dist && npm run lint && tsc && node copyPythonFiles.js",
+    "build": "npm ci && rimraf -I ./dist && tsc && node copyPythonFiles.js",
     "lint": "eslint src/**/*.ts --max-warnings=0",
     "prepublishOnly": "npm run lint && npm run build",
+    "test": "npm install",
     "watch": "npm run build && npm link && nodemon"
   },
   "keywords": [

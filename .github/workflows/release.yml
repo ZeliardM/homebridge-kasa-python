@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build_lint_test:
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    needs: build_lint_test
+    if: ${{ github.repository == 'ZeliardM/homebridge-kasa-python' }}
+    permissions:
+      id-token: write
+    uses: homebridge/.github/.github/workflows/npm-publish-esm.yml@latest
+    secrets:
+      npm_auth_token: ${{ secrets.npm_token }}
+
+#  github-releases-to-discord:
+#    name: Discord Webhooks
+#    needs: [build_and_test,publish]
+#    if : $ {{ github.repository == 'ZeliardM/homebridge-kasa-python' }}
+#    uses: homebridge/.github/.github/workflows/discord-webhooks.yml@latest
+#    with:
+#      title: "Kasa Python Release"
+#      description: |
+#        Version `v$ {{ needs.publish.outputs.NPM_VERSION }}`
+#      url: "https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v$ {{ needs.publish.outputs.NPM_VERSION }}"
+#    secrets:
+#      DISCORD_WEBHOOK: $ {{ secrets.DISCORD_WEBHOOK_URL_LATEST }}

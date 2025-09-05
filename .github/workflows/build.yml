@@ -1,38 +1,90 @@
-name: Build and Lint
+name: Build, Lint, and Test
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [latest]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      node_versions:
+        description: Optional list of Node.js versions to test against (json array string)
+        required: false
+        type: string
+      python_versions:
+        description: Optional list of Python versions to test against (json array string)
+        required: false
+        type: string
 
 jobs:
-  build:
+  build_lint_test:
     runs-on: ubuntu-latest
-
     strategy:
       fail-fast: false
       matrix:
-        # the Node.js versions to build on
-        node-version: [18.x, 20.x]
+        node-version: ${{ fromJson(inputs.node_versions || '["20","22","24"]') }}
+        python-version: ${{ fromJson(inputs.python_versions || '["3.11","3.12","3.13"]') }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Use Node.js ${{ matrix.node-version }} 
-        uses: actions/setup-node@v3
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+          cache: npm
 
-      - name: Install dependencies
-        run: npm install
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
 
-      - name: Lint the project
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Lint Project
         run: npm run lint
 
-      - name: Build the project
+      - name: Build Project
         run: npm run build
 
-      - name: List, audit, fix outdated dependencies and build again
+      - name: Test Node Plugin
         run: |
-          npm list --outdated
-          npm audit || true  # ignore failures
+          node <<'NODE'
+          (async () => {
+            try {
+              await import('./dist/index.js');
+              console.log('Node Import OK');
+            } catch (err) {
+              console.error(err);
+              process.exit(1);
+            }
+          })();
+          NODE
+
+      - name: Test Python Dependencies
+        run: |
+          if [ -f requirements.txt ]; then
+            python - <<'PY'
+            import sys
+            for line in open('requirements.txt').read().splitlines():
+                pkg = line.strip()
+                if not pkg or pkg.startswith('#'):
+                    continue
+                mod = pkg.split('==')[0].replace('-', '_')
+                __import__(mod)
+            print('Python Imports OK')
+            PY
+          fi
+
+      - name: Check outdated and audit (non-blocking)
+        run: |
+          npm list --outdated || true
+          npm audit || true
           npm audit fix || true
-          npm list --outdated
-          npm run build
