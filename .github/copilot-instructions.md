@@ -175,11 +175,11 @@ python3 -c "import kasa; print('Python Imports OK')"
 - `typescript` - TypeScript compiler
 
 ### Python Dependencies (requirements.txt):
-- `python-kasa==0.10.2` - Core Kasa API library
-- `quart==0.20.0` - Async web framework
-- `uvicorn==0.35.0` - ASGI server
-- `anyio==4.10.0` - Async I/O abstraction
-
+> **Note:** Dependency versions may change. Always check `requirements.txt` for the current required versions.
+- `python-kasa` - Core Kasa API library
+- `quart` - Async web framework
+- `uvicorn` - ASGI server
+- `anyio` - Async I/O abstraction
 ### Development Dependencies:
 - ESLint with TypeScript support
 - Rimraf for clean builds
