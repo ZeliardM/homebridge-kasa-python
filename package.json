@@ -25,7 +25,7 @@
     "build": "npm ci && rimraf -I ./dist && tsc && node copyPythonFiles.js",
     "lint": "eslint src/**/*.ts --max-warnings=0",
     "prepublishOnly": "npm run lint && npm run build",
-    "test": "npm install",
+    "test": "echo \"No test specified\" && exit 0",
     "watch": "npm run build && npm link && nodemon"
   },
   "keywords": [
