@@ -76,6 +76,11 @@ jobs:
               pkg=$(echo "$line" | sed 's/#.*//' | xargs)
               [ -z "$pkg" ] && continue
               mod=$(echo "$pkg" | cut -d'=' -f1 | tr '-' '_')
+              case "$mod" in
+                python_kasa) mod="kasa" ;;
+                # add more mappings here if needed
+              esac
+              echo "Checking import: $mod"
               python -c "import ${mod}"
             done < requirements.txt
             echo "Python Imports OK"
