@@ -184,12 +184,13 @@ python3 -c "import kasa; print('Python Imports OK')"
 - `quart` - Async web framework
 - `uvicorn` - ASGI server
 - `anyio` - Async I/O abstraction
-### Development Dependencies:
-- ESLint with TypeScript support
-- Rimraf for clean builds
-- Nodemon for development watching
-- Homebridge for testing
 
+### Development Dependencies (package.json `devDependencies`):
+> **Note:** These are installed via `npm` and listed under `devDependencies` in `package.json`.
+- `eslint` (with TypeScript support) - Linting and code quality
+- `rimraf` - Clean builds (cross-platform `rm -rf`)
+- `nodemon` - Development watch/reload
+- `homebridge` - For local plugin testing
 ## Device Implementation Patterns
 
 When working with device code:
