@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.8.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.1) (2025-09-05)
+
+### Other Changes
+- Fix release-drafter.yml @ZeliardM [#74]
+
+### Featured Changes
+
+- Prepare for scoped plugin @ZeliardM [#73]
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.8.0...v2.8.1
+
 ## [2.8.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.0) (2025-09-05)
 
 ### What's Changed
