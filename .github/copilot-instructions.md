@@ -62,7 +62,11 @@ This is a Homebridge plugin that bridges TP-Link Kasa/Tapo smart home devices to
 5. **Validate the build:**
    ```bash
    # Test Node.js import
-   node -e "import('./dist/index.js').then(() => console.log('Node import OK')).catch(console.error)"
+   node -e "
+   import('./dist/index.js')
+     .then(() => console.log('Node import OK'))
+     .catch(console.error)
+   "
    
    # Test Python imports
    python3 -c "import kasa; print('Python kasa import OK')"
