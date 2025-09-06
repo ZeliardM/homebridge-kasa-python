@@ -57,6 +57,7 @@ jobs:
           RELEASES=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases")
           
+          # Find the first draft release with proper validation
           DRAFT_ID=$(echo "$RELEASES" | jq -r '.[] | select(.draft == true) | .id' | head -1)
           DRAFT_TAG=$(echo "$RELEASES" | jq -r '.[] | select(.draft == true) | .tag_name' | head -1)
           
@@ -68,7 +69,8 @@ jobs:
           
           echo "has_unreleased=$HAS_UNRELEASED" >> $GITHUB_OUTPUT
           
-          if [ "$DRAFT_ID" != "null" ] && [ "$DRAFT_ID" != "" ]; then
+          # Validate draft release data
+          if [ "$DRAFT_ID" != "null" ] && [ "$DRAFT_ID" != "" ] && [ "$DRAFT_TAG" != "null" ] && [ "$DRAFT_TAG" != "" ]; then
             echo "Found existing draft release: $DRAFT_TAG (ID: $DRAFT_ID)"
             echo "has_draft=true" >> $GITHUB_OUTPUT
             echo "draft_id=$DRAFT_ID" >> $GITHUB_OUTPUT
@@ -76,6 +78,8 @@ jobs:
           else
             echo "No existing draft release found"
             echo "has_draft=false" >> $GITHUB_OUTPUT
+            echo "draft_id=" >> $GITHUB_OUTPUT
+            echo "draft_tag=" >> $GITHUB_OUTPUT
           fi
           
           echo "Has Unreleased section: $HAS_UNRELEASED"
@@ -99,6 +103,7 @@ jobs:
           release_date = os.environ.get('RELEASE_DATE', '')
           release_url = os.environ.get('RELEASE_URL', '')
           latest_tag = os.environ.get('LATEST_TAG', '')
+          github_repo = os.environ.get('GITHUB_REPOSITORY', '')
           
           # Read current changelog
           with open('CHANGELOG.md', 'r') as f:
@@ -112,20 +117,23 @@ jobs:
           new_lines = []
           in_current_release = False
           release_content_lines = []
+          full_changelog_added = False
           
-          for i, line in enumerate(lines):
+          for idx, line in enumerate(lines):
               if line == version_header:
                   # Found the version we just created
                   new_lines.append(line)
                   in_current_release = True
               elif in_current_release and line.startswith("## ") and line != version_header:
-                  # End of current release section, add full changelog link
-                  new_lines.extend([
-                      "",
-                      f"**Full Changelog**: https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/compare/{latest_tag}...{release_tag}",
-                      "",
-                      line
-                  ])
+                  # End of current release section, add full changelog link if not already added
+                  if not full_changelog_added:
+                      new_lines.extend([
+                          "",
+                          f"**Full Changelog**: https://github.com/{github_repo}/compare/{latest_tag}...{release_tag}",
+                          ""
+                      ])
+                      full_changelog_added = True
+                  new_lines.append(line)
                   in_current_release = False
               elif in_current_release and line.strip() and not line.startswith("**Full Changelog**"):
                   # Collect release content for output
@@ -135,10 +143,10 @@ jobs:
                   new_lines.append(line)
           
           # If we're still in current release at end of file, add full changelog link
-          if in_current_release:
+          if in_current_release and not full_changelog_added:
               new_lines.extend([
                   "",
-                  f"**Full Changelog**: https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/compare/{latest_tag}...{release_tag}"
+                  f"**Full Changelog**: https://github.com/{github_repo}/compare/{latest_tag}...{release_tag}"
               ])
           
           final_content = '\n'.join(new_lines)
@@ -152,8 +160,11 @@ jobs:
               f.write(final_content)
           
           # Prepare release content (convert ### headers to ## for release format)
-          release_content = '\n'.join(release_content_lines) if release_content_lines else "## Other Changes\n\n_No changes in this release._"
-          release_content = re.sub(r'^### ', '## ', release_content, flags=re.MULTILINE)
+          if release_content_lines:
+              release_content = '\n'.join(release_content_lines)
+              release_content = re.sub(r'^### ', '## ', release_content, flags=re.MULTILINE)
+          else:
+              release_content = "## Other Changes\n\n_No changes in this release._"
           
           # Write to GitHub output
           output_file = os.environ.get('GITHUB_OUTPUT')
@@ -191,6 +202,10 @@ jobs:
           draft_tag = os.environ.get('DRAFT_TAG', '')
           latest_tag = os.environ.get('LATEST_TAG', '')
           
+          if not draft_tag:
+              print("No draft tag provided")
+              exit(1)
+          
           # Read current changelog
           with open('CHANGELOG.md', 'r') as f:
               content = f.read()
@@ -204,13 +219,17 @@ jobs:
                   in_target_release = True
                   continue
               elif in_target_release and line.startswith("## ") and not line.startswith(f"## [{draft_tag}]"):
+                  # Found next section, stop collecting
                   break
               elif in_target_release and line.strip() and not line.startswith("**Full Changelog**"):
                   release_content_lines.append(line)
           
           # Prepare release content
-          release_content = '\n'.join(release_content_lines) if release_content_lines else "## Other Changes\n\n_No changes in this release._"
-          release_content = re.sub(r'^### ', '## ', release_content, flags=re.MULTILINE)
+          if release_content_lines:
+              release_content = '\n'.join(release_content_lines)
+              release_content = re.sub(r'^### ', '## ', release_content, flags=re.MULTILINE)
+          else:
+              release_content = "## Other Changes\n\n_No changes in this release._"
           
           # Write to GitHub output
           output_file = os.environ.get('GITHUB_OUTPUT')
@@ -222,6 +241,8 @@ jobs:
                   f.write(f"release_tag={draft_tag}\n")
           
           print(f"Extracted content for draft: {draft_tag}")
+          print("Content:")
+          print(release_content)
           EOF
         env:
           DRAFT_TAG: ${{ steps.check-status.outputs.draft_tag }}
@@ -251,23 +272,33 @@ jobs:
           if [ "${{ steps.check-status.outputs.has_unreleased }}" == "true" ]; then
             # We converted Unreleased content
             RELEASE_TAG="${{ steps.process-changelog.outputs.release_tag }}"
-            CHANGES="${{ steps.process-changelog.outputs.changes }}"
+            CHANGES='${{ steps.process-changelog.outputs.changes }}'
           else
             # We're updating existing draft
             RELEASE_TAG="${{ steps.extract-draft.outputs.release_tag }}"
-            CHANGES="${{ steps.extract-draft.outputs.changes }}"
+            CHANGES='${{ steps.extract-draft.outputs.changes }}'
+          fi
+          
+          if [ -z "$RELEASE_TAG" ] || [ "$RELEASE_TAG" == "null" ]; then
+            echo "Error: No release tag available"
+            exit 1
           fi
           
           VERSION="${RELEASE_TAG#v}"
           LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
           
-          # Create release body
-          BODY_CONTENT=$(cat << 'BODY_EOF'
-$CHANGES
-
-**Full Changelog**: https://github.com/${{ github.repository }}/compare/$LATEST_TAG...$RELEASE_TAG
-BODY_EOF
-)
+          # Create release body content
+          echo "Creating release body for: $RELEASE_TAG"
+          
+          # Use printf to safely create the body content
+          printf -v BODY_CONTENT '%s\n\n**Full Changelog**: https://github.com/%s/compare/%s...%s' \
+            "$CHANGES" \
+            "${{ github.repository }}" \
+            "$LATEST_TAG" \
+            "$RELEASE_TAG"
+          
+          # Use jq to properly escape the content
+          ESCAPED_BODY=$(echo "$BODY_CONTENT" | jq -Rs .)
           
           if [ "${{ steps.check-status.outputs.has_draft }}" == "true" ]; then
             DRAFT_ID="${{ steps.check-status.outputs.draft_id }}"
@@ -278,7 +309,7 @@ BODY_EOF
               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/${{ github.repository }}/releases/$DRAFT_ID" \
-              -d "$(jq -n --arg name "$RELEASE_TAG" --arg body "$BODY_CONTENT" '{name: $name, body: $body}')"
+              -d "{\"name\": \"$RELEASE_TAG\", \"body\": $ESCAPED_BODY}"
           else
             echo "Creating new draft release: $RELEASE_TAG"
             
@@ -287,5 +318,5 @@ BODY_EOF
               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/${{ github.repository }}/releases" \
-              -d "$(jq -n --arg tag "$RELEASE_TAG" --arg name "$RELEASE_TAG" --arg body "$BODY_CONTENT" '{tag_name: $tag, target_commitish: "latest", name: $name, body: $body, draft: true, prerelease: false}')"
+              -d "{\"tag_name\": \"$RELEASE_TAG\", \"target_commitish\": \"latest\", \"name\": \"$RELEASE_TAG\", \"body\": $ESCAPED_BODY, \"draft\": true, \"prerelease\": false}"
           fi

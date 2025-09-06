@@ -101,6 +101,10 @@ jobs:
           
           release_tag = os.environ.get('RELEASE_TAG', '')
           
+          if not release_tag:
+              print("Error: No release tag provided")
+              exit(1)
+          
           # Read current changelog
           with open('CHANGELOG.md', 'r') as f:
               content = f.read()
@@ -110,8 +114,19 @@ jobs:
           in_target_release = False
           added_commit_entry = False
           other_changes_found = False
+          target_section_end = len(lines)
           
-          for i, line in enumerate(lines):
+          # Find the target release section boundaries
+          for idx, line in enumerate(lines):
+              if line.startswith(f"## [{release_tag}]"):
+                  in_target_release = True
+                  target_section_start = idx
+              elif in_target_release and line.startswith("## ") and not line.startswith(f"## [{release_tag}]"):
+                  target_section_end = idx
+                  break
+          
+          # Process lines
+          for idx, line in enumerate(lines):
               if line.startswith(f"## [{release_tag}]"):
                   # Found the target release section
                   new_lines.append(line)
