@@ -180,7 +180,7 @@ python3 -c "import kasa; print('Python Imports OK')"
 - `typescript` - TypeScript compiler
 
 ### Python Dependencies (requirements.txt):
-> **Note:** Dependency versions may change. Always check `requirements.txt` for the current required versions.
+> **Note:** Dependency versions may change. Always check `requirements.txt` for the current required version numbers.
 - `python-kasa` - Core Kasa API library
 - `quart` - Async web framework
 - `uvicorn` - ASGI server
@@ -191,6 +191,7 @@ python3 -c "import kasa; print('Python Imports OK')"
 - `rimraf` - Clean builds (cross-platform `rm -rf`)
 - `nodemon` - Development watch/reload
 - `homebridge` - For local plugin testing
+
 ## Device Implementation Patterns
 
 When working with device code:
