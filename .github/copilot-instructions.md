@@ -142,7 +142,7 @@ src/
 4. **Dependency audit**: `npm audit` (warnings acceptable, errors should be addressed)
 
 ### CI Pipeline Replication:
-To replicate CI locally, run this exact sequence (tested on Node.js 20.19.4, Python 3.12.3):
+To replicate CI locally, run this exact sequence (tested on Node.js 20/22/24, Python 3.11/3.12/3.13):
 ```bash
 # Install Python dependencies
 python3 -m pip install --upgrade pip
