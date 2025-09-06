@@ -64,10 +64,11 @@ jobs:
           echo "Adding entry: $CHANGE_ENTRY"
           echo "Category: $CATEGORY"
           
-          # Use Python script to update changelog - much simpler than bash parsing
+          # Use Python script to update changelog with proper spacing
           python3 << 'EOF'
           import re
           import sys
+          import os
           
           # Read the current changelog
           try:
@@ -76,34 +77,48 @@ jobs:
           except FileNotFoundError:
               content = "# Changelog\n\n"
           
-          change_entry = "$CHANGE_ENTRY"
-          category = "$CATEGORY"
+          change_entry = os.environ.get('CHANGE_ENTRY', '')
+          category = os.environ.get('CATEGORY', '')
           
-          # Check if Unreleased section exists
+          if not change_entry or not category:
+              print("Missing environment variables")
+              sys.exit(1)
+          
+          lines = content.split('\n')
+          new_lines = []
+          in_unreleased = False
+          found_category = False
+          added_entry = False
+          
+          # Check if we need to create Unreleased section
           if "## [Unreleased]" not in content:
-              # Add new Unreleased section at the top
-              if content.startswith("# Changelog\n"):
-                  insertion_point = len("# Changelog\n\n")
-              else:
-                  content = "# Changelog\n\n" + content
-                  insertion_point = len("# Changelog\n\n")
-              
-              unreleased_section = f"## [Unreleased]\n\n### {category}\n\n{change_entry}\n\n"
-              content = content[:insertion_point] + unreleased_section + content[insertion_point:]
+              # Add new Unreleased section after main header
+              header_found = False
+              for line in lines:
+                  new_lines.append(line)
+                  if line.startswith("# ") and not header_found:
+                      header_found = True
+                      new_lines.extend([
+                          "",
+                          "## [Unreleased]",
+                          "",
+                          f"### {category}",
+                          "",
+                          change_entry,
+                          ""
+                      ])
+                      added_entry = True
           else:
-              # Find the Unreleased section and add to appropriate category
-              lines = content.split('\n')
-              new_lines = []
-              in_unreleased = False
-              found_category = False
-              added_entry = False
-              
-              for i, line in enumerate(lines):
+              # Process existing content line by line
+              i = 0
+              while i < len(lines):
+                  line = lines[i]
+                  
                   if line == "## [Unreleased]":
                       new_lines.append(line)
                       in_unreleased = True
                   elif line.startswith("## ") and in_unreleased:
-                      # End of Unreleased section
+                      # End of Unreleased section - add entry if not added yet
                       if not added_entry:
                           if not found_category:
                               new_lines.extend(["", f"### {category}", "", change_entry])
@@ -112,21 +127,46 @@ jobs:
                       new_lines.extend(["", line])
                       in_unreleased = False
                   elif in_unreleased and line == f"### {category}":
+                      # Found our target category
                       new_lines.append(line)
                       found_category = True
-                  elif in_unreleased and found_category and line.startswith("- "):
-                      # Add new entry before existing entries in this category
-                      if not added_entry:
-                          new_lines.extend([change_entry, line])
+                      # Look ahead for empty line and first entry
+                      j = i + 1
+                      while j < len(lines) and not added_entry:
+                          next_line = lines[j]
+                          if next_line == "":
+                              new_lines.append(next_line)
+                          elif next_line.startswith("- "):
+                              # Insert our entry before first existing entry
+                              new_lines.extend([change_entry, next_line])
+                              added_entry = True
+                              j += 1  # Skip this line since we added it
+                              break
+                          elif next_line.startswith("### ") or next_line.startswith("## "):
+                              # No existing entries in this category, add ours
+                              new_lines.extend([change_entry, ""])
+                              added_entry = True
+                              break
+                          else:
+                              new_lines.append(next_line)
+                          j += 1
+                      
+                      # If we reached end without finding entries, add our entry
+                      if not added_entry and j >= len(lines):
+                          new_lines.extend(["", change_entry])
                           added_entry = True
-                      else:
-                          new_lines.append(line)
-                  elif in_unreleased and found_category and line == "" and not added_entry:
-                      # Empty line after category header
-                      new_lines.extend([line, change_entry])
+                      
+                      i = j - 1  # Adjust index since we processed ahead
+                  elif in_unreleased and line.startswith("### ") and not found_category:
+                      # Found different category before ours, insert our category
+                      new_lines.extend([f"### {category}", "", change_entry, "", line])
+                      found_category = True
                       added_entry = True
                   else:
+                      # Regular line, just add it
                       new_lines.append(line)
+                  
+                  i += 1
               
               # If we're still in unreleased and haven't added entry
               if in_unreleased and not added_entry:
@@ -134,8 +174,23 @@ jobs:
                       new_lines.extend(["", f"### {category}", "", change_entry])
                   else:
                       new_lines.append(change_entry)
-              
-              content = '\n'.join(new_lines)
+          
+          # Clean up excessive blank lines while maintaining structure
+          final_lines = []
+          prev_blank = False
+          for line in new_lines:
+              if line == "":
+                  if not prev_blank:
+                      final_lines.append(line)
+                      prev_blank = True
+              else:
+                  final_lines.append(line)
+                  prev_blank = False
+          
+          # Ensure file ends with single newline
+          content = '\n'.join(final_lines)
+          if not content.endswith('\n'):
+              content += '\n'
           
           # Write the updated changelog
           with open('CHANGELOG.md', 'w') as f:
@@ -143,6 +198,9 @@ jobs:
           
           print("Changelog updated successfully")
           EOF
+        env:
+          CHANGE_ENTRY: "- ${{ github.event.pull_request.title }} @${{ github.event.pull_request.user.login }} [#${{ github.event.pull_request.number }}]"
+          CATEGORY: ${{ steps.categorize.outputs.category }}
 
       - name: Commit changes
         run: |

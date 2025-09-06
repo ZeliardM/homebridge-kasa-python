@@ -1,5 +1,9 @@
 name: Release Drafter
 
+# Custom release drafter that reads from CHANGELOG.md instead of using
+# the homebridge shared workflow. This ensures consistency between 
+# changelog and release content.
+
 on:
   push:
     branches: [latest]
@@ -10,6 +14,103 @@ on:
 
 jobs:
   release-drafter:
-    uses: homebridge/.github/.github/workflows/release-drafter.yml@latest
-    secrets:
-      token: ${{ secrets.GITHUB_TOKEN }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract Unreleased content from CHANGELOG.md
+        id: extract-changelog
+        run: |
+          if [[ ! -f "CHANGELOG.md" ]]; then
+            echo "No CHANGELOG.md found"
+            echo "changes=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Extract Unreleased section content
+          python3 << 'EOF'
+          import re
+          import os
+          
+          with open('CHANGELOG.md', 'r') as f:
+              content = f.read()
+          
+          # Find Unreleased section
+          lines = content.split('\n')
+          in_unreleased = False
+          release_content = []
+          
+          for line in lines:
+              if line == "## [Unreleased]":
+                  in_unreleased = True
+                  continue
+              elif line.startswith("## ") and in_unreleased:
+                  # End of Unreleased section
+                  break
+              elif in_unreleased and line.strip():
+                  # Add content from Unreleased section
+                  release_content.append(line)
+          
+          # Format for release drafter
+          if release_content:
+              formatted_content = '\n'.join(release_content)
+              # Replace ### headers with ## for release format
+              formatted_content = re.sub(r'^### ', '## ', formatted_content, flags=re.MULTILINE)
+          else:
+              formatted_content = "## Other Changes\n\n_No changes in this release._"
+          
+          # Write to GitHub output (handle multiline)
+          output_file = os.environ.get('GITHUB_OUTPUT')
+          if output_file:
+              with open(output_file, 'a') as f:
+                  f.write("changes<<EOF\n")
+                  f.write(formatted_content)
+                  f.write("\nEOF\n")
+          
+          print("Extracted changelog content:")
+          print(formatted_content)
+          EOF
+
+      - name: Get next version
+        id: version
+        run: |
+          # Get the latest tag
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $latest_tag"
+          echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
+          
+          # Extract version number (remove 'v' prefix)
+          current_version=${latest_tag#v}
+          echo "Current version: $current_version"
+          
+          # Simple increment patch version for preview
+          IFS='.' read -ra VERSION_PARTS <<< "$current_version"
+          major=${VERSION_PARTS[0]}
+          minor=${VERSION_PARTS[1]}
+          patch=${VERSION_PARTS[2]}
+          
+          # Increment patch version
+          next_patch=$((patch + 1))
+          next_version="$major.$minor.$next_patch"
+          
+          echo "next_version=$next_version" >> $GITHUB_OUTPUT
+          echo "Next version: $next_version"
+
+      - name: Create or update release draft
+        uses: release-drafter/release-drafter@v6
+        with:
+          config-name: release-drafter.yml
+          version: ${{ steps.version.outputs.next_version }}
+          tag: v${{ steps.version.outputs.next_version }}
+          name: v${{ steps.version.outputs.next_version }}
+          body: |
+            ${{ steps.extract-changelog.outputs.changes }}
+            
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.version.outputs.latest_tag }}...v${{ steps.version.outputs.next_version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
