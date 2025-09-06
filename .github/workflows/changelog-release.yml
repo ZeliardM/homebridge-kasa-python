@@ -212,7 +212,7 @@ jobs:
           # Check if "Other Changes" section exists in release body
           if echo "$CURRENT_BODY" | grep -q "## Other Changes"; then
             # Add to existing Other Changes section
-            UPDATED_BODY=$(echo "$CURRENT_BODY" | sed "/## Other Changes/a\\$VERSION_COMMIT")
+            UPDATED_BODY=$(echo "$CURRENT_BODY" | sed "/## Other Changes/a\\n$VERSION_COMMIT")
           else
             # Add new Other Changes section before Full Changelog
             UPDATED_BODY=$(echo "$CURRENT_BODY" | sed "/\*\*Full Changelog\*\*/i\\n## Other Changes\\n\\$VERSION_COMMIT\\n")
