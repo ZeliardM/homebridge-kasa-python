@@ -13,10 +13,10 @@ name: Changelog to Release
 # - ### Bug Fixes
 # - ### Other Changes
 # 
-# If CHANGELOG.md is missing entries after a release:
-# 1. Check that the GitHub release has proper content (not empty body)
-# 2. Manually add missing entries to CHANGELOG.md following the existing format
-# 3. The workflow should work correctly for future releases if releases have content
+# This workflow now works in conjunction with update-changelog.yml which automatically
+# maintains CHANGELOG.md when PRs are merged. When a release is published, this workflow:
+# 1. Updates the "Unreleased" section to the actual release version
+# 2. Syncs the content to the GitHub release
 #
 # To test the workflow manually, you can trigger it using the "workflow_dispatch" event
 # from the GitHub Actions tab.
@@ -27,7 +27,41 @@ on:
   workflow_dispatch:
 
 jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update changelog version
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name || 'manual-test' }}"
+          RELEASE_DATE=$(date +%Y-%m-%d)
+          
+          echo "Updating changelog for release: $RELEASE_TAG"
+          
+          # Replace [Unreleased] with the actual version and date
+          sed -i "s/## \[Unreleased\]/## [$RELEASE_TAG](https:\/\/github.com\/${{ github.repository }}\/releases\/tag\/$RELEASE_TAG) ($RELEASE_DATE)/" CHANGELOG.md
+          
+          # Commit the change
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          if git diff --quiet CHANGELOG.md; then
+            echo "No version update needed"
+          else
+            git add CHANGELOG.md
+            git commit -m "Update CHANGELOG.md version to $RELEASE_TAG"
+            git push
+            echo "Changelog version updated to $RELEASE_TAG"
+          fi
+
   changerelease:
+      needs: update-version
       uses: homebridge/.github/.github/workflows/change-release.yml@latest
       secrets:
           token: ${{ secrets.GITHUB_TOKEN }}

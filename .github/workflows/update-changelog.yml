@@ -1,0 +1,172 @@
+name: Update Changelog
+
+# This workflow automatically updates CHANGELOG.md when PRs are merged to the main branch.
+# It categorizes changes based on PR labels and maintains the Keep a Changelog format
+# that the changelog-release workflow expects.
+#
+# This eliminates the need for manual CHANGELOG.md maintenance and ensures consistency
+# between GitHub releases and the changelog file.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [latest]
+
+jobs:
+  update-changelog:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get next version
+        id: get-version
+        run: |
+          # Get the latest tag to determine next version
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $latest_tag"
+          
+          # For now, we'll use "Unreleased" section - version will be set when release is created
+          echo "version=Unreleased" >> $GITHUB_OUTPUT
+
+      - name: Categorize PR
+        id: categorize
+        run: |
+          labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
+          echo "PR Labels: $labels"
+          
+          # Determine category based on labels (matching release-drafter.yml)
+          category="Other Changes"
+          
+          if echo "$labels" | grep -q "breaking change"; then
+            category="Breaking Changes"
+          elif echo "$labels" | grep -qE "(feature|enhancement)"; then
+            category="Featured Changes"
+          elif echo "$labels" | grep -qE "(fix|bugfix|bug)"; then
+            category="Bug Fixes"
+          elif echo "$labels" | grep -q "documentation"; then
+            category="Other Changes"
+          fi
+          
+          echo "category=$category" >> $GITHUB_OUTPUT
+          echo "Categorized as: $category"
+
+      - name: Update CHANGELOG.md
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          CATEGORY="${{ steps.categorize.outputs.category }}"
+          
+          # Format the changelog entry
+          CHANGE_ENTRY="- $PR_TITLE @$PR_AUTHOR [#$PR_NUMBER]"
+          
+          echo "Adding entry: $CHANGE_ENTRY"
+          echo "Category: $CATEGORY"
+          
+          # Create a temporary file for the new changelog
+          temp_file=$(mktemp)
+          
+          # Check if Unreleased section exists
+          if ! grep -q "## \[Unreleased\]" CHANGELOG.md; then
+            # Create new Unreleased section at the top
+            echo "# Changelog" > "$temp_file"
+            echo "" >> "$temp_file"
+            echo "## [Unreleased]" >> "$temp_file"
+            echo "" >> "$temp_file"
+            echo "### $CATEGORY" >> "$temp_file"
+            echo "" >> "$temp_file"
+            echo "$CHANGE_ENTRY" >> "$temp_file"
+            echo "" >> "$temp_file"
+            
+            # Add the rest of the existing changelog (skip first line if it's just "# Changelog")
+            if head -1 CHANGELOG.md | grep -q "# Changelog"; then
+              tail -n +2 CHANGELOG.md >> "$temp_file"
+            else
+              cat CHANGELOG.md >> "$temp_file"
+            fi
+          else
+            # Unreleased section exists, need to add to it
+            found_section=false
+            in_unreleased=false
+            added_entry=false
+            
+            while IFS= read -r line; do
+              if [[ "$line" == "## [Unreleased]" ]]; then
+                echo "$line" >> "$temp_file"
+                in_unreleased=true
+              elif [[ "$line" =~ ^##[[:space:]] ]] && [[ "$in_unreleased" == true ]]; then
+                # End of Unreleased section, add entry if not already added
+                if [[ "$added_entry" == false ]]; then
+                  if [[ "$found_section" == false ]]; then
+                    echo "" >> "$temp_file"
+                    echo "### $CATEGORY" >> "$temp_file"
+                    echo "" >> "$temp_file"
+                  fi
+                  echo "$CHANGE_ENTRY" >> "$temp_file"
+                  echo "" >> "$temp_file"
+                fi
+                echo "$line" >> "$temp_file"
+                in_unreleased=false
+              elif [[ "$line" == "### $CATEGORY" ]] && [[ "$in_unreleased" == true ]]; then
+                echo "$line" >> "$temp_file"
+                found_section=true
+              elif [[ "$line" =~ ^###[[:space:]] ]] && [[ "$in_unreleased" == true ]] && [[ "$found_section" == true ]]; then
+                # Different category section in Unreleased, add our entry before this
+                echo "$CHANGE_ENTRY" >> "$temp_file"
+                echo "" >> "$temp_file"
+                echo "$line" >> "$temp_file"
+                added_entry=true
+                found_section=false
+              elif [[ "$in_unreleased" == true ]] && [[ "$found_section" == true ]] && [[ "$line" =~ ^-[[:space:]] ]]; then
+                # Found existing entries in our category, add new entry at the top
+                echo "$CHANGE_ENTRY" >> "$temp_file"
+                echo "$line" >> "$temp_file"
+                added_entry=true
+                found_section=false
+              else
+                echo "$line" >> "$temp_file"
+                if [[ "$in_unreleased" == true ]] && [[ "$found_section" == true ]] && [[ "$line" == "" ]]; then
+                  # Empty line after category header, add our entry
+                  echo "$CHANGE_ENTRY" >> "$temp_file"
+                  added_entry=true
+                  found_section=false
+                fi
+              fi
+            done < CHANGELOG.md
+            
+            # If we're still in unreleased section and haven't added the entry
+            if [[ "$in_unreleased" == true ]] && [[ "$added_entry" == false ]]; then
+              if [[ "$found_section" == false ]]; then
+                echo "" >> "$temp_file"
+                echo "### $CATEGORY" >> "$temp_file"
+                echo "" >> "$temp_file"
+              fi
+              echo "$CHANGE_ENTRY" >> "$temp_file"
+            fi
+          fi
+          
+          # Replace the original file
+          mv "$temp_file" CHANGELOG.md
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changes to commit"
+          else
+            git add CHANGELOG.md
+            git commit -m "Update CHANGELOG.md for PR #${{ github.event.pull_request.number }}"
+            git push
+            echo "Changelog updated successfully"
+          fi
