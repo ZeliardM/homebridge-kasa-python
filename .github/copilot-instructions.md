@@ -25,10 +25,10 @@ This is a Homebridge plugin that bridges TP-Link Kasa/Tapo smart home devices to
 - Supported versions: 3.11, 3.12, 3.13
 - Required packages defined in `requirements.txt`
 - **ALWAYS install Python dependencies first**:
-
   ```bash
   python3 -m pip install --upgrade pip
   pip install -r requirements.txt
+  ```
 ## Build and Validation Procedures
 
 ### Essential Build Sequence (ALWAYS follow this order):
