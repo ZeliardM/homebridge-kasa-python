@@ -121,11 +121,8 @@ jobs:
           
           lines = content.split('\n')
           
-          def add_entry_to_changelog(content, section_header, category, change_entry):
-              """Add entry to a specific section and category in the changelog."""
-              lines = content.split('\n')
-              
-              # Find the section boundaries
+          def find_section_boundaries(lines, section_header):
+              """Find start and end indices of a section in the changelog."""
               section_start = -1
               section_end = len(lines)
               
@@ -135,6 +132,29 @@ jobs:
                   elif section_start >= 0 and line.startswith("## ") and line.strip() != section_header.strip():
                       section_end = idx
                       break
+              
+              return section_start, section_end
+          
+          def find_category_boundaries(section_lines, category_header):
+              """Find start and end indices of a category within a section."""
+              category_start = -1
+              category_end = len(section_lines)
+              
+              for idx, line in enumerate(section_lines):
+                  if line.strip() == category_header.strip():
+                      category_start = idx
+                  elif category_start >= 0 and (line.startswith("### ") or line.startswith("**Full Changelog**")):
+                      category_end = idx
+                      break
+              
+              return category_start, category_end
+          
+          def add_entry_to_changelog(content, section_header, category, change_entry):
+              """Add entry to a specific section and category in the changelog."""
+              lines = content.split('\n')
+              
+              # Find the section boundaries
+              section_start, section_end = find_section_boundaries(lines, section_header)
               
               if section_start == -1:
                   # Section doesn't exist
@@ -147,15 +167,7 @@ jobs:
               
               # Find category within section
               category_header = f"### {category}"
-              category_start = -1
-              category_end = len(section_lines)
-              
-              for idx, line in enumerate(section_lines):
-                  if line.strip() == category_header.strip():
-                      category_start = idx
-                  elif category_start >= 0 and (line.startswith("### ") or line.startswith("**Full Changelog**")):
-                      category_end = idx
-                      break
+              category_start, category_end = find_category_boundaries(section_lines, category_header)
               
               # Build new section content
               if category_start >= 0:
@@ -267,9 +279,7 @@ jobs:
           final_lines = []
           
           # Process lines to remove excessive blanks
-          for idx in range(len(lines)):
-              current_line = lines[idx]
-              
+          for idx, current_line in enumerate(lines):
               # Check if this is an excessive blank line
               is_excessive_blank = (
                   current_line == "" and 

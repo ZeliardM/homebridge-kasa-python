@@ -181,7 +181,6 @@ jobs:
           EOF
         env:
           RELEASE_TAG: v${{ steps.version.outputs.next_version }}
-          RELEASE_DATE: $(date +%Y-%m-%d)
           RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.next_version }}
           LATEST_TAG: ${{ steps.version.outputs.latest_tag }}
           GITHUB_REPOSITORY: ${{ github.repository }}
