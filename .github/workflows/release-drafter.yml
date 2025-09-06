@@ -1,8 +1,7 @@
 name: Release Drafter
 
-# Custom release drafter that reads from CHANGELOG.md instead of using
-# the homebridge shared workflow. This ensures consistency between 
-# changelog and release content.
+# Custom release drafter that converts "Unreleased" to version in CHANGELOG.md
+# when drafting a release, then uses that content for the release draft.
 
 on:
   push:
@@ -22,59 +21,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Extract Unreleased content from CHANGELOG.md
-        id: extract-changelog
-        run: |
-          if [[ ! -f "CHANGELOG.md" ]]; then
-            echo "No CHANGELOG.md found"
-            echo "changes=" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          # Extract Unreleased section content
-          python3 << 'EOF'
-          import re
-          import os
-          
-          with open('CHANGELOG.md', 'r') as f:
-              content = f.read()
-          
-          # Find Unreleased section
-          lines = content.split('\n')
-          in_unreleased = False
-          release_content = []
-          
-          for line in lines:
-              if line == "## [Unreleased]":
-                  in_unreleased = True
-                  continue
-              elif line.startswith("## ") and in_unreleased:
-                  # End of Unreleased section
-                  break
-              elif in_unreleased and line.strip():
-                  # Add content from Unreleased section
-                  release_content.append(line)
-          
-          # Format for release drafter
-          if release_content:
-              formatted_content = '\n'.join(release_content)
-              # Replace ### headers with ## for release format
-              formatted_content = re.sub(r'^### ', '## ', formatted_content, flags=re.MULTILINE)
-          else:
-              formatted_content = "## Other Changes\n\n_No changes in this release._"
-          
-          # Write to GitHub output (handle multiline)
-          output_file = os.environ.get('GITHUB_OUTPUT')
-          if output_file:
-              with open(output_file, 'a') as f:
-                  f.write("changes<<EOF\n")
-                  f.write(formatted_content)
-                  f.write("\nEOF\n")
-          
-          print("Extracted changelog content:")
-          print(formatted_content)
-          EOF
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Get next version
         id: version
@@ -101,6 +50,129 @@ jobs:
           echo "next_version=$next_version" >> $GITHUB_OUTPUT
           echo "Next version: $next_version"
 
+      - name: Update CHANGELOG.md with release version
+        id: update-changelog
+        run: |
+          RELEASE_TAG="v${{ steps.version.outputs.next_version }}"
+          RELEASE_DATE=$(date +%Y-%m-%d)
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/$RELEASE_TAG"
+          LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
+          
+          echo "Converting Unreleased to: $RELEASE_TAG"
+          
+          python3 << 'EOF'
+          import re
+          import os
+          
+          release_tag = os.environ.get('RELEASE_TAG', '')
+          release_date = os.environ.get('RELEASE_DATE', '')
+          release_url = os.environ.get('RELEASE_URL', '')
+          latest_tag = os.environ.get('LATEST_TAG', '')
+          
+          # Read current changelog
+          with open('CHANGELOG.md', 'r') as f:
+              content = f.read()
+          
+          # Check if there's an Unreleased section to convert
+          if "## [Unreleased]" not in content:
+              print("No Unreleased section found, nothing to convert")
+              exit(0)
+          
+          # Replace [Unreleased] with actual version and add link
+          version_header = f"## [{release_tag}]({release_url}) ({release_date})"
+          updated_content = content.replace("## [Unreleased]", version_header)
+          
+          lines = updated_content.split('\n')
+          new_lines = []
+          header_found = False
+          in_current_release = False
+          release_content_lines = []
+          
+          for i, line in enumerate(lines):
+              if line.startswith("# ") and not header_found:
+                  header_found = True
+                  new_lines.append(line)
+                  # Add new empty Unreleased section after main header
+                  new_lines.extend([
+                      "",
+                      "## [Unreleased]",
+                      ""
+                  ])
+              elif line == version_header:
+                  # Found the version we just created
+                  new_lines.append(line)
+                  in_current_release = True
+              elif in_current_release and line.startswith("## ") and line != version_header:
+                  # End of current release section, add full changelog link
+                  new_lines.extend([
+                      "",
+                      f"**Full Changelog**: https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/compare/{latest_tag}...{release_tag}",
+                      "",
+                      line
+                  ])
+                  in_current_release = False
+              elif in_current_release and line.strip():
+                  # Collect release content for output
+                  release_content_lines.append(line)
+                  new_lines.append(line)
+              else:
+                  new_lines.append(line)
+          
+          # If we're still in current release at end of file, add full changelog link
+          if in_current_release:
+              new_lines.extend([
+                  "",
+                  f"**Full Changelog**: https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/compare/{latest_tag}...{release_tag}"
+              ])
+          
+          final_content = '\n'.join(new_lines)
+          
+          # Ensure proper ending
+          if not final_content.endswith('\n'):
+              final_content += '\n'
+          
+          # Write updated changelog
+          with open('CHANGELOG.md', 'w') as f:
+              f.write(final_content)
+          
+          # Format release content for GitHub output
+          release_content = '\n'.join(release_content_lines) if release_content_lines else "## Other Changes\n\n_No changes in this release._"
+          # Replace ### headers with ## for release format
+          release_content = re.sub(r'^### ', '## ', release_content, flags=re.MULTILINE)
+          
+          # Write to GitHub output (handle multiline)
+          output_file = os.environ.get('GITHUB_OUTPUT')
+          if output_file:
+              with open(output_file, 'a') as f:
+                  f.write("changes<<EOF\n")
+                  f.write(release_content)
+                  f.write("\nEOF\n")
+          
+          print(f"Changelog updated: Unreleased -> {release_tag}")
+          print("Release content extracted:")
+          print(release_content)
+          EOF
+        env:
+          RELEASE_TAG: v${{ steps.version.outputs.next_version }}
+          RELEASE_DATE: $(date +%Y-%m-%d)
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.next_version }}
+          LATEST_TAG: ${{ steps.version.outputs.latest_tag }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Commit changelog updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changelog updates needed"
+          else
+            git add CHANGELOG.md
+            git commit -m "Update CHANGELOG.md for release v${{ steps.version.outputs.next_version }}"
+            git push
+            echo "Changelog updated for release v${{ steps.version.outputs.next_version }}"
+          fi
+
       - name: Create or update release draft
         uses: release-drafter/release-drafter@v6
         with:
@@ -109,7 +181,7 @@ jobs:
           tag: v${{ steps.version.outputs.next_version }}
           name: v${{ steps.version.outputs.next_version }}
           body: |
-            ${{ steps.extract-changelog.outputs.changes }}
+            ${{ steps.update-changelog.outputs.changes }}
             
             **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.version.outputs.latest_tag }}...v${{ steps.version.outputs.next_version }}
         env:
