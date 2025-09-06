@@ -187,7 +187,6 @@ python3 -c "import kasa; print('Python Imports OK')"
 - `anyio` - Async I/O abstraction
 
 ### Development Dependencies (package.json `devDependencies`):
-> **Note:** These are installed via `npm` and listed under `devDependencies` in `package.json`.
 - `eslint` (with TypeScript support) - Linting and code quality
 - `rimraf` - Clean builds (cross-platform `rm -rf`)
 - `nodemon` - Development watch/reload
