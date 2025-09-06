@@ -144,70 +144,75 @@ jobs:
               new_lines = []
               unreleased_content = []
               in_unreleased = False
-              in_existing_version = False
               existing_version_content = []
               version_header = f"## [{release_tag}]({release_url}) ({release_date})"
               
-              # First pass - extract unreleased content
-              for line in lines:
+              # First pass - extract unreleased content and existing version content
+              i = 0
+              while i < len(lines):
+                  line = lines[i]
+                  
                   if line == "## [Unreleased]":
                       in_unreleased = True
+                      i += 1
                       continue
                   elif in_unreleased and line.startswith("## "):
+                      # End of unreleased section
                       in_unreleased = False
                   elif in_unreleased and line.strip():
                       unreleased_content.append(line)
+                      i += 1
+                      continue
+                  elif line.startswith(f"## [{release_tag}]"):
+                      # Found existing version - extract its content
+                      i += 1  # Skip the header
+                      while i < len(lines):
+                          next_line = lines[i]
+                          if next_line.startswith("## ") and not next_line.startswith(f"## [{release_tag}]"):
+                              # Hit next section
+                              break
+                          elif next_line.startswith("**Full Changelog**"):
+                              # Skip the full changelog link
+                              i += 1
+                              break
+                          elif next_line.strip():
+                              existing_version_content.append(next_line)
+                          i += 1
+                      continue
+                  
+                  i += 1
               
-              # Second pass - merge with existing version content
-              for i, line in enumerate(lines):
-                  if line.startswith(f"## [{release_tag}]"):
-                      # Found existing version, replace with updated header
+              # Now rebuild the changelog
+              i = 0
+              while i < len(lines):
+                  line = lines[i]
+                  
+                  if line == "## [Unreleased]":
+                      # Skip entire unreleased section
+                      while i < len(lines) and not (lines[i].startswith("## ") and lines[i] != "## [Unreleased]"):
+                          i += 1
+                      continue
+                  elif line.startswith(f"## [{release_tag}]"):
+                      # Replace with merged content
                       new_lines.append(version_header)
-                      in_existing_version = True
-                      continue
-                  elif line == "## [Unreleased]":
-                      # Skip unreleased section entirely
-                      in_unreleased = True
-                      continue
-                  elif in_unreleased and line.startswith("## "):
-                      # End of unreleased, continue with this line
-                      in_unreleased = False
-                      new_lines.append(line)
-                  elif in_unreleased:
-                      # Skip unreleased content (already extracted)
-                      continue
-                  elif in_existing_version and line.startswith("## ") and not line.startswith(f"## [{release_tag}]"):
-                      # End of existing version section
-                      # First add all the unreleased content, then the Full Changelog link
+                      new_lines.extend(existing_version_content)
                       new_lines.extend(unreleased_content)
                       new_lines.extend([
                           "",
                           f"**Full Changelog**: https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/compare/{latest_tag}...{release_tag}",
-                          "",
-                          line
+                          ""
                       ])
-                      in_existing_version = False
-                  elif in_existing_version and line.startswith("**Full Changelog**"):
-                      # Replace the existing Full Changelog link with merged content + new link
-                      new_lines.extend(unreleased_content)
-                      new_lines.extend([
-                          "",
-                          f"**Full Changelog**: https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/compare/{latest_tag}...{release_tag}"
-                      ])
-                  elif in_existing_version and line.strip():
-                      # Collect existing version content but don't add yet
-                      existing_version_content.append(line)
+                      # Skip to next section
+                      i += 1
+                      while i < len(lines):
+                          if lines[i].startswith("## ") and not lines[i].startswith(f"## [{release_tag}]"):
+                              break
+                          i += 1
+                      continue
                   else:
                       new_lines.append(line)
-              
-              # If we're still in existing version at end of file
-              if in_existing_version:
-                  new_lines.extend(existing_version_content)
-                  new_lines.extend(unreleased_content)
-                  new_lines.extend([
-                      "",
-                      f"**Full Changelog**: https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/compare/{latest_tag}...{release_tag}"
-                  ])
+                  
+                  i += 1
               
               # Merge existing and unreleased content for release
               all_content = existing_version_content + unreleased_content
