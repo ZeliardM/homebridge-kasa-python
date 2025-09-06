@@ -60,9 +60,6 @@
 - Update dependencies
 - Update requirements and dependencies
 - Finish updating dependencies
-- Update dependencies
-- Update dependencies
-- Update dependencies
 - Merge branch 'v2.8.0-beta' into latest
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.7.2...v2.8.0
