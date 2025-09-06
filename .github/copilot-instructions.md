@@ -41,7 +41,7 @@ This is a Homebridge plugin that bridges TP-Link Kasa/Tapo smart home devices to
    ```
    Note: If pip install times out, the packages may already be installed. Verify with:
    ```bash
-   python3 -c "import kasa; print('Python kasa import OK')"
+   python3 -c "import kasa; print('Python Import OK')"
    ```
 
 2. **Install Node.js dependencies:**
@@ -63,10 +63,10 @@ This is a Homebridge plugin that bridges TP-Link Kasa/Tapo smart home devices to
 5. **Validate the build:**
    ```bash
    # Test Node.js import
-   node -e "import('./dist/index.js').then(() => console.log('Node import OK')).catch(console.error)"
+   node -e "import('./dist/index.js').then(() => console.log('Node Import OK')).catch(console.error)"
    
-   # Test Python imports
-   python3 -c "import kasa; print('Python kasa import OK')"
+   # Test Python import
+   python3 -c "import kasa; print('Python Import OK')"
    ```
 
 ### Development Commands:
@@ -149,7 +149,7 @@ python3 -m pip install --upgrade pip
 pip install -r requirements.txt
 
 # Verify Python dependencies (if pip times out)
-python3 -c "import kasa; print('Python Imports OK')"
+python3 -c "import kasa; print('Python Import OK')"
 
 # Install Node.js dependencies  
 npm ci
@@ -164,7 +164,7 @@ npm run build
 node -e "(async () => { try { await import('./dist/index.js'); console.log('Node Import OK'); } catch (err) { console.error(err); process.exit(1); } })()"
 
 # Test Python dependencies
-python3 -c "import kasa; print('Python Imports OK')"
+python3 -c "import kasa; print('Python Import OK')"
 ```
 
 ## Key Dependencies and Configuration
