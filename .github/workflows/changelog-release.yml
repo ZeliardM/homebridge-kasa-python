@@ -46,25 +46,73 @@ jobs:
           version_header = f"## [{release_tag}]({release_url}) ({release_date})"
           updated_content = content.replace("## [Unreleased]", version_header)
           
-          # Add a new Unreleased section at the top for future changes
-          # and include the version update commit entry
           lines = updated_content.split('\n')
           new_lines = []
           header_found = False
+          in_current_release = False
+          added_commit_entry = False
+          other_changes_found = False
           
-          for line in lines:
-              new_lines.append(line)
+          for i, line in enumerate(lines):
               if line.startswith("# ") and not header_found:
                   header_found = True
-                  # Add new Unreleased section with the version update commit
+                  new_lines.append(line)
+                  # Add new empty Unreleased section after main header
                   new_lines.extend([
                       "",
                       "## [Unreleased]",
+                      ""
+                  ])
+              elif line == version_header:
+                  # Found the version we just created
+                  new_lines.append(line)
+                  in_current_release = True
+                  other_changes_found = False
+              elif in_current_release and line == "### Other Changes":
+                  # Found existing Other Changes section in current release
+                  new_lines.append(line)
+                  other_changes_found = True
+              elif in_current_release and line.startswith("## ") and line != version_header:
+                  # Found the next release section, end of current release
+                  if not added_commit_entry:
+                      if other_changes_found:
+                          # Add to existing Other Changes section - insert before this line
+                          new_lines.extend([
+                              f"- Update CHANGELOG.md version to {release_tag} @github-actions [release]",
+                              ""
+                          ])
+                      else:
+                          # Create new Other Changes section
+                          new_lines.extend([
+                              "",
+                              "### Other Changes",
+                              "",
+                              f"- Update CHANGELOG.md version to {release_tag} @github-actions [release]",
+                              ""
+                          ])
+                      added_commit_entry = True
+                  new_lines.append(line)
+                  in_current_release = False
+              elif in_current_release and other_changes_found and line.startswith("- ") and not added_commit_entry:
+                  # Add our entry before the first existing entry in Other Changes
+                  new_lines.extend([
+                      f"- Update CHANGELOG.md version to {release_tag} @github-actions [release]",
+                      line
+                  ])
+                  added_commit_entry = True
+              else:
+                  new_lines.append(line)
+          
+          # If we're still in the current release at the end of file
+          if in_current_release and not added_commit_entry:
+              if other_changes_found:
+                  new_lines.append(f"- Update CHANGELOG.md version to {release_tag} @github-actions [release]")
+              else:
+                  new_lines.extend([
                       "",
                       "### Other Changes",
                       "",
-                      f"- Update CHANGELOG.md version to {release_tag} @github-actions [release]",
-                      ""
+                      f"- Update CHANGELOG.md version to {release_tag} @github-actions [release]"
                   ])
           
           final_content = '\n'.join(new_lines)
@@ -78,7 +126,7 @@ jobs:
               f.write(final_content)
           
           print(f"Changelog updated: Unreleased -> {release_tag}")
-          print("Added version update commit entry to new Unreleased section")
+          print(f"Added version update commit entry to bottom of {release_tag} section")
           EOF
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
