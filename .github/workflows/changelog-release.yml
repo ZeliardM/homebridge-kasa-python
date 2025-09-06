@@ -215,7 +215,7 @@ jobs:
             UPDATED_BODY=$(echo "$CURRENT_BODY" | sed "/## Other Changes/a\\n$VERSION_COMMIT")
           else
             # Add new Other Changes section before Full Changelog
-            UPDATED_BODY=$(echo "$CURRENT_BODY" | sed "/\*\*Full Changelog\*\*/i\\n## Other Changes\\n\\$VERSION_COMMIT\\n")
+            UPDATED_BODY=$(echo "$CURRENT_BODY" | sed "/\*\*Full Changelog\*\*/i\\n## Other Changes\\n$VERSION_COMMIT\\n")
           fi
           
           # Update the release
