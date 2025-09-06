@@ -146,7 +146,7 @@ To replicate CI locally, run this exact sequence (tested on Node.js 20/22/24, Py
 ```bash
 # Install Python dependencies
 python3 -m pip install --upgrade pip
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 
 # Verify Python dependencies (if pip times out)
 python3 -c "import kasa; print('Python Import OK')"
