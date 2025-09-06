@@ -116,76 +116,99 @@ jobs:
               sys.exit(1)
           
           lines = content.split('\n')
-          new_lines = []
-          added_entry = False
+          
+          def add_entry_to_changelog(content, section_header, category, change_entry):
+              """Add entry to a specific section and category in the changelog."""
+              lines = content.split('\n')
+              
+              # Find the section
+              section_start = -1
+              section_end = len(lines)
+              
+              for i, line in enumerate(lines):
+                  if line.startswith(section_header):
+                      section_start = i
+                  elif section_start >= 0 and line.startswith("## ") and line != section_header:
+                      section_end = i
+                      break
+              
+              if section_start == -1:
+                  # Section doesn't exist
+                  return content
+              
+              # Extract section content
+              before_section = lines[:section_start + 1]
+              section_content = lines[section_start + 1:section_end]
+              after_section = lines[section_end:]
+              
+              # Find or create the category within the section
+              category_start = -1
+              category_end = len(section_content)
+              
+              for i, line in enumerate(section_content):
+                  if line == f"### {category}":
+                      category_start = i
+                  elif category_start >= 0 and line.startswith("### "):
+                      category_end = i
+                      break
+                  elif category_start >= 0 and line.startswith("**Full Changelog**"):
+                      category_end = i
+                      break
+              
+              if category_start >= 0:
+                  # Category exists, add to it
+                  before_category = section_content[:category_start + 1]
+                  
+                  # Handle empty line after category header
+                  insert_pos = category_start + 1
+                  if insert_pos < len(section_content) and section_content[insert_pos] == "":
+                      before_category.append("")
+                      insert_pos += 1
+                  else:
+                      before_category.append("")
+                  
+                  # Add our entry
+                  before_category.append(change_entry)
+                  
+                  # Add the rest
+                  after_category = section_content[insert_pos:category_end]
+                  remaining_section = section_content[category_end:]
+                  
+                  new_section_content = before_category + after_category + remaining_section
+              else:
+                  # Category doesn't exist, create it
+                  # Find the right place to insert it (before other categories or at the end)
+                  insert_pos = 0
+                  for i, line in enumerate(section_content):
+                      if line.startswith("### ") or line.startswith("**Full Changelog**"):
+                          insert_pos = i
+                          break
+                  else:
+                      insert_pos = len(section_content)
+                  
+                  # Insert category and entry
+                  before_insert = section_content[:insert_pos]
+                  after_insert = section_content[insert_pos:]
+                  
+                  if before_insert and before_insert[-1] != "":
+                      before_insert.append("")
+                  
+                  new_category = [f"### {category}", "", change_entry]
+                  
+                  if after_insert and after_insert[0] != "":
+                      new_category.append("")
+                  
+                  new_section_content = before_insert + new_category + after_insert
+              
+              # Reconstruct the content
+              result_lines = before_section + new_section_content + after_section
+              return '\n'.join(result_lines)
           
           if has_draft == 'true' and draft_tag:
               # There's a draft release - add content to that version section
               print(f"Adding to existing draft version: {draft_tag}")
               target_header = f"## [{draft_tag}]"
-              
-              in_target_version = False
-              found_category = False
-              
-              for i, line in enumerate(lines):
-                  if line.startswith(target_header):
-                      new_lines.append(line)
-                      in_target_version = True
-                  elif in_target_version and line.startswith("## ") and not line.startswith(target_header):
-                      # End of target version section
-                      if not added_entry:
-                          if not found_category:
-                              # Add our category and entry before this section
-                              new_lines.extend(["", f"### {category}", "", change_entry])
-                          else:
-                              # Add entry to existing category (should be handled above)
-                              new_lines.append(change_entry)
-                      new_lines.extend(["", line])
-                      in_target_version = False
-                  elif in_target_version and line == f"### {category}":
-                      # Found our target category in the version
-                      new_lines.append(line)
-                      found_category = True
-                      
-                      # Look ahead to find where to insert
-                      j = i + 1
-                      
-                      # Skip empty line after header if it exists
-                      if j < len(lines) and lines[j] == "":
-                          new_lines.append("")
-                          j += 1
-                      elif j < len(lines):
-                          # No empty line after header, add one
-                          new_lines.append("")
-                      
-                      # Insert our entry before any existing entries
-                      new_lines.append(change_entry)
-                      added_entry = True
-                      
-                      # Continue from where we left off
-                      i = j - 1  # Will be incremented by loop
-                  elif in_target_version and line.startswith("### ") and not found_category:
-                      # Found different category before ours in version, insert our category
-                      new_lines.extend([f"### {category}", "", change_entry, "", line])
-                      found_category = True
-                      added_entry = True
-                  elif in_target_version and line.startswith("**Full Changelog**") and not added_entry:
-                      # Add entry before the full changelog link
-                      if not found_category:
-                          new_lines.extend([f"### {category}", "", change_entry, "", line])
-                      else:
-                          new_lines.extend([change_entry, "", line])
-                      added_entry = True
-                  else:
-                      # Regular line, just add it
-                      new_lines.append(line)
-              
-              # If we're still in target version at end and haven't added entry
-              if in_target_version and not added_entry:
-                  if not found_category:
-                      new_lines.extend(["", f"### {category}", "", change_entry])
-                  else:
-                      new_lines.append(change_entry)
+              content = add_entry_to_changelog(content, target_header, category, change_entry)
                       
           else:
               # No draft release - use Unreleased section
@@ -194,6 +217,8 @@ jobs:
               # Check if we need to create Unreleased section
               if "## [Unreleased]" not in content:
                   # Add new Unreleased section after main header
+                  lines = content.split('\n')
+                  new_lines = []
                   header_found = False
                   for line in lines:
                       new_lines.append(line)
@@ -208,67 +233,17 @@ jobs:
                               change_entry,
                               ""
                           ])
-                          added_entry = True
                           break
+                  content = '\n'.join(new_lines)
               else:
                   # Process existing content for Unreleased section
-                  in_unreleased = False
-                  found_category = False
-                  
-                  for i, line in enumerate(lines):
-                      if line == "## [Unreleased]":
-                          new_lines.append(line)
-                          in_unreleased = True
-                      elif line.startswith("## ") and in_unreleased:
-                          # End of Unreleased section
-                          if not added_entry:
-                              if not found_category:
-                                  new_lines.extend(["", f"### {category}", "", change_entry])
-                              else:
-                                  new_lines.append(change_entry)
-                          new_lines.extend(["", line])
-                          in_unreleased = False
-                      elif in_unreleased and line == f"### {category}":
-                          # Found our target category
-                          new_lines.append(line)
-                          found_category = True
-                          
-                          # Look ahead to find where to insert
-                          j = i + 1
-                          
-                          # Skip empty line after header if it exists
-                          if j < len(lines) and lines[j] == "":
-                              new_lines.append("")
-                              j += 1
-                          elif j < len(lines):
-                              # No empty line after header, add one
-                              new_lines.append("")
-                          
-                          # Insert our entry at the top
-                          new_lines.append(change_entry)
-                          added_entry = True
-                          
-                          i = j - 1  # Will be incremented by loop
-                      elif in_unreleased and line.startswith("### ") and not found_category:
-                          # Found different category before ours, insert our category
-                          new_lines.extend([f"### {category}", "", change_entry, "", line])
-                          found_category = True
-                          added_entry = True
-                      else:
-                          # Regular line, just add it
-                          new_lines.append(line)
-                  
-                  # If we're still in unreleased and haven't added entry
-                  if in_unreleased and not added_entry:
-                      if not found_category:
-                          new_lines.extend(["", f"### {category}", "", change_entry])
-                      else:
-                          new_lines.append(change_entry)
+                  content = add_entry_to_changelog(content, "## [Unreleased]", category, change_entry)
           
           # Clean up excessive blank lines while maintaining structure
+          lines = content.split('\n')
           final_lines = []
           prev_line = ""
-          for line in new_lines:
+          for line in lines:
               # Avoid more than one consecutive empty line
               if line == "" and prev_line == "":
                   continue
