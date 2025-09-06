@@ -168,6 +168,7 @@ python3 -c "import kasa; print('Python Imports OK')"
 ```
 
 ## Key Dependencies and Configuration
+> **Note:** Dependency versions may change. Always check `package.json` and `requirements.txt` for the current required versions.
 
 ### Runtime Dependencies (package.json):
 - `axios` - HTTP client for API calls
@@ -176,7 +177,6 @@ python3 -c "import kasa; print('Python Imports OK')"
 - `typescript` - TypeScript compiler
 
 ### Python Dependencies (requirements.txt):
-> **Note:** Dependency versions may change. Always check `requirements.txt` for the current required version numbers.
 - `python-kasa` - Core Kasa API library
 - `quart` - Async web framework
 - `uvicorn` - ASGI server
