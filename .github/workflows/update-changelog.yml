@@ -4,8 +4,8 @@ name: Update Changelog
 # It categorizes changes based on PR labels and maintains the Keep a Changelog format
 # that the changelog-release workflow expects.
 #
-# This eliminates the need for manual CHANGELOG.md maintenance and ensures consistency
-# between GitHub releases and the changelog file.
+# The workflow is simplified to always add entries to an "Unreleased" section, which
+# gets converted to actual version numbers when releases are published.
 
 on:
   pull_request:
@@ -27,15 +27,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get next version
-        id: get-version
-        run: |
-          # Get the latest tag to determine next version
-          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "Latest tag: $latest_tag"
-          
-          # For now, we'll use "Unreleased" section - version will be set when release is created
-          echo "version=Unreleased" >> $GITHUB_OUTPUT
+
 
       - name: Categorize PR
         id: categorize
@@ -72,90 +64,85 @@ jobs:
           echo "Adding entry: $CHANGE_ENTRY"
           echo "Category: $CATEGORY"
           
-          # Create a temporary file for the new changelog
-          temp_file=$(mktemp)
+          # Use Python script to update changelog - much simpler than bash parsing
+          python3 << 'EOF'
+          import re
+          import sys
+          
+          # Read the current changelog
+          try:
+              with open('CHANGELOG.md', 'r') as f:
+                  content = f.read()
+          except FileNotFoundError:
+              content = "# Changelog\n\n"
+          
+          change_entry = "$CHANGE_ENTRY"
+          category = "$CATEGORY"
           
           # Check if Unreleased section exists
-          if ! grep -q "## \[Unreleased\]" CHANGELOG.md; then
-            # Create new Unreleased section at the top
-            echo "# Changelog" > "$temp_file"
-            echo "" >> "$temp_file"
-            echo "## [Unreleased]" >> "$temp_file"
-            echo "" >> "$temp_file"
-            echo "### $CATEGORY" >> "$temp_file"
-            echo "" >> "$temp_file"
-            echo "$CHANGE_ENTRY" >> "$temp_file"
-            echo "" >> "$temp_file"
-            
-            # Add the rest of the existing changelog (skip first line if it's just "# Changelog")
-            if head -1 CHANGELOG.md | grep -q "# Changelog"; then
-              tail -n +2 CHANGELOG.md >> "$temp_file"
-            else
-              cat CHANGELOG.md >> "$temp_file"
-            fi
-          else
-            # Unreleased section exists, need to add to it
-            found_section=false
-            in_unreleased=false
-            added_entry=false
-            
-            while IFS= read -r line; do
-              if [[ "$line" == "## [Unreleased]" ]]; then
-                echo "$line" >> "$temp_file"
-                in_unreleased=true
-              elif [[ "$line" =~ ^##[[:space:]] ]] && [[ "$in_unreleased" == true ]]; then
-                # End of Unreleased section, add entry if not already added
-                if [[ "$added_entry" == false ]]; then
-                  if [[ "$found_section" == false ]]; then
-                    echo "" >> "$temp_file"
-                    echo "### $CATEGORY" >> "$temp_file"
-                    echo "" >> "$temp_file"
-                  fi
-                  echo "$CHANGE_ENTRY" >> "$temp_file"
-                  echo "" >> "$temp_file"
-                fi
-                echo "$line" >> "$temp_file"
-                in_unreleased=false
-              elif [[ "$line" == "### $CATEGORY" ]] && [[ "$in_unreleased" == true ]]; then
-                echo "$line" >> "$temp_file"
-                found_section=true
-              elif [[ "$line" =~ ^###[[:space:]] ]] && [[ "$in_unreleased" == true ]] && [[ "$found_section" == true ]]; then
-                # Different category section in Unreleased, add our entry before this
-                echo "$CHANGE_ENTRY" >> "$temp_file"
-                echo "" >> "$temp_file"
-                echo "$line" >> "$temp_file"
-                added_entry=true
-                found_section=false
-              elif [[ "$in_unreleased" == true ]] && [[ "$found_section" == true ]] && [[ "$line" =~ ^-[[:space:]] ]]; then
-                # Found existing entries in our category, add new entry at the top
-                echo "$CHANGE_ENTRY" >> "$temp_file"
-                echo "$line" >> "$temp_file"
-                added_entry=true
-                found_section=false
-              else
-                echo "$line" >> "$temp_file"
-                if [[ "$in_unreleased" == true ]] && [[ "$found_section" == true ]] && [[ "$line" == "" ]]; then
-                  # Empty line after category header, add our entry
-                  echo "$CHANGE_ENTRY" >> "$temp_file"
-                  added_entry=true
-                  found_section=false
-                fi
-              fi
-            done < CHANGELOG.md
-            
-            # If we're still in unreleased section and haven't added the entry
-            if [[ "$in_unreleased" == true ]] && [[ "$added_entry" == false ]]; then
-              if [[ "$found_section" == false ]]; then
-                echo "" >> "$temp_file"
-                echo "### $CATEGORY" >> "$temp_file"
-                echo "" >> "$temp_file"
-              fi
-              echo "$CHANGE_ENTRY" >> "$temp_file"
-            fi
-          fi
+          if "## [Unreleased]" not in content:
+              # Add new Unreleased section at the top
+              if content.startswith("# Changelog\n"):
+                  insertion_point = len("# Changelog\n\n")
+              else:
+                  content = "# Changelog\n\n" + content
+                  insertion_point = len("# Changelog\n\n")
+              
+              unreleased_section = f"## [Unreleased]\n\n### {category}\n\n{change_entry}\n\n"
+              content = content[:insertion_point] + unreleased_section + content[insertion_point:]
+          else:
+              # Find the Unreleased section and add to appropriate category
+              lines = content.split('\n')
+              new_lines = []
+              in_unreleased = False
+              found_category = False
+              added_entry = False
+              
+              for i, line in enumerate(lines):
+                  if line == "## [Unreleased]":
+                      new_lines.append(line)
+                      in_unreleased = True
+                  elif line.startswith("## ") and in_unreleased:
+                      # End of Unreleased section
+                      if not added_entry:
+                          if not found_category:
+                              new_lines.extend(["", f"### {category}", "", change_entry])
+                          else:
+                              new_lines.append(change_entry)
+                      new_lines.extend(["", line])
+                      in_unreleased = False
+                  elif in_unreleased and line == f"### {category}":
+                      new_lines.append(line)
+                      found_category = True
+                  elif in_unreleased and found_category and line.startswith("- "):
+                      # Add new entry before existing entries in this category
+                      if not added_entry:
+                          new_lines.extend([change_entry, line])
+                          added_entry = True
+                      else:
+                          new_lines.append(line)
+                  elif in_unreleased and found_category and line == "" and not added_entry:
+                      # Empty line after category header
+                      new_lines.extend([line, change_entry])
+                      added_entry = True
+                  else:
+                      new_lines.append(line)
+              
+              # If we're still in unreleased and haven't added entry
+              if in_unreleased and not added_entry:
+                  if not found_category:
+                      new_lines.extend(["", f"### {category}", "", change_entry])
+                  else:
+                      new_lines.append(change_entry)
+              
+              content = '\n'.join(new_lines)
           
-          # Replace the original file
-          mv "$temp_file" CHANGELOG.md
+          # Write the updated changelog
+          with open('CHANGELOG.md', 'w') as f:
+              f.write(content)
+          
+          print("Changelog updated successfully")
+          EOF
 
       - name: Commit changes
         run: |
