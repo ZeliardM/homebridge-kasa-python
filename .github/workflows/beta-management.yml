@@ -46,11 +46,16 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/releases")
 
           # Find the first beta draft release (prerelease=true and draft=true)
-          DRAFT_ID=$(echo "$RELEASES" | jq -r '.[] | select(.draft == true and .prerelease == true and (.tag_name | contains("beta"))) | .id' | head -1)
-          DRAFT_TAG=$(echo "$RELEASES" | jq -r '.[] | select(.draft == true and .prerelease == true and (.tag_name | contains("beta"))) | .tag_name' | head -1)
+          DRAFT_ID=$(echo "$RELEASES" | jq -r \
+            '.[] | select(.draft == true and .prerelease == true and (.tag_name | contains("beta"))) | .id' \
+            | head -1)
+          DRAFT_TAG=$(echo "$RELEASES" | jq -r \
+            '.[] | select(.draft == true and .prerelease == true and (.tag_name | contains("beta"))) | .tag_name' \
+            | head -1)
 
           # Validate that we found a valid beta draft
-          if [ "$DRAFT_ID" != "null" ] && [ "$DRAFT_ID" != "" ] && [ "$DRAFT_TAG" != "null" ] && [ "$DRAFT_TAG" != "" ]; then
+          if [ "$DRAFT_ID" != "null" ] && [ "$DRAFT_ID" != "" ] && \
+             [ "$DRAFT_TAG" != "null" ] && [ "$DRAFT_TAG" != "" ]; then
             echo "Found existing beta draft release: $DRAFT_TAG (ID: $DRAFT_ID)"
             echo "has_beta_draft=true" >> $GITHUB_OUTPUT
             echo "beta_draft_id=$DRAFT_ID" >> $GITHUB_OUTPUT
@@ -135,7 +140,8 @@ jobs:
               for idx, line in enumerate(lines):
                   if line.strip().startswith(section_header.strip()):
                       section_start = idx
-                  elif section_start >= 0 and line.startswith("## ") and not line.strip().startswith(section_header.strip()):
+                  elif section_start >= 0 and line.startswith("## ") and \
+                       not line.strip().startswith(section_header.strip()):
                       section_end = idx
                       break
 
@@ -415,8 +421,12 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/releases")
 
           # Find the first beta draft release with proper validation
-          BETA_DRAFT_ID=$(echo "$RELEASES" | jq -r '.[] | select(.draft == true and .prerelease == true and (.tag_name | contains("beta"))) | .id' | head -1)
-          BETA_DRAFT_TAG=$(echo "$RELEASES" | jq -r '.[] | select(.draft == true and .prerelease == true and (.tag_name | contains("beta"))) | .tag_name' | head -1)
+          BETA_DRAFT_ID=$(echo "$RELEASES" | jq -r \
+            '.[] | select(.draft == true and .prerelease == true and (.tag_name | contains("beta"))) | .id' \
+            | head -1)
+          BETA_DRAFT_TAG=$(echo "$RELEASES" | jq -r \
+            '.[] | select(.draft == true and .prerelease == true and (.tag_name | contains("beta"))) | .tag_name' \
+            | head -1)
 
           # Check if CHANGELOG has Unreleased Beta section
           HAS_UNRELEASED_BETA="false"
@@ -427,7 +437,8 @@ jobs:
           echo "has_unreleased_beta=$HAS_UNRELEASED_BETA" >> $GITHUB_OUTPUT
 
           # Validate beta draft release data
-          if [ "$BETA_DRAFT_ID" != "null" ] && [ "$BETA_DRAFT_ID" != "" ] && [ "$BETA_DRAFT_TAG" != "null" ] && [ "$BETA_DRAFT_TAG" != "" ]; then
+          if [ "$BETA_DRAFT_ID" != "null" ] && [ "$BETA_DRAFT_ID" != "" ] && \
+             [ "$BETA_DRAFT_TAG" != "null" ] && [ "$BETA_DRAFT_TAG" != "" ]; then
             echo "Found existing beta draft release: $BETA_DRAFT_TAG (ID: $BETA_DRAFT_ID)"
             echo "has_beta_draft=true" >> $GITHUB_OUTPUT
             echo "beta_draft_id=$BETA_DRAFT_ID" >> $GITHUB_OUTPUT
@@ -705,7 +716,8 @@ jobs:
               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/${{ github.repository }}/releases" \
-              -d "{\"tag_name\": \"$RELEASE_TAG\", \"target_commitish\": \"${{ github.ref_name }}\", \"name\": \"$RELEASE_TAG\", \"body\": $ESCAPED_BODY, \"draft\": true, \"prerelease\": true}"
+              -d "{\"tag_name\": \"$RELEASE_TAG\", \"target_commitish\": \"${{ github.ref_name }}\", \
+                  \"name\": \"$RELEASE_TAG\", \"body\": $ESCAPED_BODY, \"draft\": true, \"prerelease\": true}"
           fi
 
   # Job 3: Finalize beta release (runs when beta releases are published)
@@ -775,7 +787,8 @@ jobs:
           print(repr(release_format_content))
 
           # Check if they match (allowing for minor formatting differences)
-          content_match = release_format_content.replace(' ', '').replace('\n', '') == clean_release_body.replace(' ', '').replace('\n', '')
+          content_match = (release_format_content.replace(' ', '').replace('\n', '') ==
+                          clean_release_body.replace(' ', '').replace('\n', ''))
 
           print(f"\nContent match: {content_match}")
 
@@ -885,7 +898,8 @@ jobs:
               """Add commit entry if still in target release at end of file"""
               if state['in_target_release'] and not state['added_commit_entry']:
                   if state['other_changes_found']:
-                      new_lines.append(f"- Update CHANGELOG.md for beta release {release_tag} @github-actions [beta-release]")
+                      new_lines.append(
+                          f"- Update CHANGELOG.md for beta release {release_tag} @github-actions [beta-release]")
                   else:
                       new_lines.extend([
                           "",
