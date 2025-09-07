@@ -28,7 +28,6 @@ jobs:
     uses: homebridge/.github/.github/workflows/npm-publish-esm.yml@latest
     with:
       tag: 'beta'
-      dynamically_adjust_version: true
       npm_version_command: 'pre'
       pre_id: 'beta'
       override_version: ${{ github.event.release.tag_name }}

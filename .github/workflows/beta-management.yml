@@ -390,8 +390,8 @@ jobs:
           existing_betas=$(git tag -l | grep "v$next_base_version-beta" | sort -V)
           
           if [ -z "$existing_betas" ]; then
-            # No beta releases for this version yet
-            next_beta_version="$next_base_version-beta.1"
+            # No beta releases for this version yet - start at beta.0
+            next_beta_version="$next_base_version-beta.0"
           else
             # Find the highest beta number
             latest_beta=$(echo "$existing_betas" | tail -1)

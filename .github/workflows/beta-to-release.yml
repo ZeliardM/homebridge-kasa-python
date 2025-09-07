@@ -1,0 +1,327 @@
+---
+name: Convert Beta to Release
+
+# Manual workflow to convert a published beta release to a regular release.
+# This workflow will:
+# 1. Take a published beta release
+# 2. Create a new regular release with the same content
+# 3. Update the changelog to convert the beta section to a regular release
+# 4. Follow all the same logic and checks as normal releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      beta_tag:
+        description: 'Beta release tag to convert (e.g., v2.8.0-beta.2)'
+        required: true
+        type: string
+      target_version:
+        description: 'Target release version (e.g., v2.8.0). Leave empty to auto-detect from beta tag.'
+        required: false
+        type: string
+      confirm_conversion:
+        description: 'Type "CONFIRM" to proceed with beta to release conversion'
+        required: true
+        type: string
+
+jobs:
+  validate-inputs:
+    runs-on: ubuntu-latest
+    outputs:
+      beta_tag: ${{ steps.validate.outputs.beta_tag }}
+      target_version: ${{ steps.validate.outputs.target_version }}
+      beta_exists: ${{ steps.validate.outputs.beta_exists }}
+    steps:
+      - name: Validate inputs
+        id: validate
+        run: |
+          # Validate confirmation
+          if [ "${{ github.event.inputs.confirm_conversion }}" != "CONFIRM" ]; then
+            echo "Error: Must type 'CONFIRM' to proceed with conversion"
+            exit 1
+          fi
+
+          # Validate beta tag format
+          BETA_TAG="${{ github.event.inputs.beta_tag }}"
+          if [[ ! "$BETA_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]; then
+            echo "Error: Beta tag must be in format v1.2.3-beta.0"
+            exit 1
+          fi
+
+          # Determine target version
+          TARGET_VERSION="${{ github.event.inputs.target_version }}"
+          if [ -z "$TARGET_VERSION" ]; then
+            # Auto-detect from beta tag (remove -beta.X part)
+            TARGET_VERSION=$(echo "$BETA_TAG" | sed 's/-beta\.[0-9]\+$//')
+          fi
+
+          # Validate target version format
+          if [[ ! "$TARGET_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Target version must be in format v1.2.3"
+            exit 1
+          fi
+
+          echo "beta_tag=$BETA_TAG" >> $GITHUB_OUTPUT
+          echo "target_version=$TARGET_VERSION" >> $GITHUB_OUTPUT
+
+          # Check if beta release exists
+          RELEASE_EXISTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$BETA_TAG" | \
+            jq -r '.id // "null"')
+
+          if [ "$RELEASE_EXISTS" == "null" ]; then
+            echo "Error: Beta release $BETA_TAG does not exist"
+            echo "beta_exists=false" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "Found beta release: $BETA_TAG"
+            echo "beta_exists=true" >> $GITHUB_OUTPUT
+          fi
+
+  convert-beta-to-release:
+    needs: validate-inputs
+    if: needs.validate-inputs.outputs.beta_exists == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Get beta release information
+        id: get-beta
+        run: |
+          BETA_TAG="${{ needs.validate-inputs.outputs.beta_tag }}"
+          TARGET_VERSION="${{ needs.validate-inputs.outputs.target_version }}"
+
+          # Get beta release data
+          BETA_RELEASE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$BETA_TAG")
+
+          BETA_BODY=$(echo "$BETA_RELEASE" | jq -r '.body')
+          BETA_DRAFT=$(echo "$BETA_RELEASE" | jq -r '.draft')
+          BETA_PRERELEASE=$(echo "$BETA_RELEASE" | jq -r '.prerelease')
+
+          # Validate this is actually a beta release
+          if [ "$BETA_PRERELEASE" != "true" ]; then
+            echo "Error: $BETA_TAG is not marked as a prerelease"
+            exit 1
+          fi
+
+          if [ "$BETA_DRAFT" == "true" ]; then
+            echo "Error: $BETA_TAG is still a draft release. Publish it first."
+            exit 1
+          fi
+
+          # Check if target version already exists
+          TARGET_EXISTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TARGET_VERSION" | \
+            jq -r '.id // "null"')
+
+          if [ "$TARGET_EXISTS" != "null" ]; then
+            echo "Error: Target release $TARGET_VERSION already exists"
+            exit 1
+          fi
+
+          echo "beta_body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BETA_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "Beta release validated successfully"
+          echo "Beta tag: $BETA_TAG"
+          echo "Target version: $TARGET_VERSION"
+
+      - name: Convert beta changelog section to regular release
+        run: |
+          BETA_TAG="${{ needs.validate-inputs.outputs.beta_tag }}"
+          TARGET_VERSION="${{ needs.validate-inputs.outputs.target_version }}"
+          RELEASE_DATE=$(date +%Y-%m-%d)
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/$TARGET_VERSION"
+
+          echo "Converting beta changelog section: $BETA_TAG -> $TARGET_VERSION"
+
+          python3 << 'EOF'
+          import re
+          import os
+
+          beta_tag = os.environ.get('BETA_TAG', '')
+          target_version = os.environ.get('TARGET_VERSION', '')
+          release_date = os.environ.get('RELEASE_DATE', '')
+          release_url = os.environ.get('RELEASE_URL', '')
+
+          # Read current changelog
+          with open('CHANGELOG.md', 'r') as f:
+              content = f.read()
+
+          # Create new version header
+          new_version_header = f"## [{target_version}]({release_url}) ({release_date})"
+
+          # Replace beta version header with regular version header
+          updated_content = re.sub(
+              rf"## \[{re.escape(beta_tag)}\].*?\([^)]+\)",
+              new_version_header,
+              content
+          )
+
+          # Remove any "Beta Release - " prefixes from the content
+          updated_content = re.sub(r'Beta Release - [^\n]*\n\n', '', updated_content)
+
+          # Write updated changelog
+          with open('CHANGELOG.md', 'w') as f:
+              f.write(updated_content)
+
+          print(f"Changelog updated: {beta_tag} -> {target_version}")
+          EOF
+        env:
+          BETA_TAG: ${{ needs.validate-inputs.outputs.beta_tag }}
+          TARGET_VERSION: ${{ needs.validate-inputs.outputs.target_version }}
+
+      - name: Create regular release from beta
+        run: |
+          BETA_TAG="${{ needs.validate-inputs.outputs.beta_tag }}"
+          TARGET_VERSION="${{ needs.validate-inputs.outputs.target_version }}"
+          BETA_BODY='${{ steps.get-beta.outputs.beta_body }}'
+
+          # Clean up beta body content for regular release
+          CLEAN_BODY=$(echo "$BETA_BODY" | sed 's/^Beta Release - [^\n]*\n\n//')
+
+          # Create the regular release (not draft, not prerelease)
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases" \
+            -d "$(jq -n \
+              --arg tag "$TARGET_VERSION" \
+              --arg name "$TARGET_VERSION" \
+              --arg body "$CLEAN_BODY" \
+              --arg commitish "latest" \
+              '{
+                "tag_name": $tag,
+                "target_commitish": $commitish,
+                "name": $name,
+                "body": $body,
+                "draft": false,
+                "prerelease": false
+              }')"
+
+          echo "Created regular release: $TARGET_VERSION"
+
+      - name: Add conversion commit to changelog
+        run: |
+          BETA_TAG="${{ needs.validate-inputs.outputs.beta_tag }}"
+          TARGET_VERSION="${{ needs.validate-inputs.outputs.target_version }}"
+
+          echo "Adding conversion commit entry to changelog"
+
+          python3 << 'EOF'
+          import re
+          import os
+
+          beta_tag = os.environ.get('BETA_TAG', '')
+          target_version = os.environ.get('TARGET_VERSION', '')
+
+          # Read current changelog
+          with open('CHANGELOG.md', 'r') as f:
+              content = f.read()
+
+          lines = content.split('\n')
+          new_lines = []
+          in_target_release = False
+          added_commit_entry = False
+
+          for line in lines:
+              if line.startswith(f"## [{target_version}]"):
+                  # Found the target release section
+                  new_lines.append(line)
+                  in_target_release = True
+              elif in_target_release and line.startswith("## ") and not line.startswith(f"## [{target_version}]"):
+                  # End of target release section
+                  if not added_commit_entry:
+                      # Add commit entry before next section
+                      new_lines.extend([
+                          "### Other Changes",
+                          "",
+                          f"- Convert {beta_tag} to regular release {target_version} @github-actions [beta-to-release]",
+                          ""
+                      ])
+                      added_commit_entry = True
+                  new_lines.append(line)
+                  in_target_release = False
+              elif in_target_release and line == "### Other Changes":
+                  # Found existing Other Changes section
+                  new_lines.append(line)
+                  new_lines.append("")
+                  new_lines.append(f"- Convert {beta_tag} to regular release {target_version} @github-actions [beta-to-release]")
+                  added_commit_entry = True
+              elif in_target_release and line.startswith("**Full Changelog**") and not added_commit_entry:
+                  # Add before Full Changelog link
+                  new_lines.extend([
+                      "### Other Changes",
+                      "",
+                      f"- Convert {beta_tag} to regular release {target_version} @github-actions [beta-to-release]",
+                      "",
+                      line
+                  ])
+                  added_commit_entry = True
+              else:
+                  new_lines.append(line)
+
+          # If still in target release at end of file, add entry
+          if in_target_release and not added_commit_entry:
+              new_lines.extend([
+                  "",
+                  "### Other Changes",
+                  "",
+                  f"- Convert {beta_tag} to regular release {target_version} @github-actions [beta-to-release]"
+              ])
+
+          final_content = '\n'.join(new_lines)
+          if not final_content.endswith('\n'):
+              final_content += '\n'
+
+          # Write updated changelog
+          with open('CHANGELOG.md', 'w') as f:
+              f.write(final_content)
+
+          print(f"Added conversion commit entry for {beta_tag} -> {target_version}")
+          EOF
+        env:
+          BETA_TAG: ${{ needs.validate-inputs.outputs.beta_tag }}
+          TARGET_VERSION: ${{ needs.validate-inputs.outputs.target_version }}
+
+      - name: Commit changelog changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          BETA_TAG="${{ needs.validate-inputs.outputs.beta_tag }}"
+          TARGET_VERSION="${{ needs.validate-inputs.outputs.target_version }}"
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changelog changes to commit"
+          else
+            git add CHANGELOG.md
+            git commit -m "Convert $BETA_TAG to release $TARGET_VERSION in CHANGELOG.md"
+            git push
+            echo "Changelog committed for beta to release conversion"
+          fi
+
+      - name: Summary
+        run: |
+          BETA_TAG="${{ needs.validate-inputs.outputs.beta_tag }}"
+          TARGET_VERSION="${{ needs.validate-inputs.outputs.target_version }}"
+
+          echo "## Beta to Release Conversion Complete"
+          echo ""
+          echo "✅ **Beta Release**: $BETA_TAG"
+          echo "✅ **Regular Release**: $TARGET_VERSION"
+          echo "✅ **Changelog Updated**: Beta section converted to regular release"
+          echo "✅ **Release Created**: Regular release published"
+          echo "✅ **Conversion Tracked**: Commit entry added to changelog"
+          echo ""
+          echo "The regular release $TARGET_VERSION is now available and will trigger"
+          echo "the normal release workflow for npm publishing."
