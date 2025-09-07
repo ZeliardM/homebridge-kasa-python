@@ -1,3 +1,4 @@
+---
 name: Beta Release
 
 on:
@@ -43,6 +44,10 @@ jobs:
 #     title: "Kasa Python Beta Release"
 #     description: |
 #       Version `v$ {{ needs.publish.outputs.NPM_VERSION }}`
-#     url: "https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v$ {{ needs.publish.outputs.NPM_VERSION }}"
+#     url: >
+#       https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v${{
+#       needs.publish.outputs.NPM_VERSION }}
 #   secrets:
-#     DISCORD_WEBHOOK: $ {{ secrets.DISCORD_WEBHOOK_URL_BETA || secrets.DISCORD_WEBHOOK_URL_LATEST }}
+#     DISCORD_WEBHOOK: >
+#       ${{ secrets.DISCORD_WEBHOOK_URL_BETA ||
+#       secrets.DISCORD_WEBHOOK_URL_LATEST }}

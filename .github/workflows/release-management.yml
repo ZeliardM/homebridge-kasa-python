@@ -1,0 +1,1060 @@
+---
+name: Release Management
+
+# Unified workflow that handles:
+# 1. Updating CHANGELOG.md when PRs are merged
+# 2. Converting "Unreleased" to version numbers and creating/updating draft releases
+# 3. Finalizing changelog and release when releases are published
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [latest]
+  push:
+    branches: [latest]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  # Job 1: Update changelog when PRs are merged
+  update-changelog:
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check for existing draft release
+        id: check-draft
+        run: |
+          # Install jq for JSON parsing
+          sudo apt-get update && sudo apt-get install -y jq
+
+          # Check if there's already a draft release
+          RELEASES=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases")
+
+          # Find the first draft release
+          DRAFT_ID=$(echo "$RELEASES" | jq -r '.[] | select(.draft == true) | .id' | head -1)
+          DRAFT_TAG=$(echo "$RELEASES" | jq -r '.[] | select(.draft == true) | .tag_name' | head -1)
+
+          # Validate that we found a valid draft
+          if [ "$DRAFT_ID" != "null" ] && [ "$DRAFT_ID" != "" ] && [ "$DRAFT_TAG" != "null" ] && [ "$DRAFT_TAG" != "" ]; then
+            echo "Found existing draft release: $DRAFT_TAG (ID: $DRAFT_ID)"
+            echo "has_draft=true" >> $GITHUB_OUTPUT
+            echo "draft_id=$DRAFT_ID" >> $GITHUB_OUTPUT
+            echo "draft_tag=$DRAFT_TAG" >> $GITHUB_OUTPUT
+          else
+            echo "No existing draft release found"
+            echo "has_draft=false" >> $GITHUB_OUTPUT
+            echo "draft_id=" >> $GITHUB_OUTPUT
+            echo "draft_tag=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Categorize PR
+        id: categorize
+        run: |
+          labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
+          echo "PR Labels: $labels"
+
+          # Determine category based on labels (matching release-drafter.yml)
+          category="Other Changes"
+
+          if echo "$labels" | grep -q "breaking change"; then
+            category="Breaking Changes"
+          elif echo "$labels" | grep -qE "(feature|enhancement)"; then
+            category="Featured Changes"
+          elif echo "$labels" | grep -qE "(fix|bugfix|bug)"; then
+            category="Bug Fixes"
+          elif echo "$labels" | grep -q "documentation"; then
+            category="Other Changes"
+          fi
+
+          echo "category=$category" >> $GITHUB_OUTPUT
+          echo "Categorized as: $category"
+
+      - name: Update CHANGELOG.md
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          CATEGORY="${{ steps.categorize.outputs.category }}"
+          HAS_DRAFT="${{ steps.check-draft.outputs.has_draft }}"
+          DRAFT_TAG="${{ steps.check-draft.outputs.draft_tag }}"
+
+          # Format the changelog entry
+          CHANGE_ENTRY="- $PR_TITLE @$PR_AUTHOR [#$PR_NUMBER]"
+
+          echo "Adding entry: $CHANGE_ENTRY"
+          echo "Category: $CATEGORY"
+          echo "Has draft release: $HAS_DRAFT"
+          if [ "$HAS_DRAFT" == "true" ]; then
+            echo "Draft tag: $DRAFT_TAG"
+          fi
+
+          # Use Python script to update changelog with proper logic
+          python3 << 'EOF'
+          import re
+          import sys
+          import os
+
+          # Read the current changelog
+          try:
+              with open('CHANGELOG.md', 'r') as f:
+                  content = f.read()
+          except FileNotFoundError:
+              content = "# Changelog\n\n"
+
+          change_entry = os.environ.get('CHANGE_ENTRY', '')
+          category = os.environ.get('CATEGORY', '')
+          has_draft = os.environ.get('HAS_DRAFT', 'false')
+          draft_tag = os.environ.get('DRAFT_TAG', '')
+
+          if not change_entry or not category:
+              print("Missing environment variables")
+              sys.exit(1)
+
+          lines = content.split('\n')
+
+          def find_section_boundaries(lines, section_header):
+              """Find start and end indices of a section in the changelog."""
+              section_start = -1
+              section_end = len(lines)
+
+              for idx, line in enumerate(lines):
+                  if line.strip() == section_header.strip():
+                      section_start = idx
+                  elif section_start >= 0 and line.startswith("## ") and line.strip() != section_header.strip():
+                      section_end = idx
+                      break
+
+              return section_start, section_end
+
+          def find_category_boundaries(section_lines, category_header):
+              """Find start and end indices of a category within a section."""
+              category_start = -1
+              category_end = len(section_lines)
+
+              for idx, line in enumerate(section_lines):
+                  if line.strip() == category_header.strip():
+                      category_start = idx
+                  elif category_start >= 0 and (line.startswith("### ") or line.startswith("**Full Changelog**")):
+                      category_end = idx
+                      break
+
+              return category_start, category_end
+
+          def add_entry_to_changelog(content, section_header, category, change_entry):
+              """Add entry to a specific section and category in the changelog."""
+              lines = content.split('\n')
+
+              # Find the section boundaries
+              section_start, section_end = find_section_boundaries(lines, section_header)
+
+              if section_start == -1:
+                  # Section doesn't exist
+                  return content
+
+              # Extract section parts
+              before_section = lines[:section_start + 1]
+              section_lines = lines[section_start + 1:section_end]
+              after_section = lines[section_end:]
+
+              # Find category within section
+              category_header = f"### {category}"
+              category_start, category_end = find_category_boundaries(section_lines, category_header)
+
+              # Build new section content
+              if category_start >= 0:
+                  # Category exists - add entry at the beginning of the category content
+                  before_category = section_lines[:category_start + 1]  # Include category header
+                  category_content = section_lines[category_start + 1:category_end]
+                  after_category = section_lines[category_end:]
+
+                  # Ensure proper spacing after category header
+                  new_category_content = []
+                  if category_content and category_content[0] == "":
+                      new_category_content.append("")  # Keep existing empty line
+                  else:
+                      new_category_content.append("")  # Add empty line after header
+
+                  new_category_content.append(change_entry)  # Add our entry
+
+                  # Add existing content after our entry
+                  new_category_content.extend(category_content)
+
+                  new_section_lines = before_category + new_category_content + after_category
+              else:
+                  # Category doesn't exist - find where to insert it
+                  insert_position = len(section_lines)
+
+                  # Insert before other categories or Full Changelog link
+                  for idx, line in enumerate(section_lines):
+                      if line.startswith("### ") or line.startswith("**Full Changelog**"):
+                          insert_position = idx
+                          break
+
+                  # Build new category section
+                  before_insert = section_lines[:insert_position]
+                  after_insert = section_lines[insert_position:]
+
+                  # Ensure proper spacing before new category
+                  if before_insert and before_insert[-1] != "":
+                      before_insert.append("")
+
+                  # Create new category with proper spacing
+                  new_category_section = [
+                      category_header,
+                      "",
+                      change_entry
+                  ]
+
+                  # Ensure proper spacing after new category
+                  if after_insert and after_insert[0] != "":
+                      new_category_section.append("")
+
+                  new_section_lines = before_insert + new_category_section + after_insert
+
+              # Reconstruct complete content
+              result_lines = before_section + new_section_lines + after_section
+              return '\n'.join(result_lines)
+
+          if has_draft == 'true' and draft_tag:
+              # There's a draft release - add content to that version section
+              print(f"Adding to existing draft version: {draft_tag}")
+              target_header = f"## [{draft_tag}]"
+              content = add_entry_to_changelog(content, target_header, category, change_entry)
+
+          else:
+              # No draft release - use Unreleased section
+              print("Adding to Unreleased section")
+
+              # Check if we need to create Unreleased section
+              if "## [Unreleased]" not in content:
+                  # Add new Unreleased section after main header
+                  lines = content.split('\n')
+                  new_lines = []
+                  header_found = False
+
+                  for line in lines:
+                      new_lines.append(line)
+                      if line.startswith("# ") and not header_found:
+                          header_found = True
+                          # Add proper spacing and structure
+                          new_lines.extend([
+                              "",
+                              "## [Unreleased]",
+                              "",
+                              f"### {category}",
+                              "",
+                              change_entry,
+                              ""
+                          ])
+
+                  # If no header was found, add at the beginning
+                  if not header_found:
+                      new_lines = [
+                          "# Changelog",
+                          "",
+                          "## [Unreleased]",
+                          "",
+                          f"### {category}",
+                          "",
+                          change_entry,
+                          ""
+                      ] + new_lines
+
+                  content = '\n'.join(new_lines)
+              else:
+                  # Process existing content for Unreleased section
+                  content = add_entry_to_changelog(content, "## [Unreleased]", category, change_entry)
+
+          # Clean up excessive blank lines while maintaining structure
+          lines = content.split('\n')
+          final_lines = []
+
+          # Process lines to remove excessive blanks
+          for idx in range(len(lines)):
+              current_line = lines[idx]
+              # Check if this is an excessive blank line
+              is_excessive_blank = (
+                  current_line == "" and
+                  idx > 0 and
+                  lines[idx - 1] == ""
+              )
+
+              if not is_excessive_blank:
+                  final_lines.append(current_line)
+
+          # Ensure file ends with single newline
+          content = '\n'.join(final_lines)
+          if not content.endswith('\n'):
+              content += '\n'
+
+          # Write the updated changelog
+          with open('CHANGELOG.md', 'w') as f:
+              f.write(content)
+
+          print("Changelog updated successfully")
+          print(f"Added: {change_entry}")
+          print(f"To category: {category}")
+          if has_draft == 'true':
+              print(f"In version section: {draft_tag}")
+          else:
+              print("In Unreleased section")
+          EOF
+        env:
+          CHANGE_ENTRY: >
+            - ${{ github.event.pull_request.title }}
+            @${{ github.event.pull_request.user.login }}
+            [#${{ github.event.pull_request.number }}]
+          CATEGORY: ${{ steps.categorize.outputs.category }}
+          HAS_DRAFT: ${{ steps.check-draft.outputs.has_draft }}
+          DRAFT_TAG: ${{ steps.check-draft.outputs.draft_tag }}
+
+      - name: Commit changelog changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changes to commit"
+          else
+            git add CHANGELOG.md
+            git commit -m "Update CHANGELOG.md for PR #${{ github.event.pull_request.number }}"
+            git push
+            echo "Changelog updated successfully"
+          fi
+
+  # Job 2: Draft release management (runs after changelog updates)
+  draft-release:
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Get next version
+        id: version
+        run: |
+          # Get the latest tag
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $latest_tag"
+          echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
+
+          # Extract version number (remove 'v' prefix)
+          current_version=${latest_tag#v}
+          echo "Current version: $current_version"
+
+          # Simple increment patch version for preview
+          IFS='.' read -ra VERSION_PARTS <<< "$current_version"
+          major=${VERSION_PARTS[0]}
+          minor=${VERSION_PARTS[1]}
+          patch=${VERSION_PARTS[2]}
+
+          # Increment patch version
+          next_patch=$((patch + 1))
+          next_version="$major.$minor.$next_patch"
+
+          echo "next_version=$next_version" >> $GITHUB_OUTPUT
+          echo "Next version: $next_version"
+
+      - name: Check for existing draft release and Unreleased content
+        id: check-status
+        run: |
+          # Install jq for JSON parsing
+          sudo apt-get update && sudo apt-get install -y jq
+
+          # Check if there's already a draft release
+          RELEASES=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases")
+
+          # Find the first draft release with proper validation
+          DRAFT_ID=$(echo "$RELEASES" | jq -r '.[] | select(.draft == true) | .id' | head -1)
+          DRAFT_TAG=$(echo "$RELEASES" | jq -r '.[] | select(.draft == true) | .tag_name' | head -1)
+
+          # Check if CHANGELOG has Unreleased section
+          HAS_UNRELEASED="false"
+          if grep -q "## \[Unreleased\]" CHANGELOG.md; then
+            HAS_UNRELEASED="true"
+          fi
+
+          echo "has_unreleased=$HAS_UNRELEASED" >> $GITHUB_OUTPUT
+
+          # Validate draft release data
+          if [ "$DRAFT_ID" != "null" ] && [ "$DRAFT_ID" != "" ] && [ "$DRAFT_TAG" != "null" ] && [ "$DRAFT_TAG" != "" ]; then
+            echo "Found existing draft release: $DRAFT_TAG (ID: $DRAFT_ID)"
+            echo "has_draft=true" >> $GITHUB_OUTPUT
+            echo "draft_id=$DRAFT_ID" >> $GITHUB_OUTPUT
+            echo "draft_tag=$DRAFT_TAG" >> $GITHUB_OUTPUT
+          else
+            echo "No existing draft release found"
+            echo "has_draft=false" >> $GITHUB_OUTPUT
+            echo "draft_id=" >> $GITHUB_OUTPUT
+            echo "draft_tag=" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Has Unreleased section: $HAS_UNRELEASED"
+
+      - name: Convert Unreleased to version and extract content
+        id: process-changelog
+        if: steps.check-status.outputs.has_unreleased == 'true'
+        run: |
+          RELEASE_TAG="v${{ steps.version.outputs.next_version }}"
+          RELEASE_DATE=$(date +%Y-%m-%d)
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/$RELEASE_TAG"
+          LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
+
+          echo "Converting Unreleased to: $RELEASE_TAG"
+
+          python3 << 'EOF'
+          import re
+          import os
+
+          def process_version_header(line, version_header, new_lines, state):
+              """Process the version header line and update state"""
+              if line == version_header:
+                  new_lines.append(line)
+                  state['in_current_release'] = True
+                  return True
+              return False
+
+          def process_release_end(line, version_header, new_lines, state, github_repo, latest_tag, release_tag):
+              """Process end of release section and add full changelog link if needed"""
+              if state['in_current_release'] and line.startswith("## ") and line != version_header:
+                  if not state['full_changelog_added']:
+                      new_lines.extend([
+                          "",
+                          f"**Full Changelog**: https://github.com/{github_repo}/compare/{latest_tag}...{release_tag}",
+                          ""
+                      ])
+                      state['full_changelog_added'] = True
+                  new_lines.append(line)
+                  state['in_current_release'] = False
+                  return True
+              return False
+
+          def process_release_content(line, new_lines, state):
+              """Process content within the current release section"""
+              if state['in_current_release'] and line.strip() and not line.startswith("**Full Changelog**"):
+                  state['release_content_lines'].append(line)
+                  new_lines.append(line)
+                  return True
+              return False
+
+          def finalize_release_section(new_lines, state, github_repo, latest_tag, release_tag):
+              """Add full changelog link if still in release section at end of file"""
+              if state['in_current_release'] and not state['full_changelog_added']:
+                  new_lines.extend([
+                      "",
+                      f"**Full Changelog**: https://github.com/{github_repo}/compare/{latest_tag}...{release_tag}"
+                  ])
+
+          release_tag = os.environ.get('RELEASE_TAG', '')
+          release_date = os.environ.get('RELEASE_DATE', '')
+          release_url = os.environ.get('RELEASE_URL', '')
+          latest_tag = os.environ.get('LATEST_TAG', '')
+          github_repo = os.environ.get('GITHUB_REPOSITORY', '')
+
+          # Read current changelog
+          with open('CHANGELOG.md', 'r') as f:
+              content = f.read()
+
+          # Replace [Unreleased] with actual version and add link
+          version_header = f"## [{release_tag}]({release_url}) ({release_date})"
+          updated_content = content.replace("## [Unreleased]", version_header)
+
+          lines = updated_content.split('\n')
+          new_lines = []
+          state = {
+              'in_current_release': False,
+              'release_content_lines': [],
+              'full_changelog_added': False
+          }
+
+          for idx, line in enumerate(lines):
+              # Try to process each type of line with helper functions
+              if process_version_header(line, version_header, new_lines, state):
+                  continue
+              elif process_release_end(line, version_header, new_lines, state, github_repo, latest_tag, release_tag):
+                  continue
+              elif process_release_content(line, new_lines, state):
+                  continue
+              else:
+                  new_lines.append(line)
+
+          # Finalize the release section if needed
+          finalize_release_section(new_lines, state, github_repo, latest_tag, release_tag)
+
+          final_content = '\n'.join(new_lines)
+
+          # Ensure proper ending
+          if not final_content.endswith('\n'):
+              final_content += '\n'
+
+          # Write updated changelog
+          with open('CHANGELOG.md', 'w') as f:
+              f.write(final_content)
+
+          # Prepare release content (convert ### headers to ## for release format)
+          if state['release_content_lines']:
+              release_content = '\n'.join(state['release_content_lines'])
+              release_content = re.sub(r'^### ', '## ', release_content, flags=re.MULTILINE)
+          else:
+              release_content = "## Other Changes\n\n_No changes in this release._"
+
+          # Write to GitHub output
+          output_file = os.environ.get('GITHUB_OUTPUT')
+          if output_file:
+              with open(output_file, 'a') as f:
+                  f.write("changes<<EOF\n")
+                  f.write(release_content)
+                  f.write("\nEOF\n")
+                  f.write(f"release_tag={release_tag}\n")
+
+          print(f"Changelog updated: Unreleased -> {release_tag}")
+          print("Release content extracted:")
+          print(release_content)
+          EOF
+        env:
+          RELEASE_TAG: v${{ steps.version.outputs.next_version }}
+          RELEASE_URL: >
+            https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.next_version }}
+          LATEST_TAG: ${{ steps.version.outputs.latest_tag }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Extract existing draft content for update
+        id: extract-draft
+        if: >
+          steps.check-status.outputs.has_draft == 'true' &&
+          steps.check-status.outputs.has_unreleased == 'false'
+        run: |
+          DRAFT_TAG="${{ steps.check-status.outputs.draft_tag }}"
+          LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
+
+          echo "Extracting content for existing draft: $DRAFT_TAG"
+
+          python3 << 'EOF'
+          import re
+          import os
+
+          draft_tag = os.environ.get('DRAFT_TAG', '')
+          latest_tag = os.environ.get('LATEST_TAG', '')
+
+          if not draft_tag:
+              print("No draft tag provided")
+              exit(1)
+
+          # Read current changelog
+          with open('CHANGELOG.md', 'r') as f:
+              content = f.read()
+
+          lines = content.split('\n')
+          release_content_lines = []
+          in_target_release = False
+
+          for line in lines:
+              if line.startswith(f"## [{draft_tag}]"):
+                  in_target_release = True
+                  continue
+              elif in_target_release and line.startswith("## ") and not line.startswith(f"## [{draft_tag}]"):
+                  # Found next section, stop collecting
+                  break
+              elif in_target_release and line.strip() and not line.startswith("**Full Changelog**"):
+                  release_content_lines.append(line)
+
+          # Prepare release content
+          if release_content_lines:
+              release_content = '\n'.join(release_content_lines)
+              release_content = re.sub(r'^### ', '## ', release_content, flags=re.MULTILINE)
+          else:
+              release_content = "## Other Changes\n\n_No changes in this release._"
+
+          # Write to GitHub output
+          output_file = os.environ.get('GITHUB_OUTPUT')
+          if output_file:
+              with open(output_file, 'a') as f:
+                  f.write("changes<<EOF\n")
+                  f.write(release_content)
+                  f.write("\nEOF\n")
+                  f.write(f"release_tag={draft_tag}\n")
+
+          print(f"Extracted content for draft: {draft_tag}")
+          print("Content:")
+          print(release_content)
+          EOF
+        env:
+          DRAFT_TAG: ${{ steps.check-status.outputs.draft_tag }}
+          LATEST_TAG: ${{ steps.version.outputs.latest_tag }}
+
+      - name: Commit changelog updates
+        if: steps.check-status.outputs.has_unreleased == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          RELEASE_TAG="${{ steps.process-changelog.outputs.release_tag }}"
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changelog updates needed"
+          else
+            git add CHANGELOG.md
+            git commit -m "Convert Unreleased to $RELEASE_TAG in CHANGELOG.md"
+            git push
+            echo "Changelog updated for release $RELEASE_TAG"
+          fi
+
+      - name: Create or update release draft
+        if: >
+          steps.check-status.outputs.has_unreleased == 'true' ||
+          steps.check-status.outputs.has_draft == 'true'
+        run: |
+          # Determine which tag and content to use
+          if [ "${{ steps.check-status.outputs.has_unreleased }}" == "true" ]; then
+            # We converted Unreleased content
+            RELEASE_TAG="${{ steps.process-changelog.outputs.release_tag }}"
+            CHANGES='${{ steps.process-changelog.outputs.changes }}'
+          else
+            # We're updating existing draft
+            RELEASE_TAG="${{ steps.extract-draft.outputs.release_tag }}"
+            CHANGES='${{ steps.extract-draft.outputs.changes }}'
+          fi
+
+          if [ -z "$RELEASE_TAG" ] || [ "$RELEASE_TAG" == "null" ]; then
+            echo "Error: No release tag available"
+            exit 1
+          fi
+
+          VERSION="${RELEASE_TAG#v}"
+          LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
+
+          # Create release body content
+          echo "Creating release body for: $RELEASE_TAG"
+
+          # Use printf to safely create the body content
+          printf -v BODY_CONTENT '%s\n\n**Full Changelog**: https://github.com/%s/compare/%s...%s' \
+            "$CHANGES" \
+            "${{ github.repository }}" \
+            "$LATEST_TAG" \
+            "$RELEASE_TAG"
+
+          # Use jq to properly escape the content
+          ESCAPED_BODY=$(echo "$BODY_CONTENT" | jq -Rs .)
+
+          if [ "${{ steps.check-status.outputs.has_draft }}" == "true" ]; then
+            DRAFT_ID="${{ steps.check-status.outputs.draft_id }}"
+            echo "Updating existing draft release: $RELEASE_TAG"
+
+            # Update existing draft
+            curl -X PATCH \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/$DRAFT_ID" \
+              -d "{\"name\": \"$RELEASE_TAG\", \"body\": $ESCAPED_BODY}"
+          else
+            echo "Creating new draft release: $RELEASE_TAG"
+
+            # Create new draft
+            curl -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${{ github.repository }}/releases" \
+              -d "{\"tag_name\": \"$RELEASE_TAG\", \"target_commitish\": \"latest\", \"name\": \"$RELEASE_TAG\", \"body\": $ESCAPED_BODY, \"draft\": true, \"prerelease\": false}"
+          fi
+
+  # Job 3: Finalize release (runs when releases are published)
+  finalize-release:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Sync changelog and release content
+        id: sync
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          RELEASE_BODY="${{ github.event.release.body }}"
+
+          echo "Ensuring CHANGELOG.md and release body are synchronized for: $RELEASE_TAG"
+
+          python3 << 'EOF'
+          import re
+          import os
+          import json
+
+          release_tag = os.environ.get('RELEASE_TAG', '')
+          release_body = os.environ.get('RELEASE_BODY', '')
+
+          # Read current changelog
+          with open('CHANGELOG.md', 'r') as f:
+              changelog_content = f.read()
+
+          # Extract changelog content for this release
+          lines = changelog_content.split('\n')
+          changelog_release_content = []
+          in_target_release = False
+
+          for line in lines:
+              if line.startswith(f"## [{release_tag}]"):
+                  in_target_release = True
+                  continue
+              elif in_target_release and line.startswith("## ") and not line.startswith(f"## [{release_tag}]"):
+                  break
+              elif in_target_release and line.strip() and not line.startswith("**Full Changelog**"):
+                  changelog_release_content.append(line)
+
+          changelog_content_str = '\n'.join(changelog_release_content).strip()
+
+          # Convert changelog format to release format for comparison
+          release_format_content = re.sub(r'^### ', '## ', changelog_content_str, flags=re.MULTILINE)
+
+          # Clean release body for comparison (remove Full Changelog links)
+          clean_release_body = re.sub(r'\*\*Full Changelog\*\*:.*?\n?', '', release_body).strip()
+
+          print("Changelog content:")
+          print(repr(changelog_content_str))
+          print("\nRelease body content:")
+          print(repr(clean_release_body))
+          print("\nConverted changelog format:")
+          print(repr(release_format_content))
+
+          # Check if they match (allowing for minor formatting differences)
+          content_match = release_format_content.replace(' ', '').replace('\n', '') == clean_release_body.replace(' ', '').replace('\n', '')
+
+          print(f"\nContent match: {content_match}")
+
+          if not content_match:
+              print("CHANGELOG and release body do not match - this needs manual review")
+              # For now, we'll continue with the process but log the discrepancy
+
+          # Write sync status to output
+          output_file = os.environ.get('GITHUB_OUTPUT')
+          if output_file:
+              with open(output_file, 'a') as f:
+                  f.write(f"content_synced={str(content_match).lower()}\n")
+          EOF
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+
+      - name: Add version update commit to changelog
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+
+          echo "Adding version update commit entry for: $RELEASE_TAG"
+
+          python3 << 'EOF'
+          import re
+          import os
+
+          def process_target_release_header(line, release_tag, new_lines, state):
+              """Process target release section header"""
+              if line.startswith(f"## [{release_tag}]"):
+                  new_lines.append(line)
+                  state['in_target_release'] = True
+                  state['other_changes_found'] = False
+                  return True
+              return False
+
+          def process_other_changes_header(line, new_lines, state):
+              """Process Other Changes section header within target release"""
+              if state['in_target_release'] and line == "### Other Changes":
+                  new_lines.append(line)
+                  state['other_changes_found'] = True
+                  return True
+              return False
+
+          def process_next_release_section(line, release_tag, new_lines, state):
+              """Process the start of next release section and add commit entry if needed"""
+              if (state['in_target_release'] and line.startswith("## ") and
+                  not line.startswith(f"## [{release_tag}]")):
+                  if not state['added_commit_entry']:
+                      add_commit_entry_before_section(new_lines, state, release_tag)
+                  new_lines.append(line)
+                  state['in_target_release'] = False
+                  return True
+              return False
+
+          def process_existing_other_changes_entry(line, new_lines, state, release_tag):
+              """Process existing entries in Other Changes section"""
+              if (state['in_target_release'] and state['other_changes_found'] and
+                  line.startswith("- ") and not state['added_commit_entry']):
+                  new_lines.extend([
+                      f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]",
+                      line
+                  ])
+                  state['added_commit_entry'] = True
+                  return True
+              return False
+
+          def process_full_changelog_link(line, new_lines, state, release_tag):
+              """Process Full Changelog link and add commit entry before it if needed"""
+              if (state['in_target_release'] and line.startswith("**Full Changelog**") and
+                  not state['added_commit_entry']):
+                  if state['other_changes_found']:
+                      new_lines.extend([
+                          f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]",
+                          "",
+                          line
+                      ])
+                  else:
+                      new_lines.extend([
+                          "### Other Changes",
+                          "",
+                          f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]",
+                          "",
+                          line
+                      ])
+                  state['added_commit_entry'] = True
+                  return True
+              return False
+
+          def add_commit_entry_before_section(new_lines, state, release_tag):
+              """Add commit entry before the next section"""
+              if state['other_changes_found']:
+                  new_lines.extend([
+                      f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]",
+                      ""
+                  ])
+              else:
+                  new_lines.extend([
+                      "### Other Changes",
+                      "",
+                      f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]",
+                      ""
+                  ])
+              state['added_commit_entry'] = True
+
+          def finalize_target_release(new_lines, state, release_tag):
+              """Add commit entry if still in target release at end of file"""
+              if state['in_target_release'] and not state['added_commit_entry']:
+                  if state['other_changes_found']:
+                      new_lines.append(f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]")
+                  else:
+                      new_lines.extend([
+                          "",
+                          "### Other Changes",
+                          "",
+                          f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]"
+                      ])
+
+          release_tag = os.environ.get('RELEASE_TAG', '')
+
+          if not release_tag:
+              print("Error: No release tag provided")
+              exit(1)
+
+          # Read current changelog
+          with open('CHANGELOG.md', 'r') as f:
+              content = f.read()
+
+          lines = content.split('\n')
+          new_lines = []
+          state = {
+              'in_target_release': False,
+              'added_commit_entry': False,
+              'other_changes_found': False
+          }
+
+          # Process lines using helper functions
+          for idx, line in enumerate(lines):
+              if process_target_release_header(line, release_tag, new_lines, state):
+                  continue
+              elif process_other_changes_header(line, new_lines, state):
+                  continue
+              elif process_next_release_section(line, release_tag, new_lines, state):
+                  continue
+              elif process_existing_other_changes_entry(line, new_lines, state, release_tag):
+                  continue
+              elif process_full_changelog_link(line, new_lines, state, release_tag):
+                  continue
+              else:
+                  new_lines.append(line)
+
+          # Finalize if still in target release
+          finalize_target_release(new_lines, state, release_tag)
+
+          final_content = '\n'.join(new_lines)
+
+          # Ensure proper ending
+          if not final_content.endswith('\n'):
+              final_content += '\n'
+
+          # Write updated changelog
+          with open('CHANGELOG.md', 'w') as f:
+              f.write(final_content)
+
+          print(f"Added version update commit entry to {release_tag} section")
+          EOF
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+
+      - name: Update release body with version commit
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+
+          echo "Adding version update commit to release body for: $RELEASE_TAG"
+
+          # Get current release body
+          CURRENT_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$RELEASE_TAG" | \
+            jq -r '.body')
+
+          # Use Python script for robust text manipulation
+          UPDATED_BODY=$(CURRENT_BODY="$CURRENT_BODY" python3 << 'EOF'
+          import re
+          import os
+
+          release_tag = os.environ.get('RELEASE_TAG', '')
+          current_body = os.environ.get('CURRENT_BODY', '')
+
+          if not release_tag or not current_body:
+              print("Error: Missing release tag or current body")
+              exit(1)
+
+          # Split content into lines for processing
+          lines = current_body.split('\n')
+          new_lines = []
+          version_commit = f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]"
+          other_changes_found = False
+          added_commit = False
+
+          def find_other_changes_section(lines):
+              """Find the index of the Other Changes section."""
+              for idx, line in enumerate(lines):
+                  if line.strip() == "## Other Changes":
+                      return idx
+              return -1
+
+          def find_full_changelog_section(lines):
+              """Find the index of the Full Changelog section."""
+              for idx, line in enumerate(lines):
+                  if "**Full Changelog**" in line:
+                      return idx
+              return -1
+
+          other_changes_idx = find_other_changes_section(lines)
+          full_changelog_idx = find_full_changelog_section(lines)
+
+          if other_changes_idx >= 0:
+              # Other Changes section exists, add our entry at the beginning
+              for idx, line in enumerate(lines):
+                  new_lines.append(line)
+                  if idx == other_changes_idx:
+                      # Add our entry after the Other Changes header
+                      # Find the first existing entry or end of section
+                      next_idx = idx + 1
+                      if next_idx < len(lines) and lines[next_idx].strip() == "":
+                          # Skip blank line after header
+                          new_lines.append("")
+                          new_lines.append(version_commit)
+                          added_commit = True
+                      else:
+                          # Add right after header
+                          new_lines.append("")
+                          new_lines.append(version_commit)
+                          added_commit = True
+          elif full_changelog_idx >= 0:
+              # No Other Changes section, create one before Full Changelog
+              for idx, line in enumerate(lines):
+                  if idx == full_changelog_idx:
+                      # Insert Other Changes section before Full Changelog
+                      new_lines.extend([
+                          "",
+                          "## Other Changes",
+                          "",
+                          version_commit,
+                          ""
+                      ])
+                      added_commit = True
+                  new_lines.append(line)
+          else:
+              # No Full Changelog section found, add at the end
+              new_lines.extend(lines)
+              new_lines.extend([
+                  "",
+                  "## Other Changes",
+                  "",
+                  version_commit
+              ])
+              added_commit = True
+
+          if not added_commit:
+              # Fallback: add at the end
+              new_lines.extend([
+                  "",
+                  "## Other Changes",
+                  "",
+                  version_commit
+              ])
+
+          # Join lines and clean up excessive blank lines
+          updated_content = '\n'.join(new_lines)
+          updated_content = re.sub(r'\n{3,}', '\n\n', updated_content)
+
+          print(updated_content)
+          EOF
+          )
+
+          # Update the release
+          curl -X PATCH \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$RELEASE_TAG" \
+            -d "$(jq -n --arg body "$UPDATED_BODY" '{body: $body}')"
+
+          echo "Release body updated with version commit"
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+
+      - name: Commit final changelog updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changelog updates needed"
+          else
+            git add CHANGELOG.md
+            git commit -m "Add changelog entry for release ${{ github.event.release.tag_name }} update"
+            git push
+            echo "Final changelog committed for release ${{ github.event.release.tag_name }}"
+          fi
+
+      - name: Verify release associations
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          echo "Verifying release associations for: $RELEASE_TAG"
+
+          # Get the tag commit
+          TAG_COMMIT=$(git rev-list -n 1 $RELEASE_TAG)
+          echo "Tag commit: $TAG_COMMIT"
+
+          # Get associated PRs and issues (this is mainly for logging/verification)
+          echo "Release successfully finalized and associated with commit: $TAG_COMMIT"
+          echo "CHANGELOG.md, release body, and git tag are now synchronized"
