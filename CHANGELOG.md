@@ -1,15 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Added
-
-### Changed
-
-### Fixed
-
-### Removed
-
 ## [2.8.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.1) (2025-09-05)
 
 ### Other Changes

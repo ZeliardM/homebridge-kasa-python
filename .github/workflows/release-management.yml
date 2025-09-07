@@ -922,6 +922,63 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
 
+      - name: Remove any remaining Unreleased section
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          
+          echo "Removing any remaining [Unreleased] section after release finalization"
+          
+          python3 << 'EOF'
+          import re
+          import os
+          
+          # Read current changelog
+          with open('CHANGELOG.md', 'r') as f:
+              content = f.read()
+          
+          # Remove any [Unreleased] section completely
+          lines = content.split('\n')
+          new_lines = []
+          skip_unreleased = False
+          
+          for line in lines:
+              if line.strip() == "## [Unreleased]":
+                  skip_unreleased = True
+                  continue
+              elif skip_unreleased and line.startswith("## ") and not line.startswith("## [Unreleased]"):
+                  # Found next section, stop skipping
+                  skip_unreleased = False
+                  new_lines.append(line)
+              elif not skip_unreleased:
+                  new_lines.append(line)
+          
+          # Clean up excessive blank lines
+          final_lines = []
+          for idx in range(len(new_lines)):
+              current_line = new_lines[idx]
+              # Remove excessive blank lines (more than one consecutive)
+              is_excessive_blank = (
+                  current_line == "" and
+                  idx > 0 and
+                  new_lines[idx - 1] == ""
+              )
+              
+              if not is_excessive_blank:
+                  final_lines.append(current_line)
+          
+          final_content = '\n'.join(final_lines)
+          
+          # Ensure proper ending
+          if not final_content.endswith('\n'):
+              final_content += '\n'
+          
+          # Write updated changelog
+          with open('CHANGELOG.md', 'w') as f:
+              f.write(final_content)
+          
+          print("Removed any remaining [Unreleased] section from CHANGELOG.md")
+          EOF
+
       - name: Update release body with version commit
         run: |
           RELEASE_TAG="${{ github.event.release.tag_name }}"
