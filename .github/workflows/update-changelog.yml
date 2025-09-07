@@ -279,7 +279,8 @@ jobs:
           final_lines = []
           
           # Process lines to remove excessive blanks
-          for idx, current_line in enumerate(lines):
+          for idx in range(len(lines)):
+              current_line = lines[idx]
               # Check if this is an excessive blank line
               is_excessive_blank = (
                   current_line == "" and 
