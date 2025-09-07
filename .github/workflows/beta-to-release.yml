@@ -414,8 +414,8 @@ jobs:
                   new_lines.append(line)
                   new_lines.append("")
                   beta_list = ', '.join(processed_betas)
-                  new_lines.append(f"- Convert beta releases ({beta_list}) to regular re \
-                      "@github-actions [beta-to-release]"
+                  new_lines.append(f"- Convert beta releases ({beta_list}) to regular release {base_version} "
+                                   f"@github-actions [beta-to-release]")
                   added_commit_entry = True
               elif in_target_release and line.startswith("**Full Changelog**") and not added_commit_entry:
                   # Add before Full Changelog link
@@ -423,8 +423,8 @@ jobs:
                   new_lines.extend([
                       "### Other Changes",
                       "",
-                      f"- Convert beta releases ({beta_list}) to regular release {base_versi \
-                          "@github-actions [beta-to-release]"
+                      f"- Convert beta releases ({beta_list}) to regular release {base_version} "
+                      f"@github-actions [beta-to-release]",
                       "",
                       line
                   ])
@@ -439,8 +439,8 @@ jobs:
                   "",
                   "### Other Changes",
                   "",
-                  f"- Convert beta releases ({beta_list}) to regular release {base_versi \
-                      "@github-actions [beta-to-release]"
+                  f"- Convert beta releases ({beta_list}) to regular release {base_version} "
+                  f"@github-actions [beta-to-release]"
               ])
 
           final_content = '\n'.join(new_lines)
@@ -472,8 +472,7 @@ jobs:
 
           # Add conversion commit entry
           BETA_LIST=$(echo "$PROCESSED_BETAS" | tr ',' ' ')
-          CONVERSION_ENTRY="- Convert beta releases ($PROCESSED_BETAS) to regular relea \
-              se $BASE_VERSION @github-actions [beta-to-release]"
+          CONVERSION_ENTRY="- Convert beta releases ($PROCESSED_BETAS) to regular release $BASE_VERSION @github-actions [beta-to-release]"
 
           # Use Python script for robust text manipulation
           UPDATED_BODY=$(CURRENT_BODY="$CURRENT_BODY" CONVERSION_ENTRY="$CONVERSION_ENTRY" python3 << 'EOF'
@@ -761,8 +760,8 @@ jobs:
                   not state['added_commit_entry']):
                   if state['other_changes_found']:
                       new_lines.extend([
-                          f"- Update CHANGELOG.md for converted release {release_tag} @github-ac \
-                              "@github-actions [converted-release]"
+                          f"- Update CHANGELOG.md for converted release {release_tag} "
+                          f"@github-actions [converted-release]",
                           "",
                           line
                       ])
@@ -770,8 +769,8 @@ jobs:
                       new_lines.extend([
                           "### Other Changes",
                           "",
-                          f"- Update CHANGELOG.md for converted release {release_tag} @github-ac \
-                              "@github-actions [converted-release]"
+                          f"- Update CHANGELOG.md for converted release {release_tag} "
+                          f"@github-actions [converted-release]",
                           "",
                           line
                       ])
@@ -799,15 +798,15 @@ jobs:
               """Add commit entry if still in target release at end of file"""
               if state['in_target_release'] and not state['added_commit_entry']:
                   if state['other_changes_found']:
-                      new_lines.append(f"- Update CHANGELOG.md for converted release {releas \
-                          "@github-actions [converted-release]"
+                      new_lines.append(f"- Update CHANGELOG.md for converted release {release_tag} "
+                                       f"@github-actions [converted-release]")
                   else:
                       new_lines.extend([
                           "",
                           "### Other Changes",
                           "",
-                          f"- Update CHANGELOG.md for converted release {release_tag} @github-ac \
-                              "@github-actions [converted-release]"
+                          f"- Update CHANGELOG.md for converted release {release_tag} "
+                          f"@github-actions [converted-release]"
                       ])
 
           release_tag = os.environ.get('RELEASE_TAG', '')
@@ -887,8 +886,7 @@ jobs:
           # Split content into lines for processing
           lines = current_body.split('\n')
           new_lines = []
-          version_commit = f"- Update CHANGELOG.md for converted release {releas \
-              "@github-actions [converted-release]"
+          version_commit = f"- Update CHANGELOG.md for converted release {release_tag} @github-actions [converted-release]"
           other_changes_found = False
           added_commit = False
 
