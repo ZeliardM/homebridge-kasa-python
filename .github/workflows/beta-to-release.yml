@@ -53,7 +53,7 @@ jobs:
           fi
 
           BASE_VERSION="${{ github.event.inputs.base_version }}"
-          
+
           # Validate base version format
           if [[ ! "$BASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Error: Base version must be in format v1.2.3"
@@ -68,11 +68,11 @@ jobs:
 
           # 1. Check for beta releases under this version number
           BETA_RELEASES=$(echo "$ALL_RELEASES" | jq -r --arg version "$BASE_VERSION" \
-            '.[] | select(.tag_name | test("^" + $version + "-beta\\.[0-9]+$")) | 
+            '.[] | select(.tag_name | test("^" + $version + "-beta\\.[0-9]+$")) |
             {tag_name, published_at, draft, prerelease, body}')
 
           BETA_COUNT=$(echo "$BETA_RELEASES" | jq -s length)
-          
+
           if [ "$BETA_COUNT" -eq 0 ]; then
             echo "Error: No beta releases found for version $BASE_VERSION"
             echo "conversion_valid=false" >> $GITHUB_OUTPUT
@@ -105,7 +105,7 @@ jobs:
 
           # Get last regular release (not beta, not prerelease)
           LAST_REGULAR=$(echo "$ALL_RELEASES" | jq -r \
-            '.[] | select(.prerelease == false and (.tag_name | contains("beta") | not)) | 
+            '.[] | select(.prerelease == false and (.tag_name | contains("beta") | not)) |
             .tag_name' | head -1)
 
           if [ -z "$LAST_REGULAR" ]; then
@@ -168,7 +168,7 @@ jobs:
               content = f.read()
 
           lines = content.split('\n')
-          
+
           # Find and extract content from all beta release sections
           consolidated_changes = defaultdict(list)  # category -> [entries]
           processed_betas = []
@@ -176,11 +176,11 @@ jobs:
           for beta_release in beta_releases:
               beta_tag = beta_release['tag_name']
               print(f"Processing beta release: {beta_tag}")
-              
+
               # Find this beta's section in changelog
               in_beta_section = False
               current_category = None
-              
+
               for line in lines:
                   if line.startswith(f"## [{beta_tag}]"):
                       in_beta_section = True
@@ -210,7 +210,7 @@ jobs:
 
           # Add categories in preferred order
           category_order = ['Breaking Changes', 'Featured Changes', 'Bug Fixes', 'Other Changes']
-          
+
           for category in category_order:
               if category in consolidated_changes:
                   new_changelog_lines.extend([
@@ -239,11 +239,11 @@ jobs:
           # Remove all beta sections from changelog and insert new consolidated section
           filtered_lines = []
           skip_section = False
-          
+
           for line in lines:
               # Check if this is the start of a beta section we processed
               is_processed_beta = any(line.startswith(f"## [{beta_tag}]") for beta_tag in processed_betas)
-              
+
               if is_processed_beta:
                   skip_section = True
                   # Insert our new consolidated section before the first beta section
@@ -265,9 +265,9 @@ jobs:
                   if line.startswith("# "):
                       header_pos = i + 1
                       break
-              
+
               # Insert new section after header
-              filtered_lines = (filtered_lines[:header_pos] + [""] + 
+              filtered_lines = (filtered_lines[:header_pos] + [""] +
                               new_changelog_lines + filtered_lines[header_pos:])
 
           # Write updated changelog
@@ -349,7 +349,7 @@ jobs:
             -d "{\"tag_name\": \"$BASE_VERSION\", \"target_commitish\": \"latest\", \"name\": \"$BASE_VERSION\", \"body\": $ESCAPED_BODY, \"draft\": true, \"prerelease\": false}")
 
           RELEASE_ID=$(echo "$RELEASE_RESPONSE" | jq -r '.id')
-          
+
           if [ "$RELEASE_ID" == "null" ]; then
             echo "Error creating release:"
             echo "$RELEASE_RESPONSE" | jq -r '.message // "Unknown error"'
@@ -464,7 +464,7 @@ jobs:
           BETA_LIST=$(echo "$PROCESSED_BETAS" | tr ',' ' ')
           CONVERSION_ENTRY="- Convert beta releases ($PROCESSED_BETAS) to regular release $BASE_VERSION @github-actions [beta-to-release]"
 
-          # Use Python script for robust text manipulation  
+          # Use Python script for robust text manipulation
           UPDATED_BODY=$(CURRENT_BODY="$CURRENT_BODY" CONVERSION_ENTRY="$CONVERSION_ENTRY" python3 << 'EOF'
           import re
           import os
@@ -536,7 +536,7 @@ jobs:
               # Fallback: add at the end
               new_lines.extend([
                   "",
-                  "## Other Changes", 
+                  "## Other Changes",
                   "",
                   conversion_entry
               ])
@@ -598,7 +598,7 @@ jobs:
           echo "📦 **After Publishing**: The release.yml workflow will handle npm publishing"
           echo ""
           echo "## Verification Summary"
-          
+
           # 7. Verify all commits/changes are correct across betas, changelog, and new release
           echo "- ✅ All beta releases were published (not draft)"
           echo "- ✅ No existing regular release conflicts with $BASE_VERSION"
