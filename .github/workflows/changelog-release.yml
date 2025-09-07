@@ -221,17 +221,101 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/$RELEASE_TAG" | \
             jq -r '.body')
           
-          # Add version commit entry to release body
-          VERSION_COMMIT="- Update CHANGELOG.md for release $RELEASE_TAG @github-actions [release]"
+          # Use Python script for robust text manipulation
+          UPDATED_BODY=$(CURRENT_BODY="$CURRENT_BODY" python3 << 'EOF'
+          import re
+          import os
           
-          # Check if "Other Changes" section exists in release body
-          if echo "$CURRENT_BODY" | grep -q "## Other Changes"; then
-            # Add to existing Other Changes section
-            UPDATED_BODY=$(echo "$CURRENT_BODY" | sed "/## Other Changes/a\\n$VERSION_COMMIT")
-          else
-            # Add new Other Changes section before Full Changelog
-            UPDATED_BODY=$(echo "$CURRENT_BODY" | sed "/\*\*Full Changelog\*\*/i\\n## Other Changes\\n$VERSION_COMMIT\\n")
-          fi
+          release_tag = os.environ.get('RELEASE_TAG', '')
+          current_body = os.environ.get('CURRENT_BODY', '')
+          
+          if not release_tag or not current_body:
+              print("Error: Missing release tag or current body")
+              exit(1)
+          
+          # Split content into lines for processing
+          lines = current_body.split('\n')
+          new_lines = []
+          version_commit = f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]"
+          other_changes_found = False
+          added_commit = False
+          
+          def find_other_changes_section(lines):
+              """Find the index of the Other Changes section."""
+              for idx, line in enumerate(lines):
+                  if line.strip() == "## Other Changes":
+                      return idx
+              return -1
+          
+          def find_full_changelog_section(lines):
+              """Find the index of the Full Changelog section."""
+              for idx, line in enumerate(lines):
+                  if "**Full Changelog**" in line:
+                      return idx
+              return -1
+          
+          other_changes_idx = find_other_changes_section(lines)
+          full_changelog_idx = find_full_changelog_section(lines)
+          
+          if other_changes_idx >= 0:
+              # Other Changes section exists, add our entry at the beginning
+              for idx, line in enumerate(lines):
+                  new_lines.append(line)
+                  if idx == other_changes_idx:
+                      # Add our entry after the Other Changes header
+                      # Find the first existing entry or end of section
+                      next_idx = idx + 1
+                      if next_idx < len(lines) and lines[next_idx].strip() == "":
+                          # Skip blank line after header
+                          new_lines.append("")
+                          new_lines.append(version_commit)
+                          added_commit = True
+                      else:
+                          # Add right after header
+                          new_lines.append("")
+                          new_lines.append(version_commit)
+                          added_commit = True
+          elif full_changelog_idx >= 0:
+              # No Other Changes section, create one before Full Changelog
+              for idx, line in enumerate(lines):
+                  if idx == full_changelog_idx:
+                      # Insert Other Changes section before Full Changelog
+                      new_lines.extend([
+                          "",
+                          "## Other Changes",
+                          "",
+                          version_commit,
+                          ""
+                      ])
+                      added_commit = True
+                  new_lines.append(line)
+          else:
+              # No Full Changelog section found, add at the end
+              new_lines.extend(lines)
+              new_lines.extend([
+                  "",
+                  "## Other Changes",
+                  "",
+                  version_commit
+              ])
+              added_commit = True
+          
+          if not added_commit:
+              # Fallback: add at the end
+              new_lines.extend([
+                  "",
+                  "## Other Changes", 
+                  "",
+                  version_commit
+              ])
+          
+          # Join lines and clean up excessive blank lines
+          updated_content = '\n'.join(new_lines)
+          updated_content = re.sub(r'\n{3,}', '\n\n', updated_content)
+          
+          print(updated_content)
+          EOF
+          )
           
           # Update the release
           curl -X PATCH \
@@ -241,6 +325,8 @@ jobs:
             -d "$(jq -n --arg body "$UPDATED_BODY" '{body: $body}')"
           
           echo "Release body updated with version commit"
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
 
       - name: Commit final changelog updates
         run: |
