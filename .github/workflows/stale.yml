@@ -2,7 +2,7 @@
 name: Stale
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: true
   schedule:
     - cron: '45 11 * * *'
 

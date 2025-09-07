@@ -388,7 +388,7 @@ jobs:
 
           # Check for existing beta releases with this base version
           existing_betas=$(git tag -l | grep "v$next_base_version-beta" | sort -V)
-          
+
           if [ -z "$existing_betas" ]; then
             # No beta releases for this version yet - start at beta.0
             next_beta_version="$next_base_version-beta.0"
@@ -1077,18 +1077,18 @@ jobs:
             # Commit the final changelog updates
             git add CHANGELOG.md
             git commit -m "Add changelog entry for beta release $RELEASE_TAG update"
-            
+
             # Get the new commit hash
             NEW_COMMIT=$(git rev-parse HEAD)
             echo "New commit with beta changelog updates: $NEW_COMMIT"
-            
+
             # Update the release tag to point to the new commit
             git tag -f "$RELEASE_TAG" "$NEW_COMMIT"
-            
+
             # Push both the commit and the updated tag
             git push
             git push --force origin "$RELEASE_TAG"
-            
+
             echo "Final beta changelog committed and release tag updated for $RELEASE_TAG"
             echo "Beta release tag now points to commit with changelog updates: $NEW_COMMIT"
           fi

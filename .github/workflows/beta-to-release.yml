@@ -980,18 +980,18 @@ jobs:
             # Commit the final changelog updates
             git add CHANGELOG.md
             git commit -m "Add changelog entry for converted release $RELEASE_TAG update"
-            
+
             # Get the new commit hash
             NEW_COMMIT=$(git rev-parse HEAD)
             echo "New commit with converted release changelog updates: $NEW_COMMIT"
-            
+
             # Update the release tag to point to the new commit
             git tag -f "$RELEASE_TAG" "$NEW_COMMIT"
-            
+
             # Push both the commit and the updated tag
             git push
             git push --force origin "$RELEASE_TAG"
-            
+
             echo "Final converted release changelog committed and release tag updated for $RELEASE_TAG"
             echo "Converted release tag now points to commit with changelog updates: $NEW_COMMIT"
           fi

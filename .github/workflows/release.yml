@@ -34,8 +34,8 @@ jobs:
     secrets:
       npm_auth_token: ${{ secrets.npm_token }}
 
-  # Optional Discord notification (commented out)
-  # github-releases-to-discord:
+    # Optional Discord notification (commented out)
+    # github-releases-to-discord:
   #   name: Discord Webhooks
   #   needs: [build_lint_test, publish]
   #   if: >
