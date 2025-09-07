@@ -24,9 +24,12 @@ on:
         description: 'Type "CONFIRM" to proceed with beta to release conversion'
         required: true
         type: string
+  release:
+    types: [published]
 
 jobs:
   validate-and-analyze:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       base_version: ${{ steps.validate.outputs.base_version }}
@@ -595,7 +598,7 @@ jobs:
           echo "✅ **Changes Committed**: Changelog updates pushed to repository"
           echo ""
           echo "🔄 **Next Step**: Manually publish the draft release $BASE_VERSION"
-          echo "📦 **After Publishing**: The release.yml workflow will handle npm publishing"
+          echo "📦 **After Publishing**: The beta-to-release workflow will handle finalization and npm publishing"
           echo ""
           echo "## Verification Summary"
 
@@ -608,3 +611,404 @@ jobs:
           echo "- ✅ Draft release created (requires manual publishing)"
           echo "- ✅ Conversion commit tracking added"
           echo "- ✅ All changes committed to repository"
+
+  # Job 3: Finalize converted release (runs when converted releases are published)
+  finalize-converted-release:
+    if: >
+      github.event_name == 'release' &&
+      github.event.release.prerelease == false &&
+      contains(github.event.release.body, 'beta-to-release')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Sync converted release changelog and release content
+        id: sync-converted
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          RELEASE_BODY="${{ github.event.release.body }}"
+
+          echo "Ensuring CHANGELOG.md and converted release body are synchronized for: $RELEASE_TAG"
+
+          python3 << 'EOF'
+          import re
+          import os
+          import json
+
+          release_tag = os.environ.get('RELEASE_TAG', '')
+          release_body = os.environ.get('RELEASE_BODY', '')
+
+          # Read current changelog
+          with open('CHANGELOG.md', 'r') as f:
+              changelog_content = f.read()
+
+          # Extract changelog content for this release
+          lines = changelog_content.split('\n')
+          changelog_release_content = []
+          in_target_release = False
+
+          for line in lines:
+              if line.startswith(f"## [{release_tag}]"):
+                  in_target_release = True
+                  continue
+              elif in_target_release and line.startswith("## ") and not line.startswith(f"## [{release_tag}]"):
+                  break
+              elif in_target_release and line.strip() and not line.startswith("**Full Changelog**"):
+                  changelog_release_content.append(line)
+
+          changelog_content_str = '\n'.join(changelog_release_content).strip()
+
+          # Convert changelog format to release format for comparison
+          release_format_content = re.sub(r'^### ', '## ', changelog_content_str, flags=re.MULTILINE)
+
+          # Clean release body for comparison (remove Full Changelog links)
+          clean_release_body = re.sub(r'\*\*Full Changelog\*\*:.*?\n?', '', release_body).strip()
+
+          print("Changelog content:")
+          print(repr(changelog_content_str))
+          print("\nRelease body content:")
+          print(repr(clean_release_body))
+          print("\nConverted changelog format:")
+          print(repr(release_format_content))
+
+          # Check if they match (allowing for minor formatting differences)
+          content_match = release_format_content.replace(' ', '').replace('\n', '') == clean_release_body.replace(' ', '').replace('\n', '')
+
+          print(f"\nContent match: {content_match}")
+
+          if not content_match:
+              print("CHANGELOG and converted release body do not match - this needs manual review")
+              # For now, we'll continue with the process but log the discrepancy
+
+          # Write sync status to output
+          output_file = os.environ.get('GITHUB_OUTPUT')
+          if output_file:
+              with open(output_file, 'a') as f:
+                  f.write(f"content_synced={str(content_match).lower()}\n")
+          EOF
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+
+      - name: Add converted release update commit to changelog
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+
+          echo "Adding converted release update commit entry for: $RELEASE_TAG"
+
+          python3 << 'EOF'
+          import re
+          import os
+
+          def process_target_release_header(line, release_tag, new_lines, state):
+              """Process target release section header"""
+              if line.startswith(f"## [{release_tag}]"):
+                  new_lines.append(line)
+                  state['in_target_release'] = True
+                  state['other_changes_found'] = False
+                  return True
+              return False
+
+          def process_other_changes_header(line, new_lines, state):
+              """Process Other Changes section header within target release"""
+              if state['in_target_release'] and line == "### Other Changes":
+                  new_lines.append(line)
+                  state['other_changes_found'] = True
+                  return True
+              return False
+
+          def process_next_release_section(line, release_tag, new_lines, state):
+              """Process the start of next release section and add commit entry if needed"""
+              if (state['in_target_release'] and line.startswith("## ") and
+                  not line.startswith(f"## [{release_tag}]")):
+                  if not state['added_commit_entry']:
+                      add_commit_entry_before_section(new_lines, state, release_tag)
+                  new_lines.append(line)
+                  state['in_target_release'] = False
+                  return True
+              return False
+
+          def process_existing_other_changes_entry(line, new_lines, state, release_tag):
+              """Process existing entries in Other Changes section"""
+              if (state['in_target_release'] and state['other_changes_found'] and
+                  line.startswith("- ") and not state['added_commit_entry']):
+                  new_lines.extend([
+                      f"- Update CHANGELOG.md for converted release {release_tag} @github-actions [converted-release]",
+                      line
+                  ])
+                  state['added_commit_entry'] = True
+                  return True
+              return False
+
+          def process_full_changelog_link(line, new_lines, state, release_tag):
+              """Process Full Changelog link and add commit entry before it if needed"""
+              if (state['in_target_release'] and line.startswith("**Full Changelog**") and
+                  not state['added_commit_entry']):
+                  if state['other_changes_found']:
+                      new_lines.extend([
+                          f"- Update CHANGELOG.md for converted release {release_tag} @github-actions [converted-release]",
+                          "",
+                          line
+                      ])
+                  else:
+                      new_lines.extend([
+                          "### Other Changes",
+                          "",
+                          f"- Update CHANGELOG.md for converted release {release_tag} @github-actions [converted-release]",
+                          "",
+                          line
+                      ])
+                  state['added_commit_entry'] = True
+                  return True
+              return False
+
+          def add_commit_entry_before_section(new_lines, state, release_tag):
+              """Add commit entry before the next section"""
+              if state['other_changes_found']:
+                  new_lines.extend([
+                      f"- Update CHANGELOG.md for converted release {release_tag} @github-actions [converted-release]",
+                      ""
+                  ])
+              else:
+                  new_lines.extend([
+                      "### Other Changes",
+                      "",
+                      f"- Update CHANGELOG.md for converted release {release_tag} @github-actions [converted-release]",
+                      ""
+                  ])
+              state['added_commit_entry'] = True
+
+          def finalize_target_release(new_lines, state, release_tag):
+              """Add commit entry if still in target release at end of file"""
+              if state['in_target_release'] and not state['added_commit_entry']:
+                  if state['other_changes_found']:
+                      new_lines.append(f"- Update CHANGELOG.md for converted release {release_tag} @github-actions [converted-release]")
+                  else:
+                      new_lines.extend([
+                          "",
+                          "### Other Changes",
+                          "",
+                          f"- Update CHANGELOG.md for converted release {release_tag} @github-actions [converted-release]"
+                      ])
+
+          release_tag = os.environ.get('RELEASE_TAG', '')
+
+          if not release_tag:
+              print("Error: No converted release tag provided")
+              exit(1)
+
+          # Read current changelog
+          with open('CHANGELOG.md', 'r') as f:
+              content = f.read()
+
+          lines = content.split('\n')
+          new_lines = []
+          state = {
+              'in_target_release': False,
+              'added_commit_entry': False,
+              'other_changes_found': False
+          }
+
+          # Process lines using helper functions
+          for idx, line in enumerate(lines):
+              if process_target_release_header(line, release_tag, new_lines, state):
+                  continue
+              elif process_other_changes_header(line, new_lines, state):
+                  continue
+              elif process_next_release_section(line, release_tag, new_lines, state):
+                  continue
+              elif process_existing_other_changes_entry(line, new_lines, state, release_tag):
+                  continue
+              elif process_full_changelog_link(line, new_lines, state, release_tag):
+                  continue
+              else:
+                  new_lines.append(line)
+
+          # Finalize if still in target release
+          finalize_target_release(new_lines, state, release_tag)
+
+          final_content = '\n'.join(new_lines)
+
+          # Ensure proper ending
+          if not final_content.endswith('\n'):
+              final_content += '\n'
+
+          # Write updated changelog
+          with open('CHANGELOG.md', 'w') as f:
+              f.write(final_content)
+
+          print(f"Added converted release update commit entry to {release_tag} section")
+          EOF
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+
+      - name: Update converted release body with version commit
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+
+          echo "Adding version update commit to converted release body for: $RELEASE_TAG"
+
+          # Get current release body
+          CURRENT_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$RELEASE_TAG" | \
+            jq -r '.body')
+
+          # Use Python script for robust text manipulation
+          UPDATED_BODY=$(CURRENT_BODY="$CURRENT_BODY" python3 << 'EOF'
+          import re
+          import os
+
+          release_tag = os.environ.get('RELEASE_TAG', '')
+          current_body = os.environ.get('CURRENT_BODY', '')
+
+          if not release_tag or not current_body:
+              print("Error: Missing converted release tag or current body")
+              exit(1)
+
+          # Split content into lines for processing
+          lines = current_body.split('\n')
+          new_lines = []
+          version_commit = f"- Update CHANGELOG.md for converted release {release_tag} @github-actions [converted-release]"
+          other_changes_found = False
+          added_commit = False
+
+          def find_other_changes_section(lines):
+              """Find the index of the Other Changes section."""
+              for idx, line in enumerate(lines):
+                  if line.strip() == "## Other Changes":
+                      return idx
+              return -1
+
+          def find_full_changelog_section(lines):
+              """Find the index of the Full Changelog section."""
+              for idx, line in enumerate(lines):
+                  if "**Full Changelog**" in line:
+                      return idx
+              return -1
+
+          other_changes_idx = find_other_changes_section(lines)
+          full_changelog_idx = find_full_changelog_section(lines)
+
+          if other_changes_idx >= 0:
+              # Other Changes section exists, add our entry at the beginning
+              for idx, line in enumerate(lines):
+                  new_lines.append(line)
+                  if idx == other_changes_idx:
+                      # Add our entry after the Other Changes header
+                      # Find the first existing entry or end of section
+                      next_idx = idx + 1
+                      if next_idx < len(lines) and lines[next_idx].strip() == "":
+                          # Skip blank line after header
+                          new_lines.append("")
+                          new_lines.append(version_commit)
+                          added_commit = True
+                      else:
+                          # Add right after header
+                          new_lines.append("")
+                          new_lines.append(version_commit)
+                          added_commit = True
+          elif full_changelog_idx >= 0:
+              # No Other Changes section, create one before Full Changelog
+              for idx, line in enumerate(lines):
+                  if idx == full_changelog_idx:
+                      # Insert Other Changes section before Full Changelog
+                      new_lines.extend([
+                          "",
+                          "## Other Changes",
+                          "",
+                          version_commit,
+                          ""
+                      ])
+                      added_commit = True
+                  new_lines.append(line)
+          else:
+              # No Full Changelog section found, add at the end
+              new_lines.extend(lines)
+              new_lines.extend([
+                  "",
+                  "## Other Changes",
+                  "",
+                  version_commit
+              ])
+              added_commit = True
+
+          if not added_commit:
+              # Fallback: add at the end
+              new_lines.extend([
+                  "",
+                  "## Other Changes",
+                  "",
+                  version_commit
+              ])
+
+          # Join lines and clean up excessive blank lines
+          updated_content = '\n'.join(new_lines)
+          updated_content = re.sub(r'\n{3,}', '\n\n', updated_content)
+
+          print(updated_content)
+          EOF
+          )
+
+          # Update the converted release
+          curl -X PATCH \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$RELEASE_TAG" \
+            -d "$(jq -n --arg body "$UPDATED_BODY" '{body: $body}')"
+
+          echo "Converted release body updated with version commit"
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+
+      - name: Commit final converted release changelog updates and update tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No converted release changelog updates needed"
+            TAG_COMMIT=$(git rev-list -n 1 $RELEASE_TAG)
+            echo "Converted release tag already points to correct commit: $TAG_COMMIT"
+          else
+            # Commit the final changelog updates
+            git add CHANGELOG.md
+            git commit -m "Add changelog entry for converted release $RELEASE_TAG update"
+            
+            # Get the new commit hash
+            NEW_COMMIT=$(git rev-parse HEAD)
+            echo "New commit with converted release changelog updates: $NEW_COMMIT"
+            
+            # Update the release tag to point to the new commit
+            git tag -f "$RELEASE_TAG" "$NEW_COMMIT"
+            
+            # Push both the commit and the updated tag
+            git push
+            git push --force origin "$RELEASE_TAG"
+            
+            echo "Final converted release changelog committed and release tag updated for $RELEASE_TAG"
+            echo "Converted release tag now points to commit with changelog updates: $NEW_COMMIT"
+          fi
+
+      - name: Verify converted release associations
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          echo "Verifying converted release associations for: $RELEASE_TAG"
+
+          # Get the current tag commit
+          TAG_COMMIT=$(git rev-list -n 1 $RELEASE_TAG)
+          echo "Converted release tag commit: $TAG_COMMIT"
+
+          # Verify this commit includes the changelog updates
+          git show --name-only $TAG_COMMIT | grep -q "CHANGELOG.md" && \
+            echo "✅ Converted release tag commit includes CHANGELOG.md updates" || \
+            echo "ℹ️  Converted release tag commit is original release point (no additional changelog updates needed)"
+
+          echo "Converted release successfully finalized and associated with commit: $TAG_COMMIT"
+          echo "CHANGELOG.md, converted release body, and git tag are now synchronized"

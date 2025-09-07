@@ -681,11 +681,12 @@ jobs:
               -d "{\"tag_name\": \"$RELEASE_TAG\", \"target_commitish\": \"latest\", \"name\": \"$RELEASE_TAG\", \"body\": $ESCAPED_BODY, \"draft\": true, \"prerelease\": false}"
           fi
 
-  # Job 3: Finalize release (runs when regular releases are published, not beta releases)
+  # Job 3: Finalize release (runs when regular releases are published, not beta releases or converted releases)
   finalize-release:
     if: >
       github.event_name == 'release' &&
-      github.event.release.prerelease == false
+      github.event.release.prerelease == false &&
+      !contains(github.event.release.body, 'beta-to-release')
     runs-on: ubuntu-latest
     permissions:
       contents: write
