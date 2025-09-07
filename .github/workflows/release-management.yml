@@ -132,9 +132,9 @@ jobs:
               section_end = len(lines)
 
               for idx, line in enumerate(lines):
-                  if line.strip() == section_header.strip():
+                  if line.strip().startswith(section_header.strip()):
                       section_start = idx
-                  elif section_start >= 0 and line.startswith("## ") and line.strip() != section_header.strip():
+                  elif section_start >= 0 and line.startswith("## ") and not line.strip().startswith(section_header.strip()):
                       section_end = idx
                       break
 
