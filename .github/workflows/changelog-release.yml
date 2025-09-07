@@ -99,73 +99,51 @@ jobs:
           import re
           import os
           
-          release_tag = os.environ.get('RELEASE_TAG', '')
-          
-          if not release_tag:
-              print("Error: No release tag provided")
-              exit(1)
-          
-          # Read current changelog
-          with open('CHANGELOG.md', 'r') as f:
-              content = f.read()
-          
-          lines = content.split('\n')
-          new_lines = []
-          in_target_release = False
-          added_commit_entry = False
-          other_changes_found = False
-          target_section_end = len(lines)
-          
-          # Find the target release section boundaries
-          for idx, line in enumerate(lines):
+          def process_target_release_header(line, release_tag, new_lines, state):
+              """Process target release section header"""
               if line.startswith(f"## [{release_tag}]"):
-                  in_target_release = True
-                  target_section_start = idx
-              elif in_target_release and line.startswith("## ") and not line.startswith(f"## [{release_tag}]"):
-                  target_section_end = idx
-                  break
+                  new_lines.append(line)
+                  state['in_target_release'] = True
+                  state['other_changes_found'] = False
+                  return True
+              return False
           
-          # Process lines
-          for idx, line in enumerate(lines):
-              if line.startswith(f"## [{release_tag}]"):
-                  # Found the target release section
+          def process_other_changes_header(line, new_lines, state):
+              """Process Other Changes section header within target release"""
+              if state['in_target_release'] and line == "### Other Changes":
                   new_lines.append(line)
-                  in_target_release = True
-                  other_changes_found = False
-              elif in_target_release and line == "### Other Changes":
-                  # Found existing Other Changes section in target release
+                  state['other_changes_found'] = True
+                  return True
+              return False
+          
+          def process_next_release_section(line, release_tag, new_lines, state):
+              """Process the start of next release section and add commit entry if needed"""
+              if (state['in_target_release'] and line.startswith("## ") and 
+                  not line.startswith(f"## [{release_tag}]")):
+                  if not state['added_commit_entry']:
+                      add_commit_entry_before_section(new_lines, state, release_tag)
                   new_lines.append(line)
-                  other_changes_found = True
-              elif in_target_release and line.startswith("## ") and not line.startswith(f"## [{release_tag}]"):
-                  # Found next release section, end of target release
-                  if not added_commit_entry:
-                      if other_changes_found:
-                          # Insert before this next section
-                          new_lines.extend([
-                              f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]",
-                              ""
-                          ])
-                      else:
-                          # Create new Other Changes section
-                          new_lines.extend([
-                              "### Other Changes",
-                              "",
-                              f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]",
-                              ""
-                          ])
-                      added_commit_entry = True
-                  new_lines.append(line)
-                  in_target_release = False
-              elif in_target_release and other_changes_found and line.startswith("- ") and not added_commit_entry:
-                  # Add our entry at the top of existing Other Changes entries
+                  state['in_target_release'] = False
+                  return True
+              return False
+          
+          def process_existing_other_changes_entry(line, new_lines, state, release_tag):
+              """Process existing entries in Other Changes section"""
+              if (state['in_target_release'] and state['other_changes_found'] and 
+                  line.startswith("- ") and not state['added_commit_entry']):
                   new_lines.extend([
                       f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]",
                       line
                   ])
-                  added_commit_entry = True
-              elif in_target_release and line.startswith("**Full Changelog**") and not added_commit_entry:
-                  # Add entry before the full changelog link
-                  if other_changes_found:
+                  state['added_commit_entry'] = True
+                  return True
+              return False
+          
+          def process_full_changelog_link(line, new_lines, state, release_tag):
+              """Process Full Changelog link and add commit entry before it if needed"""
+              if (state['in_target_release'] and line.startswith("**Full Changelog**") and 
+                  not state['added_commit_entry']):
+                  if state['other_changes_found']:
                       new_lines.extend([
                           f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]",
                           "",
@@ -179,21 +157,90 @@ jobs:
                           "",
                           line
                       ])
-                  added_commit_entry = True
+                  state['added_commit_entry'] = True
+                  return True
+              return False
+          
+          def add_commit_entry_before_section(new_lines, state, release_tag):
+              """Add commit entry before the next section"""
+              if state['other_changes_found']:
+                  new_lines.extend([
+                      f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]",
+                      ""
+                  ])
+              else:
+                  new_lines.extend([
+                      "### Other Changes",
+                      "",
+                      f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]",
+                      ""
+                  ])
+              state['added_commit_entry'] = True
+          
+          def finalize_target_release(new_lines, state, release_tag):
+              """Add commit entry if still in target release at end of file"""
+              if state['in_target_release'] and not state['added_commit_entry']:
+                  if state['other_changes_found']:
+                      new_lines.append(f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]")
+                  else:
+                      new_lines.extend([
+                          "",
+                          "### Other Changes",
+                          "",
+                          f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]"
+                      ])
+          
+          release_tag = os.environ.get('RELEASE_TAG', '')
+          
+          if not release_tag:
+              print("Error: No release tag provided")
+              exit(1)
+          
+          # Read current changelog
+          with open('CHANGELOG.md', 'r') as f:
+              content = f.read()
+          
+          lines = content.split('\n')
+          new_lines = []
+          state = {
+              'in_target_release': False,
+              'added_commit_entry': False,
+              'other_changes_found': False
+          }
+          
+          # Find the target release section boundaries
+          target_section_end = len(lines)
+          for idx, line in enumerate(lines):
+              if line.startswith(f"## [{release_tag}]"):
+                  target_section_start = idx
+              elif state['in_target_release'] and line.startswith("## ") and not line.startswith(f"## [{release_tag}]"):
+                  target_section_end = idx
+                  break
+          
+          # Reset state for main processing
+          state = {
+              'in_target_release': False,
+              'added_commit_entry': False,
+              'other_changes_found': False
+          }
+          
+          # Process lines using helper functions
+          for idx, line in enumerate(lines):
+              if process_target_release_header(line, release_tag, new_lines, state):
+                  continue
+              elif process_other_changes_header(line, new_lines, state):
+                  continue
+              elif process_next_release_section(line, release_tag, new_lines, state):
+                  continue
+              elif process_existing_other_changes_entry(line, new_lines, state, release_tag):
+                  continue
+              elif process_full_changelog_link(line, new_lines, state, release_tag):
+                  continue
               else:
                   new_lines.append(line)
           
-          # If we're still in the target release at the end of file
-          if in_target_release and not added_commit_entry:
-              if other_changes_found:
-                  new_lines.append(f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]")
-              else:
-                  new_lines.extend([
-                      "",
-                      "### Other Changes",
-                      "",
-                      f"- Update CHANGELOG.md for release {release_tag} @github-actions [release]"
-                  ])
+          # Finalize if still in target release
+          finalize_target_release(new_lines, state, release_tag)
           
           final_content = '\n'.join(new_lines)
           

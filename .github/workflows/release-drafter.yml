@@ -99,6 +99,45 @@ jobs:
           import re
           import os
           
+          def process_version_header(line, version_header, new_lines, state):
+              """Process the version header line and update state"""
+              if line == version_header:
+                  new_lines.append(line)
+                  state['in_current_release'] = True
+                  return True
+              return False
+          
+          def process_release_end(line, version_header, new_lines, state, github_repo, latest_tag, release_tag):
+              """Process end of release section and add full changelog link if needed"""
+              if state['in_current_release'] and line.startswith("## ") and line != version_header:
+                  if not state['full_changelog_added']:
+                      new_lines.extend([
+                          "",
+                          f"**Full Changelog**: https://github.com/{github_repo}/compare/{latest_tag}...{release_tag}",
+                          ""
+                      ])
+                      state['full_changelog_added'] = True
+                  new_lines.append(line)
+                  state['in_current_release'] = False
+                  return True
+              return False
+          
+          def process_release_content(line, new_lines, state):
+              """Process content within the current release section"""
+              if state['in_current_release'] and line.strip() and not line.startswith("**Full Changelog**"):
+                  state['release_content_lines'].append(line)
+                  new_lines.append(line)
+                  return True
+              return False
+          
+          def finalize_release_section(new_lines, state, github_repo, latest_tag, release_tag):
+              """Add full changelog link if still in release section at end of file"""
+              if state['in_current_release'] and not state['full_changelog_added']:
+                  new_lines.extend([
+                      "",
+                      f"**Full Changelog**: https://github.com/{github_repo}/compare/{latest_tag}...{release_tag}"
+                  ])
+          
           release_tag = os.environ.get('RELEASE_TAG', '')
           release_date = os.environ.get('RELEASE_DATE', '')
           release_url = os.environ.get('RELEASE_URL', '')
@@ -115,39 +154,25 @@ jobs:
           
           lines = updated_content.split('\n')
           new_lines = []
-          in_current_release = False
-          release_content_lines = []
-          full_changelog_added = False
+          state = {
+              'in_current_release': False,
+              'release_content_lines': [],
+              'full_changelog_added': False
+          }
           
           for idx, line in enumerate(lines):
-              if line == version_header:
-                  # Found the version we just created
-                  new_lines.append(line)
-                  in_current_release = True
-              elif in_current_release and line.startswith("## ") and line != version_header:
-                  # End of current release section, add full changelog link if not already added
-                  if not full_changelog_added:
-                      new_lines.extend([
-                          "",
-                          f"**Full Changelog**: https://github.com/{github_repo}/compare/{latest_tag}...{release_tag}",
-                          ""
-                      ])
-                      full_changelog_added = True
-                  new_lines.append(line)
-                  in_current_release = False
-              elif in_current_release and line.strip() and not line.startswith("**Full Changelog**"):
-                  # Collect release content for output
-                  release_content_lines.append(line)
-                  new_lines.append(line)
+              # Try to process each type of line with helper functions
+              if process_version_header(line, version_header, new_lines, state):
+                  continue
+              elif process_release_end(line, version_header, new_lines, state, github_repo, latest_tag, release_tag):
+                  continue
+              elif process_release_content(line, new_lines, state):
+                  continue
               else:
                   new_lines.append(line)
           
-          # If we're still in current release at end of file, add full changelog link
-          if in_current_release and not full_changelog_added:
-              new_lines.extend([
-                  "",
-                  f"**Full Changelog**: https://github.com/{github_repo}/compare/{latest_tag}...{release_tag}"
-              ])
+          # Finalize the release section if needed
+          finalize_release_section(new_lines, state, github_repo, latest_tag, release_tag)
           
           final_content = '\n'.join(new_lines)
           
@@ -160,8 +185,8 @@ jobs:
               f.write(final_content)
           
           # Prepare release content (convert ### headers to ## for release format)
-          if release_content_lines:
-              release_content = '\n'.join(release_content_lines)
+          if state['release_content_lines']:
+              release_content = '\n'.join(state['release_content_lines'])
               release_content = re.sub(r'^### ', '## ', release_content, flags=re.MULTILINE)
           else:
               release_content = "## Other Changes\n\n_No changes in this release._"
