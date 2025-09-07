@@ -1063,18 +1063,34 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
 
-      - name: Commit final beta changelog updates
+      - name: Commit final beta changelog updates and update tag
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
 
           if git diff --quiet CHANGELOG.md; then
             echo "No beta changelog updates needed"
+            TAG_COMMIT=$(git rev-list -n 1 $RELEASE_TAG)
+            echo "Beta release tag already points to correct commit: $TAG_COMMIT"
           else
+            # Commit the final changelog updates
             git add CHANGELOG.md
-            git commit -m "Add changelog entry for beta release ${{ github.event.release.tag_name }} update"
+            git commit -m "Add changelog entry for beta release $RELEASE_TAG update"
+            
+            # Get the new commit hash
+            NEW_COMMIT=$(git rev-parse HEAD)
+            echo "New commit with beta changelog updates: $NEW_COMMIT"
+            
+            # Update the release tag to point to the new commit
+            git tag -f "$RELEASE_TAG" "$NEW_COMMIT"
+            
+            # Push both the commit and the updated tag
             git push
-            echo "Final beta changelog committed for release ${{ github.event.release.tag_name }}"
+            git push --force origin "$RELEASE_TAG"
+            
+            echo "Final beta changelog committed and release tag updated for $RELEASE_TAG"
+            echo "Beta release tag now points to commit with changelog updates: $NEW_COMMIT"
           fi
 
       - name: Verify beta release associations
@@ -1082,10 +1098,14 @@ jobs:
           RELEASE_TAG="${{ github.event.release.tag_name }}"
           echo "Verifying beta release associations for: $RELEASE_TAG"
 
-          # Get the tag commit
+          # Get the current tag commit
           TAG_COMMIT=$(git rev-list -n 1 $RELEASE_TAG)
           echo "Beta tag commit: $TAG_COMMIT"
 
-          # Get associated PRs and issues (this is mainly for logging/verification)
+          # Verify this commit includes the changelog updates
+          git show --name-only $TAG_COMMIT | grep -q "CHANGELOG.md" && \
+            echo "✅ Beta tag commit includes CHANGELOG.md updates" || \
+            echo "ℹ️  Beta tag commit is original release point (no additional changelog updates needed)"
+
           echo "Beta release successfully finalized and associated with commit: $TAG_COMMIT"
           echo "CHANGELOG.md, beta release body, and git tag are now synchronized"

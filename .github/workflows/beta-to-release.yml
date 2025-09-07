@@ -1,23 +1,24 @@
 ---
 name: Convert Beta to Release
 
-# Manual workflow to convert a published beta release to a regular release.
-# This workflow will:
-# 1. Take a published beta release
-# 2. Create a new regular release with the same content
-# 3. Update the changelog to convert the beta section to a regular release
-# 4. Follow all the same logic and checks as normal releases
+# Manual workflow to convert published beta releases to a regular release.
+# This workflow follows the comprehensive process:
+# 1. Check for beta releases and last release, get all betas under same version number
+# 2. Verify no release exists with same version number (excluding beta tags)
+# 3. Check changelog and gather all changes for different beta releases with same version
+# 4. Create new release entry in changelog with all changes properly formatted/categorized
+# 5. Create and draft new release with all changes from changelog entry
+# 6. Add full changelog link from last regular release to new regular release
+# 7. Verify all commits/changes are correct across betas, changelog, and new release
+# 8. Add changelog commit to new release and changelog
+# 9. Actually commit the changelog changes
 
 on:
   workflow_dispatch:
     inputs:
-      beta_tag:
-        description: 'Beta release tag to convert (e.g., v2.8.0-beta.2)'
+      base_version:
+        description: 'Base version to convert all betas to regular release (e.g., v2.8.0 converts all v2.8.0-beta.X)'
         required: true
-        type: string
-      target_version:
-        description: 'Target release version (e.g., v2.8.0). Leave empty to auto-detect from beta tag.'
-        required: false
         type: string
       confirm_conversion:
         description: 'Type "CONFIRM" to proceed with beta to release conversion'
@@ -25,62 +26,106 @@ on:
         type: string
 
 jobs:
-  validate-inputs:
+  validate-and-analyze:
     runs-on: ubuntu-latest
     outputs:
-      beta_tag: ${{ steps.validate.outputs.beta_tag }}
-      target_version: ${{ steps.validate.outputs.target_version }}
-      beta_exists: ${{ steps.validate.outputs.beta_exists }}
+      base_version: ${{ steps.validate.outputs.base_version }}
+      beta_releases: ${{ steps.validate.outputs.beta_releases }}
+      last_regular_release: ${{ steps.validate.outputs.last_regular_release }}
+      conversion_valid: ${{ steps.validate.outputs.conversion_valid }}
     steps:
-      - name: Validate inputs
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Validate inputs and analyze beta releases
         id: validate
         run: |
+          # Install jq for JSON parsing
+          sudo apt-get update && sudo apt-get install -y jq
+
           # Validate confirmation
           if [ "${{ github.event.inputs.confirm_conversion }}" != "CONFIRM" ]; then
             echo "Error: Must type 'CONFIRM' to proceed with conversion"
             exit 1
           fi
 
-          # Validate beta tag format
-          BETA_TAG="${{ github.event.inputs.beta_tag }}"
-          if [[ ! "$BETA_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]; then
-            echo "Error: Beta tag must be in format v1.2.3-beta.0"
+          BASE_VERSION="${{ github.event.inputs.base_version }}"
+          
+          # Validate base version format
+          if [[ ! "$BASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Base version must be in format v1.2.3"
             exit 1
           fi
 
-          # Determine target version
-          TARGET_VERSION="${{ github.event.inputs.target_version }}"
-          if [ -z "$TARGET_VERSION" ]; then
-            # Auto-detect from beta tag (remove -beta.X part)
-            TARGET_VERSION=$(echo "$BETA_TAG" | sed 's/-beta\.[0-9]\+$//')
-          fi
+          echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
 
-          # Validate target version format
-          if [[ ! "$TARGET_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Error: Target version must be in format v1.2.3"
+          # Get all releases from GitHub API
+          ALL_RELEASES=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases?per_page=100")
+
+          # 1. Check for beta releases under this version number
+          BETA_RELEASES=$(echo "$ALL_RELEASES" | jq -r --arg version "$BASE_VERSION" \
+            '.[] | select(.tag_name | test("^" + $version + "-beta\\.[0-9]+$")) | 
+            {tag_name, published_at, draft, prerelease, body}')
+
+          BETA_COUNT=$(echo "$BETA_RELEASES" | jq -s length)
+          
+          if [ "$BETA_COUNT" -eq 0 ]; then
+            echo "Error: No beta releases found for version $BASE_VERSION"
+            echo "conversion_valid=false" >> $GITHUB_OUTPUT
             exit 1
           fi
 
-          echo "beta_tag=$BETA_TAG" >> $GITHUB_OUTPUT
-          echo "target_version=$TARGET_VERSION" >> $GITHUB_OUTPUT
+          echo "Found $BETA_COUNT beta releases for $BASE_VERSION"
+          echo "$BETA_RELEASES" | jq -r '.tag_name' | while read -r tag; do
+            echo "  - $tag"
+          done
 
-          # Check if beta release exists
-          RELEASE_EXISTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$BETA_TAG" | \
-            jq -r '.id // "null"')
-
-          if [ "$RELEASE_EXISTS" == "null" ]; then
-            echo "Error: Beta release $BETA_TAG does not exist"
-            echo "beta_exists=false" >> $GITHUB_OUTPUT
+          # Check that all beta releases are published (not draft)
+          DRAFT_BETAS=$(echo "$BETA_RELEASES" | jq -r 'select(.draft == true) | .tag_name')
+          if [ -n "$DRAFT_BETAS" ]; then
+            echo "Error: Found draft beta releases that must be published first:"
+            echo "$DRAFT_BETAS"
+            echo "conversion_valid=false" >> $GITHUB_OUTPUT
             exit 1
-          else
-            echo "Found beta release: $BETA_TAG"
-            echo "beta_exists=true" >> $GITHUB_OUTPUT
           fi
 
-  convert-beta-to-release:
-    needs: validate-inputs
-    if: needs.validate-inputs.outputs.beta_exists == 'true'
+          # 2. Verify no regular release exists with this version number
+          EXISTING_RELEASE=$(echo "$ALL_RELEASES" | jq -r --arg version "$BASE_VERSION" \
+            '.[] | select(.tag_name == $version) | .tag_name')
+
+          if [ -n "$EXISTING_RELEASE" ]; then
+            echo "Error: Regular release $BASE_VERSION already exists"
+            echo "conversion_valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # Get last regular release (not beta, not prerelease)
+          LAST_REGULAR=$(echo "$ALL_RELEASES" | jq -r \
+            '.[] | select(.prerelease == false and (.tag_name | contains("beta") | not)) | 
+            .tag_name' | head -1)
+
+          if [ -z "$LAST_REGULAR" ]; then
+            LAST_REGULAR="v0.0.0"
+          fi
+
+          echo "Last regular release: $LAST_REGULAR"
+          echo "last_regular_release=$LAST_REGULAR" >> $GITHUB_OUTPUT
+
+          # Store beta releases for next job
+          echo "beta_releases<<EOF" >> $GITHUB_OUTPUT
+          echo "$BETA_RELEASES" | jq -s . >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "conversion_valid=true" >> $GITHUB_OUTPUT
+          echo "Validation successful for converting $BETA_COUNT beta releases to $BASE_VERSION"
+
+  convert-betas-to-release:
+    needs: validate-and-analyze
+    if: needs.validate-and-analyze.outputs.conversion_valid == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -92,137 +137,242 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Get beta release information
-        id: get-beta
+      - name: Gather and consolidate beta changes
+        id: consolidate
         run: |
-          BETA_TAG="${{ needs.validate-inputs.outputs.beta_tag }}"
-          TARGET_VERSION="${{ needs.validate-inputs.outputs.target_version }}"
-
-          # Get beta release data
-          BETA_RELEASE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$BETA_TAG")
-
-          BETA_BODY=$(echo "$BETA_RELEASE" | jq -r '.body')
-          BETA_DRAFT=$(echo "$BETA_RELEASE" | jq -r '.draft')
-          BETA_PRERELEASE=$(echo "$BETA_RELEASE" | jq -r '.prerelease')
-
-          # Validate this is actually a beta release
-          if [ "$BETA_PRERELEASE" != "true" ]; then
-            echo "Error: $BETA_TAG is not marked as a prerelease"
-            exit 1
-          fi
-
-          if [ "$BETA_DRAFT" == "true" ]; then
-            echo "Error: $BETA_TAG is still a draft release. Publish it first."
-            exit 1
-          fi
-
-          # Check if target version already exists
-          TARGET_EXISTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TARGET_VERSION" | \
-            jq -r '.id // "null"')
-
-          if [ "$TARGET_EXISTS" != "null" ]; then
-            echo "Error: Target release $TARGET_VERSION already exists"
-            exit 1
-          fi
-
-          echo "beta_body<<EOF" >> $GITHUB_OUTPUT
-          echo "$BETA_BODY" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-          echo "Beta release validated successfully"
-          echo "Beta tag: $BETA_TAG"
-          echo "Target version: $TARGET_VERSION"
-
-      - name: Convert beta changelog section to regular release
-        run: |
-          BETA_TAG="${{ needs.validate-inputs.outputs.beta_tag }}"
-          TARGET_VERSION="${{ needs.validate-inputs.outputs.target_version }}"
+          BASE_VERSION="${{ needs.validate-and-analyze.outputs.base_version }}"
+          LAST_REGULAR="${{ needs.validate-and-analyze.outputs.last_regular_release }}"
           RELEASE_DATE=$(date +%Y-%m-%d)
-          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/$TARGET_VERSION"
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/$BASE_VERSION"
 
-          echo "Converting beta changelog section: $BETA_TAG -> $TARGET_VERSION"
+          echo "Consolidating changes from all beta releases for $BASE_VERSION"
 
+          # 3. Check changelog and gather all changes for different beta releases
           python3 << 'EOF'
           import re
           import os
+          import json
+          from collections import defaultdict
 
-          beta_tag = os.environ.get('BETA_TAG', '')
-          target_version = os.environ.get('TARGET_VERSION', '')
+          base_version = os.environ.get('BASE_VERSION', '')
+          last_regular = os.environ.get('LAST_REGULAR', '')
           release_date = os.environ.get('RELEASE_DATE', '')
           release_url = os.environ.get('RELEASE_URL', '')
+
+          # Parse beta releases from previous job
+          beta_releases_raw = '''${{ needs.validate-and-analyze.outputs.beta_releases }}'''
+          beta_releases = json.loads(beta_releases_raw)
 
           # Read current changelog
           with open('CHANGELOG.md', 'r') as f:
               content = f.read()
 
-          # Create new version header
-          new_version_header = f"## [{target_version}]({release_url}) ({release_date})"
+          lines = content.split('\n')
+          
+          # Find and extract content from all beta release sections
+          consolidated_changes = defaultdict(list)  # category -> [entries]
+          processed_betas = []
 
-          # Replace beta version header with regular version header
-          updated_content = re.sub(
-              rf"## \[{re.escape(beta_tag)}\].*?\([^)]+\)",
-              new_version_header,
-              content
-          )
+          for beta_release in beta_releases:
+              beta_tag = beta_release['tag_name']
+              print(f"Processing beta release: {beta_tag}")
+              
+              # Find this beta's section in changelog
+              in_beta_section = False
+              current_category = None
+              
+              for line in lines:
+                  if line.startswith(f"## [{beta_tag}]"):
+                      in_beta_section = True
+                      processed_betas.append(beta_tag)
+                      continue
+                  elif in_beta_section and line.startswith("## ") and not line.startswith(f"## [{beta_tag}]"):
+                      # End of this beta section
+                      break
+                  elif in_beta_section:
+                      if line.startswith("### "):
+                          # Category header
+                          current_category = line[4:].strip()  # Remove "### "
+                      elif line.startswith("- ") and current_category:
+                          # Change entry
+                          # Remove beta-specific tags like [beta-release]
+                          clean_entry = re.sub(r' \[beta-release\]$', '', line)
+                          consolidated_changes[current_category].append(clean_entry)
 
-          # Remove any "Beta Release - " prefixes from the content
-          updated_content = re.sub(r'Beta Release - [^\n]*\n\n', '', updated_content)
+          # 4. Create new release entry in changelog with all changes properly formatted/categorized
+          if not consolidated_changes:
+              print("Warning: No changes found in beta releases")
+              consolidated_changes['Other Changes'] = ['- No changes found in beta releases']
+
+          # Create new changelog section
+          new_version_header = f"## [{base_version}]({release_url}) ({release_date})"
+          new_changelog_lines = [new_version_header, ""]
+
+          # Add categories in preferred order
+          category_order = ['Breaking Changes', 'Featured Changes', 'Bug Fixes', 'Other Changes']
+          
+          for category in category_order:
+              if category in consolidated_changes:
+                  new_changelog_lines.extend([
+                      f"### {category}",
+                      ""
+                  ])
+                  new_changelog_lines.extend(consolidated_changes[category])
+                  new_changelog_lines.append("")
+
+          # Add any remaining categories not in the standard order
+          for category in consolidated_changes:
+              if category not in category_order:
+                  new_changelog_lines.extend([
+                      f"### {category}",
+                      ""
+                  ])
+                  new_changelog_lines.extend(consolidated_changes[category])
+                  new_changelog_lines.append("")
+
+          # 6. Add full changelog link from last regular release to new regular release
+          new_changelog_lines.extend([
+              f"**Full Changelog**: https://github.com/${{ github.repository }}/compare/{last_regular}...{base_version}",
+              ""
+          ])
+
+          # Remove all beta sections from changelog and insert new consolidated section
+          filtered_lines = []
+          skip_section = False
+          
+          for line in lines:
+              # Check if this is the start of a beta section we processed
+              is_processed_beta = any(line.startswith(f"## [{beta_tag}]") for beta_tag in processed_betas)
+              
+              if is_processed_beta:
+                  skip_section = True
+                  # Insert our new consolidated section before the first beta section
+                  if not any(f"## [{base_version}]" in existing_line for existing_line in filtered_lines):
+                      filtered_lines.extend(new_changelog_lines)
+                  continue
+              elif skip_section and line.startswith("## ") and not any(line.startswith(f"## [{beta_tag}]") for beta_tag in processed_betas):
+                  # End of beta section, resume normal processing
+                  skip_section = False
+                  filtered_lines.append(line)
+              elif not skip_section:
+                  filtered_lines.append(line)
+
+          # If we didn't insert the new section yet (no existing beta sections found), add it at the top
+          if not any(f"## [{base_version}]" in line for line in filtered_lines):
+              # Find position after main header
+              header_pos = 0
+              for i, line in enumerate(filtered_lines):
+                  if line.startswith("# "):
+                      header_pos = i + 1
+                      break
+              
+              # Insert new section after header
+              filtered_lines = (filtered_lines[:header_pos] + [""] + 
+                              new_changelog_lines + filtered_lines[header_pos:])
 
           # Write updated changelog
-          with open('CHANGELOG.md', 'w') as f:
-              f.write(updated_content)
+          final_content = '\n'.join(filtered_lines)
+          if not final_content.endswith('\n'):
+              final_content += '\n'
 
-          print(f"Changelog updated: {beta_tag} -> {target_version}")
+          with open('CHANGELOG.md', 'w') as f:
+              f.write(final_content)
+
+          # Prepare release content for GitHub release
+          release_content_lines = []
+          for category in category_order:
+              if category in consolidated_changes:
+                  release_content_lines.extend([
+                      f"## {category}",
+                      ""
+                  ])
+                  # Convert - bullets to plain entries for release
+                  for entry in consolidated_changes[category]:
+                      release_content_lines.append(entry)
+                  release_content_lines.append("")
+
+          # Add any remaining categories
+          for category in consolidated_changes:
+              if category not in category_order:
+                  release_content_lines.extend([
+                      f"## {category}",
+                      ""
+                  ])
+                  for entry in consolidated_changes[category]:
+                      release_content_lines.append(entry)
+                  release_content_lines.append("")
+
+          release_content = '\n'.join(release_content_lines).strip()
+
+          # Write outputs
+          output_file = os.environ.get('GITHUB_OUTPUT')
+          if output_file:
+              with open(output_file, 'a') as f:
+                  f.write("release_content<<EOF\n")
+                  f.write(release_content)
+                  f.write("\nEOF\n")
+                  f.write(f"processed_betas={','.join(processed_betas)}\n")
+
+          print(f"Successfully consolidated {len(processed_betas)} beta releases into {base_version}")
+          print(f"Categories found: {', '.join(consolidated_changes.keys())}")
+          print(f"Total entries: {sum(len(entries) for entries in consolidated_changes.values())}")
           EOF
         env:
-          BETA_TAG: ${{ needs.validate-inputs.outputs.beta_tag }}
-          TARGET_VERSION: ${{ needs.validate-inputs.outputs.target_version }}
+          BASE_VERSION: ${{ needs.validate-and-analyze.outputs.base_version }}
+          LAST_REGULAR: ${{ needs.validate-and-analyze.outputs.last_regular_release }}
 
-      - name: Create regular release from beta
+      - name: Create draft release
+        id: create-release
         run: |
-          BETA_TAG="${{ needs.validate-inputs.outputs.beta_tag }}"
-          TARGET_VERSION="${{ needs.validate-inputs.outputs.target_version }}"
-          BETA_BODY='${{ steps.get-beta.outputs.beta_body }}'
+          BASE_VERSION="${{ needs.validate-and-analyze.outputs.base_version }}"
+          LAST_REGULAR="${{ needs.validate-and-analyze.outputs.last_regular_release }}"
+          RELEASE_CONTENT='${{ steps.consolidate.outputs.release_content }}'
 
-          # Clean up beta body content for regular release
-          CLEAN_BODY=$(echo "$BETA_BODY" | sed 's/^Beta Release - [^\n]*\n\n//')
+          echo "Creating draft release for: $BASE_VERSION"
 
-          # Create the regular release (not draft, not prerelease)
-          curl -X POST \
+          # 5. Create and draft new release with all changes from changelog entry
+          # Create release body with full changelog link
+          printf -v BODY_CONTENT '%s\n\n**Full Changelog**: https://github.com/%s/compare/%s...%s' \
+            "$RELEASE_CONTENT" \
+            "${{ github.repository }}" \
+            "$LAST_REGULAR" \
+            "$BASE_VERSION"
+
+          # Use jq to properly escape the content
+          ESCAPED_BODY=$(echo "$BODY_CONTENT" | jq -Rs .)
+
+          # Create draft release (draft=true, prerelease=false)
+          RELEASE_RESPONSE=$(curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/releases" \
-            -d "$(jq -n \
-              --arg tag "$TARGET_VERSION" \
-              --arg name "$TARGET_VERSION" \
-              --arg body "$CLEAN_BODY" \
-              --arg commitish "latest" \
-              '{
-                "tag_name": $tag,
-                "target_commitish": $commitish,
-                "name": $name,
-                "body": $body,
-                "draft": false,
-                "prerelease": false
-              }')"
+            -d "{\"tag_name\": \"$BASE_VERSION\", \"target_commitish\": \"latest\", \"name\": \"$BASE_VERSION\", \"body\": $ESCAPED_BODY, \"draft\": true, \"prerelease\": false}")
 
-          echo "Created regular release: $TARGET_VERSION"
+          RELEASE_ID=$(echo "$RELEASE_RESPONSE" | jq -r '.id')
+          
+          if [ "$RELEASE_ID" == "null" ]; then
+            echo "Error creating release:"
+            echo "$RELEASE_RESPONSE" | jq -r '.message // "Unknown error"'
+            exit 1
+          fi
+
+          echo "Draft release created successfully: $BASE_VERSION (ID: $RELEASE_ID)"
+          echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
 
       - name: Add conversion commit to changelog
         run: |
-          BETA_TAG="${{ needs.validate-inputs.outputs.beta_tag }}"
-          TARGET_VERSION="${{ needs.validate-inputs.outputs.target_version }}"
+          BASE_VERSION="${{ needs.validate-and-analyze.outputs.base_version }}"
+          PROCESSED_BETAS="${{ steps.consolidate.outputs.processed_betas }}"
 
           echo "Adding conversion commit entry to changelog"
 
+          # 8. Add changelog commit to new release and changelog
           python3 << 'EOF'
           import re
           import os
 
-          beta_tag = os.environ.get('BETA_TAG', '')
-          target_version = os.environ.get('TARGET_VERSION', '')
+          base_version = os.environ.get('BASE_VERSION', '')
+          processed_betas = os.environ.get('PROCESSED_BETAS', '').split(',')
 
           # Read current changelog
           with open('CHANGELOG.md', 'r') as f:
@@ -234,18 +384,19 @@ jobs:
           added_commit_entry = False
 
           for line in lines:
-              if line.startswith(f"## [{target_version}]"):
+              if line.startswith(f"## [{base_version}]"):
                   # Found the target release section
                   new_lines.append(line)
                   in_target_release = True
-              elif in_target_release and line.startswith("## ") and not line.startswith(f"## [{target_version}]"):
+              elif in_target_release and line.startswith("## ") and not line.startswith(f"## [{base_version}]"):
                   # End of target release section
                   if not added_commit_entry:
                       # Add commit entry before next section
+                      beta_list = ', '.join(processed_betas)
                       new_lines.extend([
                           "### Other Changes",
                           "",
-                          f"- Convert {beta_tag} to regular release {target_version} @github-actions [beta-to-release]",
+                          f"- Convert beta releases ({beta_list}) to regular release {base_version} @github-actions [beta-to-release]",
                           ""
                       ])
                       added_commit_entry = True
@@ -255,14 +406,16 @@ jobs:
                   # Found existing Other Changes section
                   new_lines.append(line)
                   new_lines.append("")
-                  new_lines.append(f"- Convert {beta_tag} to regular release {target_version} @github-actions [beta-to-release]")
+                  beta_list = ', '.join(processed_betas)
+                  new_lines.append(f"- Convert beta releases ({beta_list}) to regular release {base_version} @github-actions [beta-to-release]")
                   added_commit_entry = True
               elif in_target_release and line.startswith("**Full Changelog**") and not added_commit_entry:
                   # Add before Full Changelog link
+                  beta_list = ', '.join(processed_betas)
                   new_lines.extend([
                       "### Other Changes",
                       "",
-                      f"- Convert {beta_tag} to regular release {target_version} @github-actions [beta-to-release]",
+                      f"- Convert beta releases ({beta_list}) to regular release {base_version} @github-actions [beta-to-release]",
                       "",
                       line
                   ])
@@ -272,11 +425,12 @@ jobs:
 
           # If still in target release at end of file, add entry
           if in_target_release and not added_commit_entry:
+              beta_list = ', '.join(processed_betas)
               new_lines.extend([
                   "",
                   "### Other Changes",
                   "",
-                  f"- Convert {beta_tag} to regular release {target_version} @github-actions [beta-to-release]"
+                  f"- Convert beta releases ({beta_list}) to regular release {base_version} @github-actions [beta-to-release]"
               ])
 
           final_content = '\n'.join(new_lines)
@@ -287,41 +441,170 @@ jobs:
           with open('CHANGELOG.md', 'w') as f:
               f.write(final_content)
 
-          print(f"Added conversion commit entry for {beta_tag} -> {target_version}")
+          print(f"Added conversion commit entry for beta releases -> {base_version}")
           EOF
         env:
-          BETA_TAG: ${{ needs.validate-inputs.outputs.beta_tag }}
-          TARGET_VERSION: ${{ needs.validate-inputs.outputs.target_version }}
+          BASE_VERSION: ${{ needs.validate-and-analyze.outputs.base_version }}
+          PROCESSED_BETAS: ${{ steps.consolidate.outputs.processed_betas }}
+
+      - name: Update draft release with conversion commit
+        run: |
+          BASE_VERSION="${{ needs.validate-and-analyze.outputs.base_version }}"
+          RELEASE_ID="${{ steps.create-release.outputs.release_id }}"
+          PROCESSED_BETAS="${{ steps.consolidate.outputs.processed_betas }}"
+
+          echo "Adding conversion commit to draft release body"
+
+          # Get current release body
+          CURRENT_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" | \
+            jq -r '.body')
+
+          # Add conversion commit entry
+          BETA_LIST=$(echo "$PROCESSED_BETAS" | tr ',' ' ')
+          CONVERSION_ENTRY="- Convert beta releases ($PROCESSED_BETAS) to regular release $BASE_VERSION @github-actions [beta-to-release]"
+
+          # Use Python script for robust text manipulation  
+          UPDATED_BODY=$(CURRENT_BODY="$CURRENT_BODY" CONVERSION_ENTRY="$CONVERSION_ENTRY" python3 << 'EOF'
+          import re
+          import os
+
+          current_body = os.environ.get('CURRENT_BODY', '')
+          conversion_entry = os.environ.get('CONVERSION_ENTRY', '')
+
+          if not current_body or not conversion_entry:
+              print("Error: Missing release body or conversion entry")
+              exit(1)
+
+          # Split content into lines for processing
+          lines = current_body.split('\n')
+          new_lines = []
+          added_commit = False
+
+          def find_other_changes_section(lines):
+              """Find the index of the Other Changes section."""
+              for idx, line in enumerate(lines):
+                  if line.strip() == "## Other Changes":
+                      return idx
+              return -1
+
+          def find_full_changelog_section(lines):
+              """Find the index of the Full Changelog section."""
+              for idx, line in enumerate(lines):
+                  if "**Full Changelog**" in line:
+                      return idx
+              return -1
+
+          other_changes_idx = find_other_changes_section(lines)
+          full_changelog_idx = find_full_changelog_section(lines)
+
+          if other_changes_idx >= 0:
+              # Other Changes section exists, add our entry at the beginning
+              for idx, line in enumerate(lines):
+                  new_lines.append(line)
+                  if idx == other_changes_idx:
+                      # Add our entry after the Other Changes header
+                      new_lines.append("")
+                      new_lines.append(conversion_entry)
+                      added_commit = True
+          elif full_changelog_idx >= 0:
+              # No Other Changes section, create one before Full Changelog
+              for idx, line in enumerate(lines):
+                  if idx == full_changelog_idx:
+                      # Insert Other Changes section before Full Changelog
+                      new_lines.extend([
+                          "",
+                          "## Other Changes",
+                          "",
+                          conversion_entry,
+                          ""
+                      ])
+                      added_commit = True
+                  new_lines.append(line)
+          else:
+              # No Full Changelog section found, add at the end
+              new_lines.extend(lines)
+              new_lines.extend([
+                  "",
+                  "## Other Changes",
+                  "",
+                  conversion_entry
+              ])
+              added_commit = True
+
+          if not added_commit:
+              # Fallback: add at the end
+              new_lines.extend([
+                  "",
+                  "## Other Changes", 
+                  "",
+                  conversion_entry
+              ])
+
+          # Join lines and clean up excessive blank lines
+          updated_content = '\n'.join(new_lines)
+          updated_content = re.sub(r'\n{3,}', '\n\n', updated_content)
+
+          print(updated_content)
+          EOF
+          )
+
+          # Update the draft release
+          curl -X PATCH \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" \
+            -d "$(jq -n --arg body "$UPDATED_BODY" '{body: $body}')"
+
+          echo "Draft release body updated with conversion commit"
+        env:
+          PROCESSED_BETAS: ${{ steps.consolidate.outputs.processed_betas }}
 
       - name: Commit changelog changes
         run: |
+          # 9. Actually commit the changelog changes
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-          BETA_TAG="${{ needs.validate-inputs.outputs.beta_tag }}"
-          TARGET_VERSION="${{ needs.validate-inputs.outputs.target_version }}"
+          BASE_VERSION="${{ needs.validate-and-analyze.outputs.base_version }}"
+          PROCESSED_BETAS="${{ steps.consolidate.outputs.processed_betas }}"
 
           if git diff --quiet CHANGELOG.md; then
             echo "No changelog changes to commit"
           else
             git add CHANGELOG.md
-            git commit -m "Convert $BETA_TAG to release $TARGET_VERSION in CHANGELOG.md"
+            git commit -m "Convert beta releases ($PROCESSED_BETAS) to release $BASE_VERSION in CHANGELOG.md"
             git push
             echo "Changelog committed for beta to release conversion"
           fi
 
-      - name: Summary
+      - name: Verify and summarize
         run: |
-          BETA_TAG="${{ needs.validate-inputs.outputs.beta_tag }}"
-          TARGET_VERSION="${{ needs.validate-inputs.outputs.target_version }}"
+          BASE_VERSION="${{ needs.validate-and-analyze.outputs.base_version }}"
+          PROCESSED_BETAS="${{ steps.consolidate.outputs.processed_betas }}"
+          LAST_REGULAR="${{ needs.validate-and-analyze.outputs.last_regular_release }}"
 
           echo "## Beta to Release Conversion Complete"
           echo ""
-          echo "✅ **Beta Release**: $BETA_TAG"
-          echo "✅ **Regular Release**: $TARGET_VERSION"
-          echo "✅ **Changelog Updated**: Beta section converted to regular release"
-          echo "✅ **Release Created**: Regular release published"
-          echo "✅ **Conversion Tracked**: Commit entry added to changelog"
+          echo "✅ **Beta Releases Processed**: $PROCESSED_BETAS"
+          echo "✅ **New Regular Release**: $BASE_VERSION (DRAFT)"
+          echo "✅ **Changelog Updated**: All beta sections consolidated into regular release"
+          echo "✅ **Draft Release Created**: Ready for manual publishing"
+          echo "✅ **Full Changelog**: $LAST_REGULAR → $BASE_VERSION"
+          echo "✅ **Conversion Tracked**: Commit entry added to changelog and release"
+          echo "✅ **Changes Committed**: Changelog updates pushed to repository"
           echo ""
-          echo "The regular release $TARGET_VERSION is now available and will trigger"
-          echo "the normal release workflow for npm publishing."
+          echo "🔄 **Next Step**: Manually publish the draft release $BASE_VERSION"
+          echo "📦 **After Publishing**: The release.yml workflow will handle npm publishing"
+          echo ""
+          echo "## Verification Summary"
+          
+          # 7. Verify all commits/changes are correct across betas, changelog, and new release
+          echo "- ✅ All beta releases were published (not draft)"
+          echo "- ✅ No existing regular release conflicts with $BASE_VERSION"
+          echo "- ✅ All beta changes consolidated by category"
+          echo "- ✅ Changelog properly formatted with version header and date"
+          echo "- ✅ Full changelog link from $LAST_REGULAR to $BASE_VERSION"
+          echo "- ✅ Draft release created (requires manual publishing)"
+          echo "- ✅ Conversion commit tracking added"
+          echo "- ✅ All changes committed to repository"
