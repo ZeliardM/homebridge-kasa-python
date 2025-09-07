@@ -284,19 +284,15 @@ jobs:
           # Clean up excessive blank lines while maintaining structure
           lines = content.split('\n')
           final_lines = []
+          prev_line_empty = False
 
           # Process lines to remove excessive blanks
-          for idx in range(len(lines)):
-              current_line = lines[idx]
-              # Check if this is an excessive blank line
-              is_excessive_blank = (
-                  current_line == "" and
-                  idx > 0 and
-                  lines[idx - 1] == ""
-              )
-
-              if not is_excessive_blank:
+          for current_line in lines:
+              current_line_empty = current_line == ""
+              # Skip if both current and previous lines are empty (excessive blank)
+              if not (current_line_empty and prev_line_empty):
                   final_lines.append(current_line)
+              prev_line_empty = current_line_empty
 
           # Ensure file ends with single newline
           content = '\n'.join(final_lines)

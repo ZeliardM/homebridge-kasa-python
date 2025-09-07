@@ -685,8 +685,9 @@ jobs:
           print(repr(release_format_content))
 
           # Check if they match (allowing for minor formatting differences)
-                    content_match = release_format_content.replace(' ', '').replace('\n', '') == \
-              clean_release_body.replace(' ', '').replace('\n', '')
+          normalized_release_format_content = release_format_content.replace(' ', '').replace('\n', '')
+          normalized_clean_release_body = clean_release_body.replace(' ', '').replace('\n', '')
+          content_match = normalized_release_format_content == normalized_clean_release_body
 
           print(f"\nContent match: {content_match}")
 
