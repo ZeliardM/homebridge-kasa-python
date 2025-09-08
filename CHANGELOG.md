@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Other Changes
+
+- Fix CHANGELOG.md workflow not syncing properly with GitHub releases, add automated changelog maintenance, consolidate release workflows, implement comprehensive beta management system, optimize workflow code quality, and resolve Unreleased section handling @Copilot [#76]
+
 ## [2.8.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.1) (2025-09-05)
 
 ### Other Changes
