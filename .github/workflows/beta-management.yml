@@ -14,7 +14,7 @@ on:
     branches: [beta-*.*.*, beta]
   release:
     types: [published]
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
   # Job 1: Update changelog when PRs are merged to beta branches

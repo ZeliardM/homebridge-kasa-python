@@ -92,12 +92,12 @@ jobs:
         run: |
           gh pr comment "$PR_URL" --body "🚨 **Major version update detected**
 
-This PR contains a major version update that requires manual review before merging.
+          This PR contains a major version update that requires manual review before merging.
 
-**Update Type:** \`${{ steps.metadata.outputs.update-type }}\`
-**Target Branch:** \`${{ steps.branch-type.outputs.base_branch }}\`
+          **Update Type:** \`${{ steps.metadata.outputs.update-type }}\`
+          **Target Branch:** \`${{ steps.branch-type.outputs.base_branch }}\`
 
-Please review the breaking changes and test thoroughly before merging."
+          Please review the breaking changes and test thoroughly before merging."
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
