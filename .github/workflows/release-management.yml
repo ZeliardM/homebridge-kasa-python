@@ -458,11 +458,160 @@ jobs:
             echo "draft_tag=" >> $GITHUB_OUTPUT
           fi
 
+          # Determine which edge case we're in
+          if [ "$HAS_UNRELEASED" == "true" ] && [ "$DRAFT_ID" != "null" ] && [ "$DRAFT_ID" != "" ]; then
+            echo "scenario=unreleased_and_draft" >> $GITHUB_OUTPUT
+            echo "Edge case: Both Unreleased section and draft release exist"
+          elif [ "$HAS_UNRELEASED" == "true" ] && ([ "$DRAFT_ID" == "null" ] || [ "$DRAFT_ID" == "" ]); then
+            echo "scenario=unreleased_only" >> $GITHUB_OUTPUT
+            echo "Edge case: Only Unreleased section exists"
+          elif [ "$HAS_UNRELEASED" == "false" ] && [ "$DRAFT_ID" != "null" ] && [ "$DRAFT_ID" != "" ]; then
+            echo "scenario=draft_only" >> $GITHUB_OUTPUT
+            echo "Edge case: Only draft release exists"
+          else
+            echo "scenario=neither" >> $GITHUB_OUTPUT
+            echo "Edge case: Neither Unreleased section nor draft release exist"
+          fi
+
           echo "Has Unreleased section: $HAS_UNRELEASED"
+
+      - name: Handle edge case - merge Unreleased into existing draft
+        id: merge-unreleased-draft
+        if: steps.check-status.outputs.scenario == 'unreleased_and_draft'
+        run: |
+          DRAFT_TAG="${{ steps.check-status.outputs.draft_tag }}"
+          LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
+
+          echo "Merging Unreleased content into existing draft: $DRAFT_TAG"
+
+          python3 << 'EOF'
+          import re
+          import os
+
+          draft_tag = os.environ.get('DRAFT_TAG', '')
+          latest_tag = os.environ.get('LATEST_TAG', '')
+
+          if not draft_tag:
+              print("No draft tag provided")
+              exit(1)
+
+          # Read current changelog
+          with open('CHANGELOG.md', 'r') as f:
+              content = f.read()
+
+          lines = content.split('\n')
+          
+          # Find Unreleased section content
+          unreleased_content = []
+          in_unreleased = False
+          
+          # Find existing draft section content
+          draft_content = []
+          in_draft = False
+          
+          for line in lines:
+              if line.strip() == "## [Unreleased]":
+                  in_unreleased = True
+                  continue
+              elif line.startswith(f"## [{draft_tag}]"):
+                  in_draft = True
+                  continue
+              elif in_unreleased and line.startswith("## ") and line.strip() != "## [Unreleased]":
+                  in_unreleased = False
+              elif in_draft and line.startswith("## ") and not line.startswith(f"## [{draft_tag}]"):
+                  in_draft = False
+              elif in_unreleased and line.strip() and not line.startswith("**Full Changelog**"):
+                  unreleased_content.append(line)
+              elif in_draft and line.strip() and not line.startswith("**Full Changelog**"):
+                  draft_content.append(line)
+
+          # Merge content: combine unreleased and existing draft content
+          all_content_lines = unreleased_content + draft_content
+
+          # Remove Unreleased section and update draft section with merged content
+          new_lines = []
+          skip_unreleased = False
+          in_target_draft = False
+          
+          for line in lines:
+              if line.strip() == "## [Unreleased]":
+                  skip_unreleased = True
+                  continue
+              elif line.startswith(f"## [{draft_tag}]"):
+                  # Replace draft section with merged content
+                  new_lines.append(line)
+                  in_target_draft = True
+                  
+                  # Add merged content with proper formatting
+                  if all_content_lines:
+                      new_lines.extend(all_content_lines)
+                  
+                  # Skip original draft content (we'll handle it in the loop)
+                  continue
+              elif skip_unreleased and line.startswith("## ") and line.strip() != "## [Unreleased]":
+                  skip_unreleased = False
+                  new_lines.append(line)
+              elif in_target_draft and line.startswith("## ") and not line.startswith(f"## [{draft_tag}]"):
+                  # End of draft section, add full changelog link if not present
+                  if not any("**Full Changelog**" in existing_line for existing_line in all_content_lines):
+                      new_lines.extend([
+                          "",
+                          f"**Full Changelog**: https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/compare/{latest_tag}...{draft_tag}",
+                          ""
+                      ])
+                  new_lines.append(line)
+                  in_target_draft = False
+              elif not skip_unreleased and not in_target_draft:
+                  new_lines.append(line)
+
+          # Handle end of file case for draft section
+          if in_target_draft and not any("**Full Changelog**" in existing_line for existing_line in all_content_lines):
+              new_lines.extend([
+                  "",
+                  f"**Full Changelog**: https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/compare/{latest_tag}...{draft_tag}"
+              ])
+
+          final_content = '\n'.join(new_lines)
+
+          # Clean up excessive blank lines
+          final_content = re.sub(r'\n{3,}', '\n\n', final_content)
+
+          # Ensure proper ending
+          if not final_content.endswith('\n'):
+              final_content += '\n'
+
+          # Write updated changelog
+          with open('CHANGELOG.md', 'w') as f:
+              f.write(final_content)
+
+          # Prepare release content for draft update
+          if all_content_lines:
+              release_content = '\n'.join(all_content_lines)
+              release_content = re.sub(r'^### ', '## ', release_content, flags=re.MULTILINE)
+          else:
+              release_content = "## Other Changes\n\n_No changes in this release._"
+
+          # Write to GitHub output
+          output_file = os.environ.get('GITHUB_OUTPUT')
+          if output_file:
+              with open(output_file, 'a') as f:
+                  f.write("merged_changes<<EOF\n")
+                  f.write(release_content)
+                  f.write("\nEOF\n")
+                  f.write(f"release_tag={draft_tag}\n")
+
+          print(f"Merged Unreleased content into draft: {draft_tag}")
+          print("Merged content:")
+          print(release_content)
+          EOF
+        env:
+          DRAFT_TAG: ${{ steps.check-status.outputs.draft_tag }}
+          LATEST_TAG: ${{ steps.version.outputs.latest_tag }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
 
       - name: Convert Unreleased to version and extract content
         id: process-changelog
-        if: steps.check-status.outputs.has_unreleased == 'true'
+        if: steps.check-status.outputs.scenario == 'unreleased_only'
         run: |
           RELEASE_TAG="v${{ steps.version.outputs.next_version }}"
           RELEASE_DATE=$(date +%Y-%m-%d)
@@ -589,9 +738,7 @@ jobs:
 
       - name: Extract existing draft content for update
         id: extract-draft
-        if: >
-          steps.check-status.outputs.has_draft == 'true' &&
-          steps.check-status.outputs.has_unreleased == 'false'
+        if: steps.check-status.outputs.scenario == 'draft_only'
         run: |
           DRAFT_TAG="${{ steps.check-status.outputs.draft_tag }}"
           LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
@@ -651,38 +798,169 @@ jobs:
           DRAFT_TAG: ${{ steps.check-status.outputs.draft_tag }}
           LATEST_TAG: ${{ steps.version.outputs.latest_tag }}
 
+      - name: Create Unreleased section and prepare for draft creation
+        id: create-unreleased
+        if: steps.check-status.outputs.scenario == 'neither'
+        run: |
+          RELEASE_TAG="v${{ steps.version.outputs.next_version }}"
+          RELEASE_DATE=$(date +%Y-%m-%d)
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/$RELEASE_TAG"
+          LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
+
+          echo "No content exists - creating Unreleased section and converting to: $RELEASE_TAG"
+
+          python3 << 'EOF'
+          import re
+          import os
+
+          release_tag = os.environ.get('RELEASE_TAG', '')
+          release_date = os.environ.get('RELEASE_DATE', '')
+          release_url = os.environ.get('RELEASE_URL', '')
+          latest_tag = os.environ.get('LATEST_TAG', '')
+          github_repo = os.environ.get('GITHUB_REPOSITORY', '')
+
+          # Read current changelog
+          with open('CHANGELOG.md', 'r') as f:
+              content = f.read()
+
+          # Create a minimal Unreleased section and immediately convert it to version
+          version_header = f"## [{release_tag}]({release_url}) ({release_date})"
+          
+          lines = content.split('\n')
+          new_lines = []
+          header_found = False
+
+          for line in lines:
+              if line.startswith("# ") and not header_found:
+                  new_lines.append(line)
+                  header_found = True
+                  # Add new version section after main header
+                  new_lines.extend([
+                      "",
+                      version_header,
+                      "",
+                      "## Other Changes",
+                      "",
+                      "_No changes in this release._",
+                      "",
+                      f"**Full Changelog**: https://github.com/{github_repo}/compare/{latest_tag}...{release_tag}",
+                      ""
+                  ])
+              else:
+                  new_lines.append(line)
+
+          # If no header was found, add at the beginning
+          if not header_found:
+              new_lines = [
+                  "# Changelog",
+                  "",
+                  version_header,
+                  "",
+                  "## Other Changes",
+                  "",
+                  "_No changes in this release._",
+                  "",
+                  f"**Full Changelog**: https://github.com/{github_repo}/compare/{latest_tag}...{release_tag}",
+                  ""
+              ] + new_lines
+
+          final_content = '\n'.join(new_lines)
+
+          # Ensure proper ending
+          if not final_content.endswith('\n'):
+              final_content += '\n'
+
+          # Write updated changelog
+          with open('CHANGELOG.md', 'w') as f:
+              f.write(final_content)
+
+          # Prepare minimal release content
+          release_content = "## Other Changes\n\n_No changes in this release._"
+
+          # Write to GitHub output
+          output_file = os.environ.get('GITHUB_OUTPUT')
+          if output_file:
+              with open(output_file, 'a') as f:
+                  f.write("changes<<EOF\n")
+                  f.write(release_content)
+                  f.write("\nEOF\n")
+                  f.write(f"release_tag={release_tag}\n")
+
+          print(f"Created initial version section: {release_tag}")
+          print("Release content:")
+          print(release_content)
+          EOF
+        env:
+          RELEASE_TAG: v${{ steps.version.outputs.next_version }}
+          RELEASE_URL: >
+            https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.next_version }}
+          LATEST_TAG: ${{ steps.version.outputs.latest_tag }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
       - name: Commit changelog updates
-        if: steps.check-status.outputs.has_unreleased == 'true'
+        if: >
+          steps.check-status.outputs.scenario == 'unreleased_only' ||
+          steps.check-status.outputs.scenario == 'unreleased_and_draft' ||
+          steps.check-status.outputs.scenario == 'neither'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-          RELEASE_TAG="${{ steps.process-changelog.outputs.release_tag }}"
+          # Determine which tag to use based on scenario
+          if [ "${{ steps.check-status.outputs.scenario }}" == "unreleased_only" ]; then
+            RELEASE_TAG="${{ steps.process-changelog.outputs.release_tag }}"
+            ACTION="Convert Unreleased to"
+          elif [ "${{ steps.check-status.outputs.scenario }}" == "unreleased_and_draft" ]; then
+            RELEASE_TAG="${{ steps.merge-unreleased-draft.outputs.release_tag }}"
+            ACTION="Merge Unreleased into draft"
+          elif [ "${{ steps.check-status.outputs.scenario }}" == "neither" ]; then
+            RELEASE_TAG="${{ steps.create-unreleased.outputs.release_tag }}"
+            ACTION="Create initial version section"
+          fi
 
           if git diff --quiet CHANGELOG.md; then
             echo "No changelog updates needed"
           else
             git add CHANGELOG.md
-            git commit -m "Convert Unreleased to $RELEASE_TAG in CHANGELOG.md"
+            git commit -m "$ACTION $RELEASE_TAG in CHANGELOG.md"
             git push
             echo "Changelog updated for release $RELEASE_TAG"
           fi
 
       - name: Create or update release draft
         if: >
-          steps.check-status.outputs.has_unreleased == 'true' ||
-          steps.check-status.outputs.has_draft == 'true'
+          steps.check-status.outputs.scenario == 'unreleased_only' ||
+          steps.check-status.outputs.scenario == 'unreleased_and_draft' ||
+          steps.check-status.outputs.scenario == 'draft_only' ||
+          steps.check-status.outputs.scenario == 'neither'
         run: |
-          # Determine which tag and content to use
-          if [ "${{ steps.check-status.outputs.has_unreleased }}" == "true" ]; then
-            # We converted Unreleased content
-            RELEASE_TAG="${{ steps.process-changelog.outputs.release_tag }}"
-            CHANGES='${{ steps.process-changelog.outputs.changes }}'
-          else
-            # We're updating existing draft
-            RELEASE_TAG="${{ steps.extract-draft.outputs.release_tag }}"
-            CHANGES='${{ steps.extract-draft.outputs.changes }}'
-          fi
+          # Determine which tag and content to use based on scenario
+          case "${{ steps.check-status.outputs.scenario }}" in
+            "unreleased_only")
+              RELEASE_TAG="${{ steps.process-changelog.outputs.release_tag }}"
+              CHANGES='${{ steps.process-changelog.outputs.changes }}'
+              ACTION="Creating new draft release from Unreleased"
+              ;;
+            "unreleased_and_draft")
+              RELEASE_TAG="${{ steps.merge-unreleased-draft.outputs.release_tag }}"
+              CHANGES='${{ steps.merge-unreleased-draft.outputs.merged_changes }}'
+              ACTION="Updating existing draft with merged content"
+              ;;
+            "draft_only")
+              RELEASE_TAG="${{ steps.extract-draft.outputs.release_tag }}"
+              CHANGES='${{ steps.extract-draft.outputs.changes }}'
+              ACTION="Updating existing draft release"
+              ;;
+            "neither")
+              RELEASE_TAG="${{ steps.create-unreleased.outputs.release_tag }}"
+              CHANGES='${{ steps.create-unreleased.outputs.changes }}'
+              ACTION="Creating new draft release from initial content"
+              ;;
+            *)
+              echo "Unknown scenario: ${{ steps.check-status.outputs.scenario }}"
+              exit 1
+              ;;
+          esac
 
           if [ -z "$RELEASE_TAG" ] || [ "$RELEASE_TAG" == "null" ]; then
             echo "Error: No release tag available"
@@ -693,7 +971,7 @@ jobs:
           LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
 
           # Create release body content
-          echo "Creating release body for: $RELEASE_TAG"
+          echo "$ACTION: $RELEASE_TAG"
 
           # Use printf to safely create the body content
           printf -v BODY_CONTENT '%s\n\n**Full Changelog**: https://github.com/%s/compare/%s...%s' \
@@ -705,9 +983,10 @@ jobs:
           # Use jq to properly escape the content
           ESCAPED_BODY=$(echo "$BODY_CONTENT" | jq -Rs .)
 
+          # Check if we need to create or update
           if [ "${{ steps.check-status.outputs.has_draft }}" == "true" ]; then
             DRAFT_ID="${{ steps.check-status.outputs.draft_id }}"
-            echo "Updating existing draft release: $RELEASE_TAG"
+            echo "Updating existing draft release: $RELEASE_TAG (ID: $DRAFT_ID)"
 
             # Update existing draft
             curl -X PATCH \
