@@ -1011,7 +1011,8 @@ jobs:
           
           # Clean up excessive blank lines
           final_lines = []
-          for idx, current_line in enumerate(new_lines):
+          for idx in range(len(new_lines)):
+              current_line = new_lines[idx]
               # Remove excessive blank lines (more than one consecutive)
               is_excessive_blank = (
                   current_line == "" and
