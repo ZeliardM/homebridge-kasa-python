@@ -241,46 +241,47 @@ jobs:
                   print(f"Found draft section {draft_tag} in changelog, adding to it")
                   content = add_entry_to_changelog(content, target_header, category, change_entry)
               else:
-                  print(f"Draft section {draft_tag} not found in changelog, falling back to Unreleased section")
-                  # Fall back to Unreleased section since draft section doesn't exist yet
-                  if "## [Unreleased]" not in content:
-                      # Add new Unreleased section after main header
-                      lines = content.split('\n')
-                      new_lines = []
-                      header_found = False
+                  print(f"Draft section {draft_tag} not found in changelog, creating new section for {draft_tag}")
+                  # Create the specific draft version section since the draft already exists
+                  lines = content.split('\n')
+                  new_lines = []
+                  header_found = False
+                  inserted = False
 
-                      for line in lines:
+                  for line in lines:
+                      if line.startswith("# ") and not header_found:
                           new_lines.append(line)
-                          if line.startswith("# ") and not header_found:
-                              header_found = True
-                              # Add proper spacing and structure
+                          header_found = True
+                      elif header_found and not inserted and (line.startswith("## ") or not line.strip()):
+                          if line.startswith("## ") and "Unreleased" not in line:
+                              # Insert before first regular release section
                               new_lines.extend([
                                   "",
-                                  "## [Unreleased]",
+                                  target_header,
                                   "",
                                   f"### {category}",
                                   "",
                                   change_entry,
                                   ""
                               ])
+                              inserted = True
+                          new_lines.append(line)
+                      else:
+                          new_lines.append(line)
 
-                      # If no header was found, add at the beginning
-                      if not header_found:
-                          new_lines = [
-                              "# Changelog",
-                              "",
-                              "## [Unreleased]",
-                              "",
-                              f"### {category}",
-                              "",
-                              change_entry,
-                              ""
-                          ] + new_lines
+                  # If no release sections found, add at the end after header
+                  if not inserted:
+                      new_lines.extend([
+                          "",
+                          target_header,
+                          "",
+                          f"### {category}",
+                          "",
+                          change_entry,
+                          ""
+                      ])
 
-                      content = '\n'.join(new_lines)
-                  else:
-                      # Process existing content for Unreleased section
-                      content = add_entry_to_changelog(content, "## [Unreleased]", category, change_entry)
+                  content = '\n'.join(new_lines)
 
           else:
               # No draft release - use Unreleased section
