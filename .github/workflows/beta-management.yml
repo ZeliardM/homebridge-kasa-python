@@ -237,10 +237,61 @@ jobs:
               return '\n'.join(result_lines)
 
           if has_beta_draft == 'true' and beta_draft_tag:
-              # There's a beta draft release - add content to that version section
-              print(f"Adding to existing beta draft version: {beta_draft_tag}")
+              # There's a beta draft release - try to add content to that version section
+              print(f"Attempting to add to existing beta draft version: {beta_draft_tag}")
               target_header = f"## [{beta_draft_tag}]"
-              content = add_entry_to_changelog(content, target_header, category, change_entry)
+              
+              # Check if the beta draft version section exists in changelog
+              if target_header in content:
+                  print(f"Found beta draft section {beta_draft_tag} in changelog, adding to it")
+                  content = add_entry_to_changelog(content, target_header, category, change_entry)
+              else:
+                  print(f"Beta draft section {beta_draft_tag} not found in changelog, falling back to Unreleased Beta section")
+                  # Fall back to Unreleased Beta section since beta draft section doesn't exist yet
+                  if "## [Unreleased Beta]" not in content:
+                      # Add new Unreleased Beta section after main header but before any regular releases
+                      lines = content.split('\n')
+                      new_lines = []
+                      header_found = False
+                      inserted = False
+
+                      for line in lines:
+                          if line.startswith("# ") and not header_found:
+                              new_lines.append(line)
+                              header_found = True
+                          elif header_found and not inserted and (line.startswith("## ") or not line.strip()):
+                              if line.startswith("## ") and "Unreleased" not in line:
+                                  # Insert before first regular release section
+                                  new_lines.extend([
+                                      "",
+                                      "## [Unreleased Beta]",
+                                      "",
+                                      f"### {category}",
+                                      "",
+                                      change_entry,
+                                      ""
+                                  ])
+                                  inserted = True
+                              new_lines.append(line)
+                          else:
+                              new_lines.append(line)
+
+                      # If no release sections found, add at the end after header
+                      if not inserted:
+                          new_lines.extend([
+                              "",
+                              "## [Unreleased Beta]",
+                              "",
+                              f"### {category}",
+                              "",
+                              change_entry,
+                              ""
+                          ])
+
+                      content = '\n'.join(new_lines)
+                  else:
+                      # Process existing content for Unreleased Beta section
+                      content = add_entry_to_changelog(content, "## [Unreleased Beta]", category, change_entry)
 
           else:
               # No beta draft release - use Unreleased Beta section

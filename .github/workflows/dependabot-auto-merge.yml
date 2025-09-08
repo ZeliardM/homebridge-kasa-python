@@ -20,22 +20,84 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Label PR as auto-merged
-        if: |
-          steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-patch'
+      - name: Determine target branch type
+        id: branch-type
         run: |
-          gh pr edit "$PR_URL" --add-label "auto-merged"
+          BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+          echo "base_branch=$BASE_BRANCH" >> $GITHUB_OUTPUT
+          
+          if [[ "$BASE_BRANCH" == beta* ]]; then
+            echo "branch_type=beta" >> $GITHUB_OUTPUT
+            echo "Target is beta branch: $BASE_BRANCH"
+          elif [[ "$BASE_BRANCH" == "latest" ]]; then
+            echo "branch_type=main" >> $GITHUB_OUTPUT
+            echo "Target is main branch: $BASE_BRANCH"
+          else
+            echo "branch_type=other" >> $GITHUB_OUTPUT
+            echo "Target is other branch: $BASE_BRANCH"
+          fi
+
+      - name: Label PR based on update type and target
+        run: |
+          UPDATE_TYPE="${{ steps.metadata.outputs.update-type }}"
+          BRANCH_TYPE="${{ steps.branch-type.outputs.branch_type }}"
+          
+          # Always add dependency label
+          gh pr edit "$PR_URL" --add-label "dependency"
+          
+          # Add update type label
+          case "$UPDATE_TYPE" in
+            "version-update:semver-major")
+              gh pr edit "$PR_URL" --add-label "dependency-major"
+              ;;
+            "version-update:semver-minor")
+              gh pr edit "$PR_URL" --add-label "dependency-minor"
+              ;;
+            "version-update:semver-patch")
+              gh pr edit "$PR_URL" --add-label "dependency-patch"
+              ;;
+          esac
+          
+          # Add target branch label
+          if [ "$BRANCH_TYPE" = "beta" ]; then
+            gh pr edit "$PR_URL" --add-label "beta"
+          fi
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Enable auto-merge for patch and minor updates
+      - name: Auto-merge patch and minor updates
         if: |
           steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
           steps.metadata.outputs.update-type == 'version-update:semver-patch'
         run: |
+          UPDATE_TYPE="${{ steps.metadata.outputs.update-type }}"
+          BRANCH_TYPE="${{ steps.branch-type.outputs.branch_type }}"
+          
+          echo "Auto-merging $UPDATE_TYPE update targeting $BRANCH_TYPE branch"
+          
+          # Add auto-merged label
+          gh pr edit "$PR_URL" --add-label "auto-merged"
+          
+          # Enable auto-merge with squash
           gh pr merge --auto --squash "$PR_URL"
+          
+          echo "Auto-merge enabled for PR targeting ${{ steps.branch-type.outputs.base_branch }}"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on major updates requiring manual review
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        run: |
+          gh pr comment "$PR_URL" --body "🚨 **Major version update detected**
+
+This PR contains a major version update that requires manual review before merging.
+
+**Update Type:** \`${{ steps.metadata.outputs.update-type }}\`
+**Target Branch:** \`${{ steps.branch-type.outputs.base_branch }}\`
+
+Please review the breaking changes and test thoroughly before merging."
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

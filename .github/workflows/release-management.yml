@@ -232,10 +232,55 @@ jobs:
               return '\n'.join(result_lines)
 
           if has_draft == 'true' and draft_tag:
-              # There's a draft release - add content to that version section
-              print(f"Adding to existing draft version: {draft_tag}")
+              # There's a draft release - try to add content to that version section
+              print(f"Attempting to add to existing draft version: {draft_tag}")
               target_header = f"## [{draft_tag}]"
-              content = add_entry_to_changelog(content, target_header, category, change_entry)
+              
+              # Check if the draft version section exists in changelog
+              if target_header in content:
+                  print(f"Found draft section {draft_tag} in changelog, adding to it")
+                  content = add_entry_to_changelog(content, target_header, category, change_entry)
+              else:
+                  print(f"Draft section {draft_tag} not found in changelog, falling back to Unreleased section")
+                  # Fall back to Unreleased section since draft section doesn't exist yet
+                  if "## [Unreleased]" not in content:
+                      # Add new Unreleased section after main header
+                      lines = content.split('\n')
+                      new_lines = []
+                      header_found = False
+
+                      for line in lines:
+                          new_lines.append(line)
+                          if line.startswith("# ") and not header_found:
+                              header_found = True
+                              # Add proper spacing and structure
+                              new_lines.extend([
+                                  "",
+                                  "## [Unreleased]",
+                                  "",
+                                  f"### {category}",
+                                  "",
+                                  change_entry,
+                                  ""
+                              ])
+
+                      # If no header was found, add at the beginning
+                      if not header_found:
+                          new_lines = [
+                              "# Changelog",
+                              "",
+                              "## [Unreleased]",
+                              "",
+                              f"### {category}",
+                              "",
+                              change_entry,
+                              ""
+                          ] + new_lines
+
+                      content = '\n'.join(new_lines)
+                  else:
+                      # Process existing content for Unreleased section
+                      content = add_entry_to_changelog(content, "## [Unreleased]", category, change_entry)
 
           else:
               # No draft release - use Unreleased section

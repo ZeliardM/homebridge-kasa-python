@@ -2,12 +2,55 @@
 name: Stale
 
 on:
-  workflow_dispatch: true
+  workflow_dispatch:
   schedule:
-    - cron: '45 11 * * *'
+    - cron: '30 1 * * *'  # Run daily at 1:30 AM UTC
 
 jobs:
   stale:
-    uses: homebridge/.github/.github/workflows/stale.yml@latest
-    secrets:
-      token: ${{ secrets.GITHUB_TOKEN }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      discussions: write
+
+    steps:
+      - name: Stale Issues and PRs
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          
+          # Issues
+          stale-issue-message: |
+            This issue has been automatically marked as stale because it has not had 
+            recent activity. It will be closed if no further activity occurs. Thank you 
+            for your contributions.
+          close-issue-message: |
+            This issue has been automatically closed because it has not had recent activity. 
+            If you believe this issue is still valid, please reopen it.
+          days-before-issue-stale: 60
+          days-before-issue-close: 7
+          stale-issue-label: 'stale'
+          
+          # Pull Requests  
+          stale-pr-message: |
+            This pull request has been automatically marked as stale because it has not had 
+            recent activity. It will be closed if no further activity occurs. Thank you 
+            for your contributions.
+          close-pr-message: |
+            This pull request has been automatically closed because it has not had recent activity. 
+            If you believe this pull request is still valid, please reopen it.
+          days-before-pr-stale: 30
+          days-before-pr-close: 7
+          stale-pr-label: 'stale'
+          
+          # Exempt labels
+          exempt-issue-labels: 'pinned,security,enhancement,bug'
+          exempt-pr-labels: 'pinned,security,work-in-progress'
+          
+          # Don't mark issues/PRs stale if they have these labels
+          exempt-all-pr-assignees: true
+          exempt-all-issue-assignees: true
+          
+          # Operations per run (to avoid rate limiting)
+          operations-per-run: 50
