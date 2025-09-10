@@ -1,0 +1,188 @@
+---
+name: Beta Release Flow
+
+# Unified workflow for beta release management:
+# - PR merges into beta branches (update changelog)
+# - Published beta release events (finalize and sync)
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [beta-*.*.*, beta]
+  push:
+    branches: [beta-*.*.*, beta]
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job 1: Handle PR merged to beta branches
+  update-beta-changelog:
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.base.ref, 'beta')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Update changelog for beta PR
+        run: |
+          python3 .github/scripts/release_manager.py pr-merged \
+            --github-token "${{ secrets.GITHUB_TOKEN }}" \
+            --repo "${{ github.repository }}" \
+            --pr-title "${{ github.event.pull_request.title }}" \
+            --pr-author "${{ github.event.pull_request.user.login }}" \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --pr-labels '${{ toJson(github.event.pull_request.labels.*.name) }}' \
+            --base-branch "${{ github.event.pull_request.base.ref }}"
+
+      - name: Commit changelog changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changes to commit"
+          else
+            git add CHANGELOG.md
+            git commit -m "Update CHANGELOG.md for beta PR #${{ github.event.pull_request.number }}"
+            git push
+            echo "Beta changelog updated successfully"
+          fi
+
+  # Job 2: Create or update beta draft releases
+  manage-beta-draft:
+    if: >
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (startsWith(github.ref_name, 'beta') || contains(github.ref_name, 'beta'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Create or update beta draft
+        run: |
+          python3 .github/scripts/release_manager.py create-beta-draft \
+            --github-token "${{ secrets.GITHUB_TOKEN }}" \
+            --repo "${{ github.repository }}"
+
+      - name: Commit beta changelog updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No beta changelog updates needed"
+          else
+            git add CHANGELOG.md
+            git commit -m "Update CHANGELOG.md for beta draft release"
+            git push
+            echo "Beta changelog updated"
+          fi
+
+  # Job 3: Finalize published beta releases
+  finalize-beta-release:
+    if: >
+      github.event_name == 'release' &&
+      github.event.release.prerelease == true &&
+      contains(github.event.release.tag_name, 'beta')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Finalize beta release
+        run: |
+          python3 .github/scripts/release_manager.py publish-beta \
+            --github-token "${{ secrets.GITHUB_TOKEN }}" \
+            --repo "${{ github.repository }}" \
+            --version "${{ github.event.release.tag_name }}" \
+            --release-body "${{ github.event.release.body }}"
+
+      - name: Commit final beta changes and update tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No beta changelog updates needed"
+            TAG_COMMIT=$(git rev-list -n 1 $RELEASE_TAG)
+            echo "Beta release tag already points to correct commit: $TAG_COMMIT"
+          else
+            # Commit the final changelog updates
+            git add CHANGELOG.md
+            git commit -m "Add changelog entry for beta release $RELEASE_TAG update"
+
+            # Get the new commit hash
+            NEW_COMMIT=$(git rev-parse HEAD)
+            echo "New commit with beta changelog updates: $NEW_COMMIT"
+
+            # Update the release tag to point to the new commit
+            git tag -f "$RELEASE_TAG" "$NEW_COMMIT"
+
+            # Push both the commit and the updated tag
+            git push
+            git push --force origin "$RELEASE_TAG"
+
+            echo "Final beta changelog committed and release tag updated for $RELEASE_TAG"
+            echo "Beta release tag now points to commit with changelog updates: $NEW_COMMIT"
+          fi
+
+      - name: Verify beta release
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          echo "Verifying beta release associations for: $RELEASE_TAG"
+
+          # Get the current tag commit
+          TAG_COMMIT=$(git rev-list -n 1 $RELEASE_TAG)
+          echo "Beta tag commit: $TAG_COMMIT"
+
+          # Verify this commit includes the changelog updates
+          git show --name-only $TAG_COMMIT | grep -q "CHANGELOG.md" && \
+            echo "✅ Beta tag commit includes CHANGELOG.md updates" || \
+            echo "ℹ️  Beta tag commit is original release point (no additional changelog updates needed)"
+
+          echo "Beta release successfully finalized and associated with commit: $TAG_COMMIT"
+          echo "CHANGELOG.md, beta release body, and git tag are now synchronized"

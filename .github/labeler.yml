@@ -60,8 +60,10 @@ bug:
 - head-branch: '.*/bug-.*'
 - title: '.*[Bb]ug.*'
 
-# Add 'breaking-change' label for potential breaking changes
+# Add 'breaking-change' label for potential breaking changes (UNIFIED LABEL)
 breaking-change:
 - head-branch: '.*breaking.*'
 - title: '.*breaking.*'
 - title: '.*BREAKING.*'
+- title: '.*breaking change.*'
+- title: '.*BREAKING CHANGE.*'

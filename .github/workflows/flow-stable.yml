@@ -1,0 +1,275 @@
+---
+name: Stable Release Flow
+
+# Unified workflow for stable release management:
+# - Manual conversion of published betas to stable draft releases
+# - Published stable release events (finalize and sync)
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [latest]
+  push:
+    branches: [latest]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      convert_beta_version:
+        description: 'Beta version to convert to stable (e.g., v2.8.0 converts all v2.8.0-beta.X)'
+        required: false
+        type: string
+      confirm_conversion:
+        description: 'Type "CONFIRM" to proceed with beta to stable conversion'
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job 1: Handle PR merged to main/latest branch
+  update-main-changelog:
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'latest'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Update changelog for main PR
+        run: |
+          python3 .github/scripts/release_manager.py pr-merged \
+            --github-token "${{ secrets.GITHUB_TOKEN }}" \
+            --repo "${{ github.repository }}" \
+            --pr-title "${{ github.event.pull_request.title }}" \
+            --pr-author "${{ github.event.pull_request.user.login }}" \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --pr-labels '${{ toJson(github.event.pull_request.labels.*.name) }}' \
+            --base-branch "${{ github.event.pull_request.base.ref }}"
+
+      - name: Commit changelog changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changes to commit"
+          else
+            git add CHANGELOG.md
+            git commit -m "Update CHANGELOG.md for PR #${{ github.event.pull_request.number }}"
+            git push
+            echo "Changelog updated successfully"
+          fi
+
+  # Job 2: Create or update stable draft releases
+  manage-stable-draft:
+    if: >
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref_name == 'latest' &&
+      (github.event.inputs.convert_beta_version == '' || github.event.inputs.convert_beta_version == null)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Create or update stable draft
+        run: |
+          python3 .github/scripts/release_manager.py create-stable-draft \
+            --github-token "${{ secrets.GITHUB_TOKEN }}" \
+            --repo "${{ github.repository }}"
+
+      - name: Commit stable changelog updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No stable changelog updates needed"
+          else
+            git add CHANGELOG.md
+            git commit -m "Update CHANGELOG.md for stable draft release"
+            git push
+            echo "Stable changelog updated"
+          fi
+
+  # Job 3: Convert beta to stable (manual workflow)
+  convert-beta-to-stable:
+    if: >
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.convert_beta_version != '' &&
+      github.event.inputs.convert_beta_version != null
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Validate conversion inputs
+        run: |
+          BETA_VERSION="${{ github.event.inputs.convert_beta_version }}"
+          CONFIRM="${{ github.event.inputs.confirm_conversion }}"
+
+          if [ "$CONFIRM" != "CONFIRM" ]; then
+            echo "Error: Must type 'CONFIRM' to proceed with conversion"
+            exit 1
+          fi
+
+          if [[ ! "$BETA_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Beta version must be in format v1.2.3"
+            exit 1
+          fi
+
+          echo "Validated conversion request for: $BETA_VERSION"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Convert beta releases to stable
+        run: |
+          python3 .github/scripts/release_manager.py convert-to-stable \
+            --github-token "${{ secrets.GITHUB_TOKEN }}" \
+            --repo "${{ github.repository }}" \
+            --version "${{ github.event.inputs.convert_beta_version }}"
+
+      - name: Commit beta-to-stable changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          BASE_VERSION="${{ github.event.inputs.convert_beta_version }}"
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changelog changes to commit"
+          else
+            git add CHANGELOG.md
+            git commit -m "Convert beta releases to stable release $BASE_VERSION in CHANGELOG.md"
+            git push
+            echo "Changelog committed for beta to stable conversion"
+          fi
+
+      - name: Summary of conversion
+        run: |
+          BASE_VERSION="${{ github.event.inputs.convert_beta_version }}"
+
+          echo "## Beta to Stable Conversion Complete"
+          echo ""
+          echo "✅ **Beta Version Converted**: $BASE_VERSION"
+          echo "✅ **New Stable Release**: $BASE_VERSION (DRAFT)"
+          echo "✅ **Changelog Updated**: All beta sections consolidated into stable release"
+          echo "✅ **Draft Release Created**: Ready for manual publishing"
+          echo "✅ **Changes Committed**: Changelog updates pushed to repository"
+          echo ""
+          echo "🔄 **Next Step**: Manually publish the draft release $BASE_VERSION"
+          echo "📦 **After Publishing**: The stable release workflow will handle finalization"
+
+  # Job 4: Finalize published stable releases
+  finalize-stable-release:
+    if: >
+      github.event_name == 'release' &&
+      github.event.release.prerelease == false &&
+      !contains(github.event.release.tag_name, 'beta')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Finalize stable release
+        run: |
+          python3 .github/scripts/release_manager.py publish-stable \
+            --github-token "${{ secrets.GITHUB_TOKEN }}" \
+            --repo "${{ github.repository }}" \
+            --version "${{ github.event.release.tag_name }}" \
+            --release-body "${{ github.event.release.body }}"
+
+      - name: Commit final stable changes and update tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No stable changelog updates needed"
+            TAG_COMMIT=$(git rev-list -n 1 $RELEASE_TAG)
+            echo "Stable release tag already points to correct commit: $TAG_COMMIT"
+          else
+            # Commit the final changelog updates
+            git add CHANGELOG.md
+            git commit -m "Add changelog entry for stable release $RELEASE_TAG update"
+
+            # Get the new commit hash
+            NEW_COMMIT=$(git rev-parse HEAD)
+            echo "New commit with stable changelog updates: $NEW_COMMIT"
+
+            # Update the release tag to point to the new commit
+            git tag -f "$RELEASE_TAG" "$NEW_COMMIT"
+
+            # Push both the commit and the updated tag
+            git push
+            git push --force origin "$RELEASE_TAG"
+
+            echo "Final stable changelog committed and release tag updated for $RELEASE_TAG"
+            echo "Stable release tag now points to commit with changelog updates: $NEW_COMMIT"
+          fi
+
+      - name: Verify stable release
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          echo "Verifying stable release associations for: $RELEASE_TAG"
+
+          # Get the current tag commit
+          TAG_COMMIT=$(git rev-list -n 1 $RELEASE_TAG)
+          echo "Stable tag commit: $TAG_COMMIT"
+
+          # Verify this commit includes the changelog updates
+          git show --name-only $TAG_COMMIT | grep -q "CHANGELOG.md" && \
+            echo "✅ Stable tag commit includes CHANGELOG.md updates" || \
+            echo "ℹ️  Stable tag commit is original release point (no additional changelog updates needed)"
+
+          echo "Stable release successfully finalized and associated with commit: $TAG_COMMIT"
+          echo "CHANGELOG.md, stable release body, and git tag are now synchronized"

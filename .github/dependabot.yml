@@ -7,7 +7,7 @@ updates:
       day: friday
       time: "15:00"
       timezone: "America/New_York"
-    target-branch: 'beta.*.*.*'
+    target-branch: beta
     labels:
       - dependency
     assignees:
@@ -40,7 +40,7 @@ updates:
       day: friday
       time: "15:00"
       timezone: "America/New_York"
-    target-branch: 'beta.*.*.*'
+    target-branch: beta
     labels:
       - dependency
     assignees:
@@ -70,7 +70,7 @@ updates:
       day: friday
       time: "15:00"
       timezone: "America/New_York"
-    target-branch: 'beta.*.*.*'
+    target-branch: beta
     assignees:
       - ZeliardM
     commit-message:

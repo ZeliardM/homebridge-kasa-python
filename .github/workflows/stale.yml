@@ -45,8 +45,8 @@ jobs:
           stale-pr-label: 'stale'
           
           # Exempt labels
-          exempt-issue-labels: 'pinned,security,enhancement,bug'
-          exempt-pr-labels: 'pinned,security,work-in-progress'
+          exempt-issue-labels: 'pinned,security,enhancement,bug,breaking-change'
+          exempt-pr-labels: 'pinned,security,work-in-progress,breaking-change'
           
           # Don't mark issues/PRs stale if they have these labels
           exempt-all-pr-assignees: true
