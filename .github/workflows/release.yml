@@ -32,7 +32,7 @@ jobs:
       id-token: write
     uses: homebridge/.github/.github/workflows/npm-publish-esm.yml@latest
     secrets:
-      npm_auth_token: ${{ secrets.npm_token }}
+      npm_auth_token: ${{ secrets.NPM_TOKEN }}
 
     # Optional Discord notification (commented out)
     # github-releases-to-discord:
