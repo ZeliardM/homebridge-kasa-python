@@ -1,19 +1,15 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: "/"
+    directory: /
     schedule:
       interval: weekly
       day: friday
       time: "15:00"
-      timezone: "America/New_York"
+      timezone: America/New_York
     target-branch: beta
-    labels:
-      - dependency
-    assignees:
-      - ZeliardM
-    commit-message:
-      prefix: "npm"
+    labels: [dependency]
+    assignees: [ZeliardM]
     versioning-strategy: increase
     groups:
       typescript-eslint:
@@ -34,44 +30,30 @@ updates:
           - "md5"
 
   - package-ecosystem: pip
-    directory: "/"
+    directory: /
     schedule:
       interval: weekly
       day: friday
       time: "15:00"
-      timezone: "America/New_York"
+      timezone: America/New_York
     target-branch: beta
-    labels:
-      - dependency
-    assignees:
-      - ZeliardM
-    commit-message:
-      prefix: "pip"
+    labels: [dependency]
+    assignees: [ZeliardM]
     versioning-strategy: increase
     groups:
       pydantic:
-        patterns:
-          - "pydantic"
-          - "pydantic_core"
-          - "pydantic-core"
+        patterns: ["pydantic","pydantic_core","pydantic-core"]
       crypt:
-        patterns:
-          - "cryptography"
-          - "chacha20poly1305-reuseable"
+        patterns: ["cryptography","chacha20poly1305-reuseable"]
       aio:
-        patterns:
-          - "aiosignal"
-          - "aiohttp"
+        patterns: ["aiosignal","aiohttp"]
 
   - package-ecosystem: github-actions
-    directory: "/"
+    directory: /
     schedule:
       interval: weekly
       day: friday
       time: "15:00"
-      timezone: "America/New_York"
+      timezone: America/New_York
     target-branch: beta
-    assignees:
-      - ZeliardM
-    commit-message:
-      prefix: "ci"
+    assignees: [ZeliardM]
