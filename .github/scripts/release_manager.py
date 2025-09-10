@@ -1,1078 +1,649 @@
 #!/usr/bin/env python3
 """
-Unified Release Manager Script
+Simplified Unified Release Manager
 
-This script consolidates all versioning, changelog, and release management logic
-previously scattered across multiple workflow files. It uses only standard library
-Python modules and handles:
+Implements the streamlined strategy:
 
-1. PR merges into beta (draft/updated beta prerelease handling)
-2. Publishing beta prereleases (finalizing entry + retag + body sync)
-3. Converting published betas to a stable draft release
-4. Publishing stable releases (finalizing entry + retag + body sync)
+Beta Flow:
+- On PR merged to any beta* branch:
+    * Determine target beta version:
+        - If unpublished draft beta.0 exists: append categories/entries there (same tag).
+        - If labels require a higher base (breaking-change > feature > patch) than the current unpublished draft’s base, replace that draft with new base beta.0 (migrate existing entries).
+        - If no unpublished draft:
+            - If no published betas for that base yet: create base beta.0 comparing last stable.
+            - Else (published betas exist for that base): increment beta.(N+1) comparing to previous beta.
+            - If breaking-change after publication and ESCALATE_BREAKING_POST_PUBLISH=True: start new MAJOR base beta.0 comparing to last stable.
+- Bodies are always:
+    Beta Release - vX.Y.Z-beta.N
+
+    ## Category A
+    - entry
+
+    ## Category B
+    - entry
+
+    **Full Changelog**: compare/<from>...<tag>
+- While beta.0 (unpublished) is being aggregated, compare link stays last stable release (or v0.0.0).
+- Publishing a beta adds a “Update CHANGELOG.md for beta release … [beta-release]” entry under Other Changes and re-syncs the release body.
+
+Stable Flow:
+- convert-to-stable consolidates all published betas for a base into a new stable draft; stable section mirrors categories; adds conversion entry.
+- Publishing stable adds “Update CHANGELOG.md for release … [release]”.
+- Stable body format (no Beta Release - prefix):
+    ## Breaking Changes
+    - entry
+    ...
+    **Full Changelog**: compare/<prev_stable>...<stable_tag>
+
+Escalation:
+- breaking-change label triggers major bump logic depending on unpublished vs published state.
+
+Assumptions:
+- Only standard library used.
+- CHANGELOG headings: each version has dedicated section; no “Unreleased” sections.
+
+NOTE: This script intentionally does NOT maintain an [Unreleased] section.
 """
 
-import argparse
-import json
-import os
-import re
-import sys
-from collections import defaultdict
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Union
-from urllib.request import Request, urlopen
-from urllib.parse import quote
+import os, re, json, sys, argparse, datetime, urllib.request, urllib.error
+from dataclasses import dataclass
+from typing import Optional, List, Dict, Tuple
 
-# Configuration constants
-ESCALATE_BREAKING_POST_PUBLISH = True  # Toggle for mid-series escalation after beta publish
+# ---------------- Configuration ----------------
+ESCALATE_BREAKING_POST_PUBLISH = True
+CHANGELOG_FILE = "CHANGELOG.md"
 
-# Category ordering for changelog and releases
 CATEGORY_ORDER = [
-    'Breaking Changes',
-    'Featured Changes', 
-    'Bug Fixes',
-    'Other Changes'
+    "Breaking Changes",
+    "Featured Changes",
+    "Bug Fixes",
+    "Other Changes",
 ]
 
-# Label mappings to categories
-LABEL_MAPPINGS = {
-    'Breaking Changes': ['breaking-change', 'breaking change'],
-    'Featured Changes': ['feature', 'enhancement'],
-    'Bug Fixes': ['fix', 'bugfix', 'bug'],
-    'Other Changes': ['documentation', 'docs', 'dependency']
-}
+LABEL_BREAKING = {"breaking-change"}
+LABEL_FEATURE = {"enhancement", "feature"}
+LABEL_FIX = {"fix", "bug", "bugfix", "docs", "documentation", "dependency"}
 
-class GitHubAPI:
-    """GitHub API helper class using only standard library"""
-    
+SEMVER = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$")
+
+# ---------------- Data Structures ----------------
+@dataclass(order=True, frozen=True)
+class Version:
+    major: int
+    minor: int
+    patch: int
+    beta: Optional[int] = None
+
+    @classmethod
+    def parse(cls, s: str) -> "Version":
+        m = SEMVER.match(s)
+        if not m:
+            raise ValueError(s)
+        a,b,c,d = m.groups()
+        return cls(int(a), int(b), int(c), int(d) if d is not None else None)
+
+    def is_beta(self) -> bool:
+        return self.beta is not None
+
+    def tag(self) -> str:
+        if self.beta is None:
+            return f"v{self.major}.{self.minor}.{self.patch}"
+        return f"v{self.major}.{self.minor}.{self.patch}-beta.{self.beta}"
+
+    def base(self) -> "Version":
+        return Version(self.major, self.minor, self.patch, None)
+
+    def bump_major(self) -> "Version":
+        return Version(self.major+1, 0, 0)
+
+    def bump_minor(self) -> "Version":
+        return Version(self.major, self.minor+1, 0)
+
+    def bump_patch(self) -> "Version":
+        return Version(self.major, self.minor, self.patch+1)
+
+    def next_beta(self) -> "Version":
+        if self.beta is None:
+            return Version(self.major, self.minor, self.patch, 0)
+        return Version(self.major, self.minor, self.patch, self.beta+1)
+
+# ---------------- GitHub API ----------------
+class GitHub:
     def __init__(self, token: str, repo: str):
         self.token = token
         self.repo = repo
-        self.base_url = f"https://api.github.com/repos/{repo}"
-    
-    def _request(self, method: str, url: str, data: Optional[dict] = None) -> dict:
-        """Make HTTP request to GitHub API"""
+        self.api = f"https://api.github.com/repos/{repo}"
+
+    def _request(self, method: str, path: str, data: Optional[dict]=None) -> dict:
+        url = f"{self.api}{path}"
         headers = {
-            'Authorization': f'token {self.token}',
-            'Accept': 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json'
+            "Accept":"application/vnd.github+json",
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type":"application/json"
         }
-        
-        if data:
-            data = json.dumps(data).encode('utf-8')
-        
-        req = Request(url, data=data, headers=headers, method=method)
-        
+        body = None
+        if data is not None:
+            body = json.dumps(data).encode()
+        req = urllib.request.Request(url, data=body, headers=headers, method=method)
         try:
-            with urlopen(req) as response:
-                return json.loads(response.read().decode('utf-8'))
+            with urllib.request.urlopen(req) as r:
+                raw = r.read().decode()
+                if raw.strip():
+                    return json.loads(raw)
+                return {}
+        except urllib.error.HTTPError as e:
+            try:
+                msg = e.read().decode()
+            except:
+                msg = str(e)
+            print(f"GitHub API error {e.code}: {msg}", file=sys.stderr)
+            return {}
         except Exception as e:
-            print(f"GitHub API request failed: {e}")
-            sys.exit(1)
-    
-    def get_releases(self, per_page: int = 100) -> List[dict]:
-        """Get all releases"""
-        url = f"{self.base_url}/releases?per_page={per_page}"
-        return self._request('GET', url)
-    
-    def get_release_by_tag(self, tag: str) -> Optional[dict]:
-        """Get release by tag"""
-        url = f"{self.base_url}/releases/tags/{tag}"
+            print(f"GitHub API exception: {e}", file=sys.stderr)
+            return {}
+
+    def releases(self) -> List[dict]:
+        return self._request("GET", "/releases?per_page=100") or []
+
+    def release_by_tag(self, tag: str) -> Optional[dict]:
+        r = self._request("GET", f"/releases/tags/{tag}")
+        if r.get("message") == "Not Found":
+            return None
+        return r or None
+
+    def create_release(self, tag: str, name: str, body: str, draft: bool, prerelease: bool, target: str="beta") -> dict:
+        return self._request("POST", "/releases", {
+            "tag_name": tag,
+            "name": name,
+            "body": body,
+            "draft": draft,
+            "prerelease": prerelease,
+            "target_commitish": target
+        })
+
+    def update_release(self, release_id: int, **fields) -> dict:
+        return self._request("PATCH", f"/releases/{release_id}", fields)
+
+# ---------------- Changelog Utilities ----------------
+def read_changelog() -> str:
+    if not os.path.exists(CHANGELOG_FILE):
+        return "# Changelog\n\n"
+    return open(CHANGELOG_FILE, "r", encoding="utf-8").read()
+
+def write_changelog(content: str):
+    if not content.endswith("\n"):
+        content += "\n"
+    open(CHANGELOG_FILE, "w", encoding="utf-8").write(content)
+
+SECTION_RE = re.compile(r"^## \[(v[0-9]+\.[0-9]+\.[0-9]+(?:-beta\.[0-9]+)?)\]", re.MULTILINE)
+
+def list_versions(content: str) -> List[Version]:
+    out=[]
+    for m in SECTION_RE.finditer(content):
         try:
-            return self._request('GET', url)
+            out.append(Version.parse(m.group(1)))
         except:
-            return None
-    
-    def create_release(self, tag: str, name: str, body: str, 
-                      draft: bool = True, prerelease: bool = False,
-                      target_commitish: str = "latest") -> dict:
-        """Create a new release"""
-        url = f"{self.base_url}/releases"
-        data = {
-            'tag_name': tag,
-            'target_commitish': target_commitish,
-            'name': name,
-            'body': body,
-            'draft': draft,
-            'prerelease': prerelease
-        }
-        return self._request('POST', url, data)
-    
-    def update_release(self, release_id: int, name: Optional[str] = None, 
-                      body: Optional[str] = None) -> dict:
-        """Update an existing release"""
-        url = f"{self.base_url}/releases/{release_id}"
-        data = {}
-        if name:
-            data['name'] = name
-        if body:
-            data['body'] = body
-        return self._request('PATCH', url, data)
+            pass
+    return sorted(set(out))
 
-class VersionManager:
-    """Handle version calculations and comparisons"""
-    
-    @staticmethod
-    def parse_version(version: str) -> Tuple[int, int, int, Optional[str], Optional[int]]:
-        """Parse version string into components (major, minor, patch, prerelease, prerelease_num)"""
-        # Remove 'v' prefix if present
-        version = version.lstrip('v')
-        
-        # Split on beta/alpha/rc
-        match = re.match(r'(\d+)\.(\d+)\.(\d+)(?:-(\w+)\.?(\d+)?)?', version)
-        if not match:
-            raise ValueError(f"Invalid version format: {version}")
-        
-        major, minor, patch = int(match.group(1)), int(match.group(2)), int(match.group(3))
-        prerelease = match.group(4)
-        prerelease_num = int(match.group(5)) if match.group(5) else None
-        
-        return major, minor, patch, prerelease, prerelease_num
-    
-    @staticmethod
-    def format_version(major: int, minor: int, patch: int, 
-                      prerelease: Optional[str] = None, 
-                      prerelease_num: Optional[int] = None) -> str:
-        """Format version components into string"""
-        version = f"v{major}.{minor}.{patch}"
-        if prerelease:
-            version += f"-{prerelease}"
-            if prerelease_num is not None:
-                version += f".{prerelease_num}"
-        return version
-    
-    @staticmethod
-    def get_next_version(current: str, version_type: str = "patch") -> str:
-        """Get next version based on type"""
-        major, minor, patch, _, _ = VersionManager.parse_version(current)
-        
-        if version_type == "major":
-            return VersionManager.format_version(major + 1, 0, 0)
-        elif version_type == "minor":
-            return VersionManager.format_version(major, minor + 1, 0)
-        else:  # patch
-            return VersionManager.format_version(major, minor, patch + 1)
-    
-    @staticmethod
-    def get_base_version(version: str) -> str:
-        """Get base version without prerelease"""
-        major, minor, patch, _, _ = VersionManager.parse_version(version)
-        return VersionManager.format_version(major, minor, patch)
+def find_section_block(content: str, tag: str) -> str:
+    pattern = rf"^## \[{re.escape(tag)}\].*?\n(.*?)(?=^## \[v|\Z)"
+    m = re.search(pattern, content, flags=re.S|re.M)
+    return m.group(1).strip() if m else ""
 
-class ChangelogManager:
-    """Handle changelog operations"""
-    
-    def __init__(self, changelog_path: str = "CHANGELOG.md"):
-        self.changelog_path = changelog_path
-    
-    def read_changelog(self) -> str:
-        """Read current changelog content"""
-        try:
-            with open(self.changelog_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except FileNotFoundError:
-            return "# Changelog\n\n"
-    
-    def write_changelog(self, content: str):
-        """Write changelog content"""
-        with open(self.changelog_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-    
-    def categorize_pr(self, labels: List[str]) -> str:
-        """Categorize PR based on labels"""
-        for category in CATEGORY_ORDER:
-            if category in LABEL_MAPPINGS:
-                for label in LABEL_MAPPINGS[category]:
-                    if label in labels:
-                        return category
-        return 'Other Changes'
-    
-    def format_pr_entry(self, title: str, author: str, number: int) -> str:
-        """Format PR entry for changelog"""
-        return f"- {title} @{author} [#{number}]"
-    
-    def add_pr_to_changelog(self, title: str, author: str, number: int, 
-                           labels: List[str], target_version: Optional[str] = None) -> bool:
-        """Add PR entry to changelog, returns True if changes were made"""
-        content = self.read_changelog()
-        category = self.categorize_pr(labels)
-        entry = self.format_pr_entry(title, author, number)
-        
-        # Determine target section
-        if target_version:
-            section_header = f"## [{target_version}]"
-        else:
-            section_header = "## [Unreleased]"
-        
-        updated_content = self._add_entry_to_section(content, section_header, category, entry)
-        
-        if updated_content != content:
-            self.write_changelog(updated_content)
-            return True
-        return False
-    
-    def _add_entry_to_section(self, content: str, section_header: str, 
-                             category: str, entry: str) -> str:
-        """Add entry to specific section and category"""
-        lines = content.split('\n')
-        
-        # Find or create the section
-        section_start = self._find_section_start(lines, section_header)
-        if section_start == -1:
-            # Create new section
-            return self._create_new_section(content, section_header, category, entry)
-        
-        # Find or create category within section
-        return self._add_entry_to_existing_section(lines, section_start, category, entry)
-    
-    def _find_section_start(self, lines: List[str], section_header: str) -> int:
-        """Find the start line of a section"""
-        for i, line in enumerate(lines):
-            if line.strip().startswith(section_header.strip()):
-                return i
-        return -1
-    
-    def _create_new_section(self, content: str, section_header: str, 
-                           category: str, entry: str) -> str:
-        """Create a new section with the entry"""
-        lines = content.split('\n')
-        
-        # Find insertion point (after main header, before first release)
-        insert_point = 0
-        for i, line in enumerate(lines):
-            if line.startswith('# '):
-                insert_point = i + 1
-                break
-        
-        # Look for first release section to insert before it
-        for i in range(insert_point, len(lines)):
-            if lines[i].startswith('## ') and '[' in lines[i]:
-                insert_point = i
-                break
-        
-        new_section = [
-            '',
-            section_header,
-            '',
-            f'### {category}',
-            '',
-            entry,
-            ''
-        ]
-        
-        lines[insert_point:insert_point] = new_section
-        return '\n'.join(lines)
-    
-    def _add_entry_to_existing_section(self, lines: List[str], section_start: int, 
-                                      category: str, entry: str) -> str:
-        """Add entry to existing section"""
-        # Find section boundaries
-        section_end = len(lines)
-        for i in range(section_start + 1, len(lines)):
-            if lines[i].startswith('## '):
-                section_end = i
-                break
-        
-        # Find category within section
-        category_start = -1
-        for i in range(section_start, section_end):
-            if lines[i].strip() == f'### {category}':
-                category_start = i
-                break
-        
-        if category_start == -1:
-            # Create new category before other categories or Full Changelog
-            insert_point = section_end
-            for i in range(section_start + 1, section_end):
-                if lines[i].startswith('### ') or lines[i].startswith('**Full Changelog**'):
-                    insert_point = i
-                    break
-            
-            # Insert new category
-            new_category = ['', f'### {category}', '', entry]
-            if insert_point < len(lines) and lines[insert_point].strip():
-                new_category.append('')
-            
-            lines[insert_point:insert_point] = new_category
-        else:
-            # Add to existing category (at the beginning)
-            insert_point = category_start + 1
-            # Skip empty line after category header
-            if insert_point < len(lines) and not lines[insert_point].strip():
-                insert_point += 1
-            
-            lines.insert(insert_point, entry)
-        
-        return '\n'.join(lines)
-    
-    def convert_unreleased_to_version(self, version: str, date: str, 
-                                     repo: str, compare_from: str) -> Optional[str]:
-        """Convert [Unreleased] section to versioned section"""
-        content = self.read_changelog()
-        
-        if '## [Unreleased]' not in content:
-            return None
-        
-        # Create version header with link
-        version_url = f"https://github.com/{repo}/releases/tag/{version}"
-        version_header = f"## [{version}]({version_url}) ({date})"
-        
-        # Replace Unreleased with version
-        updated_content = content.replace('## [Unreleased]', version_header)
-        
-        # Add Full Changelog link if not present
-        lines = updated_content.split('\n')
-        updated_lines = []
-        in_current_release = False
-        
-        for i, line in enumerate(lines):
-            updated_lines.append(line)
-            
-            if line == version_header:
-                in_current_release = True
-            elif in_current_release and line.startswith('## '):
-                # End of current release section
-                if not any('**Full Changelog**' in prev_line for prev_line in updated_lines[-10:]):
-                    # Insert Full Changelog link before next section
-                    updated_lines.insert(-1, '')
-                    updated_lines.insert(-1, f"**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{version}")
-                    updated_lines.insert(-1, '')
-                in_current_release = False
-        
-        # Handle end of file case
-        if in_current_release and not any('**Full Changelog**' in line for line in updated_lines[-5:]):
-            updated_lines.extend([
-                '',
-                f"**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{version}"
-            ])
-        
-        final_content = '\n'.join(updated_lines)
-        
-        # Clean up excessive blank lines
-        final_content = re.sub(r'\n{3,}', '\n\n', final_content)
-        
-        if not final_content.endswith('\n'):
-            final_content += '\n'
-        
-        self.write_changelog(final_content)
-        return self._extract_release_content(final_content, version)
-    
-    def _extract_release_content(self, content: str, version: str) -> str:
-        """Extract content for a specific version for release body"""
-        lines = content.split('\n')
-        release_lines = []
-        in_target_release = False
-        
+def categorize(labels: List[str]) -> str:
+    low = {l.lower() for l in labels}
+    if low & LABEL_BREAKING: return "Breaking Changes"
+    if low & LABEL_FEATURE: return "Featured Changes"
+    if low & LABEL_FIX: return "Bug Fixes"
+    return "Other Changes"
+
+def bump_type(labels: List[str]) -> str:
+    low = {l.lower() for l in labels}
+    if low & LABEL_BREAKING: return "major"
+    if low & LABEL_FEATURE: return "minor"
+    return "patch"
+
+def squeeze_blank(text: str) -> str:
+    lines = text.splitlines()
+    out=[]
+    prev_blank=False
+    for l in lines:
+        blank = (l.strip()=="")
+        if blank and prev_blank: continue
+        out.append(l)
+        prev_blank=blank
+    return "\n".join(out)
+
+def insert_entry(content: str, version: Version, category: str, entry: str, compare_from: Optional[str]) -> str:
+    tag = version.tag()
+    repo = os.environ.get("GITHUB_REPOSITORY","")
+    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    section_header = f"## [{tag}](https://github.com/{repo}/releases/tag/{tag}) ({today})"
+    if f"## [{tag}]" not in content:
+        # insert after main header at top
+        lines = content.splitlines()
+        out=[]; inserted=False
         for line in lines:
-            if line.startswith(f"## [{version}]"):
-                in_target_release = True
+            out.append(line)
+            if not inserted and line.startswith("# "):
+                out += ["", section_header, "", f"### {category}", "", entry, ""]
+                if compare_from:
+                    out += [f"**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{tag}", ""]
+                inserted=True
+        if not inserted:
+            out = ["# Changelog","", section_header,"", f"### {category}","", entry,""]
+            if compare_from:
+                out += [f"**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{tag}",""]
+        return squeeze_blank("\n".join(out)) + "\n"
+    # update existing
+    lines = content.splitlines()
+    out=[]; in_sec=False; added=False
+    i=0
+    while i < len(lines):
+        line=lines[i]
+        if line.startswith(f"## [{tag}]"):
+            out.append(section_header)
+            in_sec=True
+            i+=1
+            continue
+        if in_sec and line.startswith("## [v") and not line.startswith(f"## [{tag}]"):
+            # end of section
+            if not added:
+                out += [f"### {category}","", entry,""]
+            if compare_from and not any("**Full Changelog**" in x for x in out[-6:]):
+                out += [f"**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{tag}",""]
+            out.append(line)
+            in_sec=False
+            i+=1
+            continue
+        if in_sec:
+            if line == f"### {category}":
+                # insert entry after header blank
+                out.append(line)
+                if i+1 >= len(lines) or lines[i+1].strip() != "":
+                    out.append("")
+                out.append(entry)
+                added=True
+                i+=1
                 continue
-            elif in_target_release and line.startswith('## '):
-                break
-            elif in_target_release and line.strip() and not line.startswith('**Full Changelog**'):
-                release_lines.append(line)
-        
-        if not release_lines:
-            return "## Other Changes\n\n_No changes in this release._"
-        
-        # Convert ### to ## for release format
-        release_content = '\n'.join(release_lines)
-        release_content = re.sub(r'^### ', '## ', release_content, flags=re.MULTILINE)
-        
-        return release_content.strip()
+        out.append(line)
+        i+=1
+    if in_sec:
+        if not added:
+            out += [f"### {category}","", entry,""]
+        if compare_from and not any("**Full Changelog**" in x for x in out[-6:]):
+            out += [f"**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{tag}",""]
+    return squeeze_blank("\n".join(out)) + "\n"
 
-class ReleaseManager:
-    """Main release management orchestrator"""
-    
-    def __init__(self, github_token: str, repo: str):
-        self.github = GitHubAPI(github_token, repo)
-        self.changelog = ChangelogManager()
-        self.repo = repo
-    
-    def handle_pr_merged(self, title: str, author: str, number: int, 
-                        labels: List[str], base_branch: str) -> dict:
-        """Handle PR merged event"""
-        result = {'action': 'pr_merged', 'changes_made': False}
-        
-        # Check if this is a beta branch
-        is_beta = base_branch.startswith('beta')
-        
-        if is_beta:
-            result.update(self._handle_beta_pr_merged(title, author, number, labels))
-        else:
-            result.update(self._handle_main_pr_merged(title, author, number, labels))
-        
-        return result
-    
-    def _handle_beta_pr_merged(self, title: str, author: str, number: int, 
-                              labels: List[str]) -> dict:
-        """Handle PR merged to beta branch"""
-        # Check for existing beta draft
-        releases = self.github.get_releases()
-        beta_draft = None
-        
-        for release in releases:
-            if (release.get('draft') and release.get('prerelease') and 
-                'beta' in release.get('tag_name', '')):
-                beta_draft = release
-                break
-        
-        if beta_draft:
-            # Add to existing beta draft version
-            tag = beta_draft['tag_name']
-            changes_made = self.changelog.add_pr_to_changelog(
-                title, author, number, labels, tag
-            )
-            return {'existing_beta_draft': tag, 'changes_made': changes_made}
-        else:
-            # Add to Unreleased Beta section
-            changes_made = self.changelog.add_pr_to_changelog(
-                title, author, number, labels, "Unreleased Beta"
-            )
-            return {'unreleased_beta': True, 'changes_made': changes_made}
-    
-    def _handle_main_pr_merged(self, title: str, author: str, number: int, 
-                              labels: List[str]) -> dict:
-        """Handle PR merged to main/latest branch"""
-        # Check for existing draft release
-        releases = self.github.get_releases()
-        draft_release = None
-        
-        for release in releases:
-            if release.get('draft') and not release.get('prerelease'):
-                draft_release = release
-                break
-        
-        if draft_release:
-            # Add to existing draft version
-            tag = draft_release['tag_name']
-            changes_made = self.changelog.add_pr_to_changelog(
-                title, author, number, labels, tag
-            )
-            return {'existing_draft': tag, 'changes_made': changes_made}
-        else:
-            # Add to Unreleased section
-            changes_made = self.changelog.add_pr_to_changelog(
-                title, author, number, labels
-            )
-            return {'unreleased': True, 'changes_made': changes_made}
-    
-    def publish_beta_release(self, version: str, release_body: str) -> dict:
-        """Handle beta release published event"""
-        # Add finalization entry to changelog
-        self._add_finalization_entry(version, "beta")
-        
-        # Update release body with finalization entry
-        updated_body = self._add_finalization_to_release_body(release_body, version, "beta")
-        
-        # Update the release
-        release = self.github.get_release_by_tag(version)
-        if release:
-            self.github.update_release(release['id'], body=updated_body)
-        
-        return {
-            'action': 'finalized_beta',
-            'version': version,
-            'changelog_updated': True
-        }
-    
-    def convert_beta_to_stable(self, base_version: str) -> dict:
-        """Convert all beta releases for a base version to stable"""
-        releases = self.github.get_releases()
-        
-        # Find all beta releases for this base version
-        beta_releases = []
-        for release in releases:
-            tag = release.get('tag_name', '')
-            if tag.startswith(f"{base_version}-beta.") and not release.get('draft'):
-                beta_releases.append(release)
-        
-        if not beta_releases:
-            return {'error': f'No published beta releases found for {base_version}'}
-        
-        # Check if stable release already exists
-        stable_release = self.github.get_release_by_tag(base_version)
-        if stable_release and not stable_release.get('draft'):
-            return {'error': f'Stable release {base_version} already exists'}
-        
-        # Consolidate all beta changes
-        consolidated_content = self._consolidate_beta_changes(base_version, beta_releases)
-        
-        # Update changelog
-        date = datetime.now().strftime('%Y-%m-%d')
-        self._create_stable_changelog_entry(base_version, date, consolidated_content)
-        
-        # Create draft stable release
-        release_body = self._format_stable_release_body(consolidated_content, base_version)
-        
-        if stable_release and stable_release.get('draft'):
-            # Update existing draft
-            self.github.update_release(stable_release['id'], body=release_body)
-            release_id = stable_release['id']
-        else:
-            # Create new draft
-            release = self.github.create_release(
-                tag=base_version,
-                name=base_version,
-                body=release_body,
-                draft=True,
-                prerelease=False
-            )
-            release_id = release['id']
-        
-        return {
-            'action': 'converted_beta_to_stable',
-            'version': base_version,
-            'beta_releases_consolidated': len(beta_releases),
-            'release_id': release_id
-        }
-    
-    def publish_stable_release(self, version: str, release_body: str) -> dict:
-        """Handle stable release published event"""
-        # Check if this was a converted release (contains beta-to-release marker)
-        is_converted = 'beta-to-release' in release_body
-        
-        # Add finalization entry to changelog
-        entry_type = "converted-release" if is_converted else "release"
-        self._add_finalization_entry(version, entry_type)
-        
-        # Update release body with finalization entry
-        updated_body = self._add_finalization_to_release_body(release_body, version, entry_type)
-        
-        # Update the release
-        release = self.github.get_release_by_tag(version)
-        if release:
-            self.github.update_release(release['id'], body=updated_body)
-        
-        # Remove any remaining Unreleased sections
-        self._clean_unreleased_sections()
-        
-        return {
-            'action': 'finalized_stable',
-            'version': version,
-            'was_converted': is_converted,
-            'changelog_updated': True
-        }
-    
-    def _add_finalization_entry(self, version: str, entry_type: str) -> bool:
-        """Add finalization entry to changelog"""
-        content = self.changelog.read_changelog()
-        
-        if entry_type == "beta":
-            entry = f"- Update CHANGELOG.md for beta release {version} @github-actions [beta-release]"
-        elif entry_type == "converted-release":
-            entry = f"- Update CHANGELOG.md for converted release {version} @github-actions [converted-release]"
-        else:  # regular release
-            entry = f"- Update CHANGELOG.md for release {version} @github-actions [release]"
-        
-        # Add to Other Changes section of the target version
-        lines = content.split('\n')
-        updated_lines = []
-        in_target_release = False
-        added_entry = False
-        
-        for i, line in enumerate(lines):
-            if line.startswith(f"## [{version}]"):
-                in_target_release = True
-                updated_lines.append(line)
-            elif in_target_release and line.startswith("## ") and not line.startswith(f"## [{version}]"):
-                # End of target release section
-                if not added_entry:
-                    self._insert_finalization_entry_before_section(updated_lines, entry)
-                    added_entry = True
-                updated_lines.append(line)
-                in_target_release = False
-            elif in_target_release and line == "### Other Changes":
-                # Found Other Changes section, add entry after it
-                updated_lines.append(line)
-                # Skip empty line if present
-                next_idx = i + 1
-                if next_idx < len(lines) and not lines[next_idx].strip():
-                    updated_lines.append("")
-                    next_idx += 1
-                updated_lines.append(entry)
-                added_entry = True
-                # Continue with remaining lines from where we left off
-                continue
-            elif in_target_release and line.startswith("**Full Changelog**") and not added_entry:
-                # Add before Full Changelog link
-                updated_lines.extend([
-                    "### Other Changes",
-                    "",
-                    entry,
-                    "",
-                    line
-                ])
-                added_entry = True
-            else:
-                updated_lines.append(line)
-        
-        # Handle end of file case
-        if in_target_release and not added_entry:
-            updated_lines.extend([
-                "",
-                "### Other Changes",
-                "",
-                entry
-            ])
-        
-        final_content = '\n'.join(updated_lines)
-        if not final_content.endswith('\n'):
-            final_content += '\n'
-        
-        self.changelog.write_changelog(final_content)
-        return True
-    
-    def _insert_finalization_entry_before_section(self, lines: List[str], entry: str):
-        """Insert finalization entry before the next section"""
-        lines.extend([
-            "### Other Changes",
-            "",
-            entry,
-            ""
-        ])
-    
-    def _add_finalization_to_release_body(self, body: str, version: str, entry_type: str) -> str:
-        """Add finalization entry to release body"""
-        if entry_type == "beta":
-            entry = f"- Update CHANGELOG.md for beta release {version} @github-actions [beta-release]"
-        elif entry_type == "converted-release":
-            entry = f"- Update CHANGELOG.md for converted release {version} @github-actions [converted-release]"
-        else:  # regular release
-            entry = f"- Update CHANGELOG.md for release {version} @github-actions [release]"
-        
-        lines = body.split('\n')
-        
-        # Find Other Changes section or add before Full Changelog
-        other_changes_idx = -1
-        full_changelog_idx = -1
-        
-        for i, line in enumerate(lines):
-            if line.strip() == "## Other Changes":
-                other_changes_idx = i
-                break
-            elif "**Full Changelog**" in line:
-                full_changelog_idx = i
-                break
-        
-        if other_changes_idx >= 0:
-            # Add to existing Other Changes section
-            lines.insert(other_changes_idx + 2, entry)  # After header and empty line
-        elif full_changelog_idx >= 0:
-            # Create Other Changes section before Full Changelog
-            lines[full_changelog_idx:full_changelog_idx] = [
-                "",
-                "## Other Changes",
-                "",
-                entry,
-                ""
-            ]
-        else:
-            # Add at the end
-            lines.extend([
-                "",
-                "## Other Changes",
-                "",
-                entry
-            ])
-        
-        return '\n'.join(lines)
-    
-    def _consolidate_beta_changes(self, base_version: str, beta_releases: List[dict]) -> dict:
-        """Consolidate changes from all beta releases"""
-        content = self.changelog.read_changelog()
-        lines = content.split('\n')
-        
-        consolidated_changes = defaultdict(list)
-        processed_betas = []
-        
-        for beta_release in beta_releases:
-            beta_tag = beta_release['tag_name']
-            print(f"Processing beta release: {beta_tag}")
-            
-            # Find this beta's section in changelog
-            in_beta_section = False
-            current_category = None
-            
-            for line in lines:
-                if line.startswith(f"## [{beta_tag}]"):
-                    in_beta_section = True
-                    processed_betas.append(beta_tag)
-                    continue
-                elif in_beta_section and line.startswith("## ") and not line.startswith(f"## [{beta_tag}]"):
-                    break
-                elif in_beta_section:
-                    if line.startswith("### "):
-                        current_category = line[4:].strip()  # Remove "### "
-                    elif line.startswith("- ") and current_category:
-                        # Remove beta-specific tags
-                        clean_entry = re.sub(r' \[beta-release\]$', '', line)
-                        consolidated_changes[current_category].append(clean_entry)
-        
-        return {
-            'changes': dict(consolidated_changes),
-            'processed_betas': processed_betas
-        }
-    
-    def _create_stable_changelog_entry(self, version: str, date: str, consolidated_content: dict):
-        """Create stable changelog entry from consolidated beta content"""
-        content = self.changelog.read_changelog()
-        lines = content.split('\n')
-        
-        # Create new version header
-        version_url = f"https://github.com/{self.repo}/releases/tag/{version}"
-        version_header = f"## [{version}]({version_url}) ({date})"
-        
-        # Build new section content
-        new_section_lines = [version_header, ""]
-        
-        changes = consolidated_content['changes']
-        processed_betas = consolidated_content['processed_betas']
-        
-        # Add categories in order
-        for category in CATEGORY_ORDER:
-            if category in changes:
-                new_section_lines.extend([
-                    f"### {category}",
-                    ""
-                ])
-                new_section_lines.extend(changes[category])
-                new_section_lines.append("")
-        
-        # Add any remaining categories
-        for category in changes:
-            if category not in CATEGORY_ORDER:
-                new_section_lines.extend([
-                    f"### {category}",
-                    ""
-                ])
-                new_section_lines.extend(changes[category])
-                new_section_lines.append("")
-        
-        # Add conversion entry
-        beta_list = ', '.join(processed_betas)
-        new_section_lines.extend([
-            "### Other Changes",
-            "",
-            f"- Convert beta releases ({beta_list}) to regular release {version} @github-actions [beta-to-release]",
-            ""
-        ])
-        
-        # Add Full Changelog link
-        latest_regular = self._get_latest_version(self.github.get_releases())
-        new_section_lines.extend([
-            f"**Full Changelog**: https://github.com/{self.repo}/compare/{latest_regular}...{version}",
-            ""
-        ])
-        
-        # Remove beta sections and insert new consolidated section
-        filtered_lines = []
-        skip_section = False
-        inserted_new_section = False
-        
-        for line in lines:
-            # Check if this is a beta section we processed
-            is_processed_beta = any(line.startswith(f"## [{beta_tag}]") for beta_tag in processed_betas)
-            
-            if is_processed_beta:
-                skip_section = True
-                # Insert new section before first beta section
-                if not inserted_new_section:
-                    filtered_lines.extend(new_section_lines)
-                    inserted_new_section = True
-                continue
-            elif skip_section and line.startswith("## ") and not any(line.startswith(f"## [{beta_tag}]") for beta_tag in processed_betas):
-                skip_section = False
-                filtered_lines.append(line)
-            elif not skip_section:
-                filtered_lines.append(line)
-        
-        # If we didn't insert the section yet, add it at the top
-        if not inserted_new_section:
-            # Find position after main header
-            header_pos = 0
-            for i, line in enumerate(filtered_lines):
-                if line.startswith("# "):
-                    header_pos = i + 1
-                    break
-            
-            filtered_lines[header_pos:header_pos] = [""] + new_section_lines
-        
-        final_content = '\n'.join(filtered_lines)
-        if not final_content.endswith('\n'):
-            final_content += '\n'
-        
-        self.changelog.write_changelog(final_content)
-    
-    def _format_stable_release_body(self, consolidated_content: dict, version: str) -> str:
-        """Format stable release body from consolidated content"""
-        changes = consolidated_content['changes']
-        processed_betas = consolidated_content['processed_betas']
-        
-        body_lines = []
-        
-        # Add categories in order
-        for category in CATEGORY_ORDER:
-            if category in changes:
-                body_lines.extend([
-                    f"## {category}",
-                    ""
-                ])
-                body_lines.extend(changes[category])
-                body_lines.append("")
-        
-        # Add any remaining categories
-        for category in changes:
-            if category not in CATEGORY_ORDER:
-                body_lines.extend([
-                    f"## {category}",
-                    ""
-                ])
-                body_lines.extend(changes[category])
-                body_lines.append("")
-        
-        # Add conversion entry
-        beta_list = ', '.join(processed_betas)
-        body_lines.extend([
-            "## Other Changes",
-            "",
-            f"- Convert beta releases ({beta_list}) to regular release {version} @github-actions [beta-to-release]",
-            ""
-        ])
-        
-        # Add Full Changelog link
-        latest_regular = self._get_latest_version(self.github.get_releases())
-        body_lines.append(f"**Full Changelog**: https://github.com/{self.repo}/compare/{latest_regular}...{version}")
-        
-        return '\n'.join(body_lines)
-    
-    def _clean_unreleased_sections(self):
-        """Remove any remaining Unreleased sections"""
-        content = self.changelog.read_changelog()
-        lines = content.split('\n')
-        
-        filtered_lines = []
-        skip_unreleased = False
-        
-        for line in lines:
-            if line.strip() in ["## [Unreleased]", "## [Unreleased Beta]"]:
-                skip_unreleased = True
-                continue
-            elif skip_unreleased and line.startswith("## ") and not line.strip().startswith("## [Unreleased"):
-                skip_unreleased = False
-                filtered_lines.append(line)
-            elif not skip_unreleased:
-                filtered_lines.append(line)
-        
-        # Clean up excessive blank lines
-        final_lines = []
-        for i, current_line in enumerate(filtered_lines):
-            is_excessive_blank = (
-                current_line == "" and
-                i > 0 and
-                filtered_lines[i - 1] == ""
-            )
-            if not is_excessive_blank:
-                final_lines.append(current_line)
-        
-        final_content = '\n'.join(final_lines)
-        if not final_content.endswith('\n'):
-            final_content += '\n'
-        
-        self.changelog.write_changelog(final_content)
-    
-    def create_stable_draft(self) -> dict:
-        """Create or update stable draft release from Unreleased content"""
-        # Get latest version for next release calculation
-        releases = self.github.get_releases()
-        latest_version = self._get_latest_version(releases)
-        
-        # Calculate next stable version
-        next_version = VersionManager.get_next_version(latest_version, "patch")
-        
-        # Check for Unreleased content
-        content = self.changelog.read_changelog()
-        if '## [Unreleased]' in content:
-            # Convert to stable version
-            date = datetime.now().strftime('%Y-%m-%d')
-            release_content = self.changelog.convert_unreleased_to_version(
-                next_version, date, self.repo, latest_version
-            )
-        else:
-            # Create minimal content
-            release_content = "## Other Changes\n\n_No changes in this release._"
-        
-        # Create stable release body
-        body = f"{release_content}\n\n"
-        body += f"**Full Changelog**: https://github.com/{self.repo}/compare/{latest_version}...{next_version}"
-        
-        # Check for existing draft
-        draft_release = None
-        for release in releases:
-            if release.get('draft') and not release.get('prerelease'):
-                draft_release = release
-                break
-        
-        if draft_release:
-            # Update existing draft
-            self.github.update_release(draft_release['id'], name=next_version, body=body)
-            release_id = draft_release['id']
-        else:
-            # Create new draft
-            release = self.github.create_release(
-                tag=next_version,
-                name=next_version,
-                body=body,
-                draft=True,
-                prerelease=False
-            )
-            release_id = release['id']
-        
-        return {
-            'action': 'created_stable_draft',
-            'version': next_version,
-            'release_id': release_id
-        }
-        """Create or update beta draft release"""
-        # Get latest version for next beta calculation
-        releases = self.github.get_releases()
-        latest_version = self._get_latest_version(releases)
-        
-        # Calculate next beta version
-        next_beta = self._calculate_next_beta_version(latest_version, releases)
-        
-        # Check for Unreleased Beta content
-        content = self.changelog.read_changelog()
-        if '## [Unreleased Beta]' in content:
-            # Convert to beta version
-            date = datetime.now().strftime('%Y-%m-%d')
-            release_content = self.changelog.convert_unreleased_to_version(
-                next_beta, date, self.repo, latest_version
-            )
-        else:
-            # Create minimal content
-            release_content = "## Other Changes\n\n_No changes in this beta release._"
-        
-        # Create beta release body
-        version_without_v = next_beta.lstrip('v')
-        body = f"Beta Release - {version_without_v}\n\n{release_content}\n\n"
-        body += f"**Full Changelog**: https://github.com/{self.repo}/compare/{latest_version}...{next_beta}"
-        
-        # Create draft release
-        release = self.github.create_release(
-            tag=next_beta,
-            name=next_beta,
-            body=body,
-            draft=True,
-            prerelease=True
-        )
-        
-        return {
-            'action': 'created_beta_draft',
-            'version': next_beta,
-            'release_id': release['id']
-        }
-    
-    def _get_latest_version(self, releases: List[dict]) -> str:
-        """Get latest non-beta version"""
-        for release in releases:
-            tag = release.get('tag_name', '')
-            if not release.get('prerelease') and 'beta' not in tag:
-                return tag
-        return 'v0.0.0'
-    
-    def _calculate_next_beta_version(self, latest_version: str, releases: List[dict]) -> str:
-        """Calculate next beta version"""
-        # Get base version for next release
-        major, minor, patch, _, _ = VersionManager.parse_version(latest_version)
-        next_base = VersionManager.format_version(major, minor, patch + 1)
-        
-        # Check for existing betas with this base
-        existing_betas = []
-        for release in releases:
-            tag = release.get('tag_name', '')
-            if tag.startswith(f"{next_base}-beta."):
-                try:
-                    _, _, _, _, beta_num = VersionManager.parse_version(tag)
-                    if beta_num is not None:
-                        existing_betas.append(beta_num)
-                except:
-                    continue
-        
-        # Get next beta number
-        next_beta_num = max(existing_betas, default=-1) + 1
-        return VersionManager.format_version(major, minor, patch + 1, 'beta', next_beta_num)
+def collect_section_categories(block: str) -> Dict[str,List[str]]:
+    cats={}
+    current=None
+    for line in block.splitlines():
+        if line.startswith("### "):
+            current=line[4:].strip()
+            cats.setdefault(current,[])
+        elif line.startswith("- ") and current:
+            cats[current].append(line)
+    return cats
 
-def main():
-    """Main entry point"""
-    parser = argparse.ArgumentParser(description='Unified Release Manager')
-    parser.add_argument('action', choices=[
-        'pr-merged', 'create-beta-draft', 'publish-beta', 'convert-to-stable', 'publish-stable', 'create-stable-draft'
-    ])
-    parser.add_argument('--github-token', required=True, help='GitHub token')
-    parser.add_argument('--repo', required=True, help='Repository name (owner/repo)')
-    
-    # PR merged args
-    parser.add_argument('--pr-title', help='PR title')
-    parser.add_argument('--pr-author', help='PR author')
-    parser.add_argument('--pr-number', type=int, help='PR number')
-    parser.add_argument('--pr-labels', help='PR labels (JSON array)')
-    parser.add_argument('--base-branch', help='Base branch name')
-    
-    # Version args
-    parser.add_argument('--version', help='Version tag')
-    parser.add_argument('--release-body', help='Release body content')
-    
-    args = parser.parse_args()
-    
-    manager = ReleaseManager(args.github_token, args.repo)
-    
-    if args.action == 'pr-merged':
-        if not all([args.pr_title, args.pr_author, args.pr_number, args.base_branch]):
-            print("Error: Missing required PR arguments")
-            sys.exit(1)
-        
-        labels = json.loads(args.pr_labels) if args.pr_labels else []
-        result = manager.handle_pr_merged(
-            args.pr_title, args.pr_author, args.pr_number, labels, args.base_branch
-        )
-        print(json.dumps(result))
-    
-    elif args.action == 'create-beta-draft':
-        result = manager.create_beta_draft()
-        print(json.dumps(result))
-    
-    elif args.action == 'create-stable-draft':
-        result = manager.create_stable_draft()
-        print(json.dumps(result))
-    
-    elif args.action == 'publish-beta':
-        if not all([args.version, args.release_body]):
-            print("Error: Missing required version and release body arguments")
-            sys.exit(1)
-        
-        result = manager.publish_beta_release(args.version, args.release_body)
-        print(json.dumps(result))
-    
-    elif args.action == 'convert-to-stable':
-        if not args.version:
-            print("Error: Missing required version argument")
-            sys.exit(1)
-        
-        result = manager.convert_beta_to_stable(args.version)
-        print(json.dumps(result))
-    
-    elif args.action == 'publish-stable':
-        if not all([args.version, args.release_body]):
-            print("Error: Missing required version and release body arguments")
-            sys.exit(1)
-        
-        result = manager.publish_stable_release(args.version, args.release_body)
-        print(json.dumps(result))
-    
+def build_beta_body(current: Version, changelog: str, latest_stable: Optional[Version]) -> str:
+    block = find_section_block(changelog, current.tag())
+    cats = collect_section_categories(block)
+    # determine compare_from
+    if current.beta == 0:
+        compare_from = latest_stable.tag() if latest_stable else "v0.0.0"
     else:
-        print(f"Action {args.action} not implemented")
-        sys.exit(1)
+        compare_from = f"v{current.major}.{current.minor}.{current.patch}-beta.{current.beta-1}"
+    ordered = [c for c in CATEGORY_ORDER if c in cats] + [c for c in cats if c not in CATEGORY_ORDER]
+    if not ordered:
+        body_sections = "## Other Changes\n\n_No changes in this beta release._"
+    else:
+        parts=[]
+        for c in ordered:
+            parts.append(f"## {c}\n")
+            parts.extend(cats[c])
+            parts.append("")
+        body_sections = "\n".join(parts).strip()
+    repo = os.environ.get("GITHUB_REPOSITORY","")
+    return f"Beta Release - {current.tag()}\n\n{body_sections}\n\n**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{current.tag()}"
 
-if __name__ == '__main__':
+def build_stable_body(version: Version, changelog: str, prev_stable: Version) -> str:
+    block = find_section_block(changelog, version.tag())
+    cats = collect_section_categories(block)
+    ordered = [c for c in CATEGORY_ORDER if c in cats] + [c for c in cats if c not in CATEGORY_ORDER]
+    parts=[]
+    for c in ordered:
+        parts.append(f"## {c}\n")
+        parts.extend(cats[c])
+        parts.append("")
+    if not ordered:
+        parts = ["## Other Changes","","_No changes in this release._",""]
+    repo = os.environ.get("GITHUB_REPOSITORY","")
+    parts.append(f"**Full Changelog**: https://github.com/{repo}/compare/{prev_stable.tag()}...{version.tag()}")
+    return "\n".join(parts).strip()
+
+# ---------------- Version Decision Logic ----------------
+def latest_versions(changelog: str) -> Tuple[Optional[Version], Optional[Version]]:
+    versions = list_versions(changelog)
+    stable = [v for v in versions if not v.is_beta()]
+    beta = [v for v in versions if v.is_beta()]
+    latest_stable = max(stable) if stable else None
+    latest_beta = max(beta) if beta else None
+    return latest_stable, latest_beta
+
+def find_unpublished_beta_draft(gh: GitHub) -> Optional[Version]:
+    for r in gh.releases():
+        if r.get("draft") and r.get("prerelease") and "beta" in r.get("tag_name",""):
+            try:
+                return Version.parse(r["tag_name"])
+            except:
+                continue
+    return None
+
+def is_published(gh: GitHub, version: Version) -> bool:
+    rel = gh.release_by_tag(version.tag())
+    return bool(rel) and not rel.get("draft", False)
+
+def bump_base(latest_stable: Optional[Version], bump: str) -> Version:
+    base = latest_stable or Version(0,0,0)
+    if bump == "major": return base.bump_major()
+    if bump == "minor": return base.bump_minor()
+    return base.bump_patch()
+
+def decide_beta_target(gh: GitHub,
+                       latest_stable: Optional[Version],
+                       latest_published_beta: Optional[Version],
+                       existing_unpublished: Optional[Version],
+                       labels: List[str]) -> Tuple[Version,bool]:
+    """
+    Return (target_version, replace_unpublished?)
+    replace_unpublished = True only when we escalate base for an unpublished draft.
+    """
+    bump = bump_type(labels)
+    required_base = bump_base(latest_stable, bump)
+
+    if existing_unpublished:
+        if not is_published(gh, existing_unpublished):
+            # unpublished draft present (always beta.0 by our rules)
+            if required_base > existing_unpublished.base():
+                # escalate & replace
+                return Version(required_base.major, required_base.minor, required_base.patch, 0), True
+            return existing_unpublished, False
+
+    # no unpublished draft
+    if latest_published_beta is None:
+        return Version(required_base.major, required_base.minor, required_base.patch, 0), False
+
+    # we do have published betas
+    if bump == "major" and ESCALATE_BREAKING_POST_PUBLISH:
+        new_base = latest_published_beta.base().bump_major()
+        return Version(new_base.major, new_base.minor, new_base.patch, 0), False
+
+    if required_base > latest_published_beta.base():
+        return Version(required_base.major, required_base.minor, required_base.patch, 0), False
+
+    return latest_published_beta.next_beta(), False
+
+# ---------------- Core Actions ----------------
+def cmd_pr_merged(args):
+    gh = GitHub(args.github_token, args.repo)
+    labels = json.loads(args.pr_labels or "[]")
+    content = read_changelog()
+    latest_stable, latest_beta_any = latest_versions(content)
+
+    # Determine latest published beta (ignore unpublished drafts)
+    published_beta_versions=[]
+    for r in gh.releases():
+        tn = r.get("tag_name","")
+        if "beta" in tn and not r.get("draft") and r.get("prerelease"):
+            try: published_beta_versions.append(Version.parse(tn))
+            except: pass
+    latest_published_beta = max(published_beta_versions) if published_beta_versions else None
+    existing_unpublished = find_unpublished_beta_draft(gh)
+
+    category = categorize(labels)
+    entry = f"- {args.pr_title} @{args.pr_author} [#{args.pr_number}]"
+
+    target_version, replace = decide_beta_target(
+        gh, latest_stable, latest_published_beta, existing_unpublished, labels
+    )
+
+    # If replacing an unpublished draft (escalation)
+    if replace and existing_unpublished and existing_unpublished.tag() != target_version.tag():
+        # Remove old section (migrate entries)
+        old_block = find_section_block(content, existing_unpublished.tag())
+        content = remove_version_section(content, existing_unpublished.tag())
+        # Insert new base section with migrated categories
+        migrated_cats = collect_section_categories(old_block)
+        content = ensure_version_section(content, target_version, latest_stable)
+        # Re-add migrated entries
+        for cat, entries in migrated_cats.items():
+            for e in entries:
+                content = insert_entry(content, target_version, cat, e, None)
+        # Delete old draft release
+        old_rel = gh.release_by_tag(existing_unpublished.tag())
+        if old_rel and old_rel.get("id"):
+            # cannot delete release via script easily without an endpoint inside constraints—safe to ignore
+            pass
+
+    # Ensure version section exists
+    if f"## [{target_version.tag()}]" not in content:
+        compare_from = None
+        if target_version.beta == 0:
+            compare_from = latest_stable.tag() if latest_stable else None
+        else:
+            compare_from = f"v{target_version.major}.{target_version.minor}.{target_version.patch}-beta.{target_version.beta-1}"
+        content = insert_entry(content, target_version, category, entry, compare_from)
+    else:
+        # Determine compare_from only if section missing link (rare)
+        section_block = find_section_block(content, target_version.tag())
+        needs_compare = "**Full Changelog**" not in section_block
+        compare_from = None
+        if needs_compare:
+            if target_version.beta == 0:
+                compare_from = latest_stable.tag() if latest_stable else None
+            else:
+                compare_from = f"v{target_version.major}.{target_version.minor}.{target_version.patch}-beta.{target_version.beta-1}"
+        content = insert_entry(content, target_version, category, entry, compare_from)
+
+    write_changelog(content)
+    git_commit(f"Update CHANGELOG.md for beta PR #{args.pr_number}")
+
+    # Create or update draft release
+    existing_rel = gh.release_by_tag(target_version.tag())
+    body = build_beta_body(target_version, content, latest_stable)
+    if existing_rel and existing_rel.get("id"):
+        gh.update_release(existing_rel["id"], body=body, name=target_version.tag())
+    else:
+        gh.create_release(target_version.tag(), target_version.tag(), body, draft=True, prerelease=True)
+
+def remove_version_section(content: str, tag: str) -> str:
+    pattern = rf"^## \[{re.escape(tag)}\].*?(?=^## \[v|\Z)"
+    return re.sub(pattern, "", content, flags=re.S|re.M)
+
+def ensure_version_section(content: str, version: Version, latest_stable: Optional[Version]) -> str:
+    if f"## [{version.tag()}]" in content:
+        return content
+    repo = os.environ.get("GITHUB_REPOSITORY","")
+    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    compare_from = latest_stable.tag() if latest_stable else None
+    section_header = f"## [{version.tag()}](https://github.com/{repo}/releases/tag/{version.tag()}) ({today})"
+    insert = [section_header,""]
+    if compare_from:
+        insert += [f"**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{version.tag()}",""]
+    lines = content.splitlines()
+    out=[]; inserted=False
+    for line in lines:
+        out.append(line)
+        if not inserted and line.startswith("# "):
+            out += [""]+insert
+            inserted=True
+    if not inserted:
+        out = ["# Changelog",""]+insert+out
+    return squeeze_blank("\n".join(out))+"\n"
+
+def git_config():
+    os.system('git config --local user.email "action@github.com"')
+    os.system('git config --local user.name "GitHub Action"')
+
+def git_commit(message: str):
+    git_config()
+    diff = os.popen("git diff --name-only").read().strip()
+    if "CHANGELOG.md" in diff:
+        os.system("git add CHANGELOG.md")
+        os.system(f'git commit -m "{message}" || true')
+        os.system("git push || true")
+
+def cmd_finalize_beta(args):
+    gh = GitHub(args.github_token, args.repo)
+    tag = args.version
+    v = Version.parse(tag)
+    content = read_changelog()
+    entry = f"- Update CHANGELOG.md for beta release {tag} @github-actions [beta-release]"
+    content = insert_entry(content, v, "Other Changes", entry, None)
+    write_changelog(content)
+    git_commit(f"Add changelog entry for beta release {tag} update")
+    latest_stable,_ = latest_versions(content)
+    body = build_beta_body(v, content, latest_stable)
+    rel = gh.release_by_tag(tag)
+    if rel and rel.get("id"):
+        gh.update_release(rel["id"], body=body)
+
+def cmd_convert_betas(args):
+    gh = GitHub(args.github_token, args.repo)
+    base_tag = args.version
+    base_version = Version.parse(base_tag)
+    # gather published betas
+    releases = gh.releases()
+    betas=[]
+    for r in releases:
+        tn = r.get("tag_name","")
+        if tn.startswith(base_tag+"-beta.") and not r.get("draft") and r.get("prerelease"):
+            try: betas.append(Version.parse(tn))
+            except: pass
+    if not betas:
+        print("No published betas for that base")
+        return
+    content = read_changelog()
+    # accumulate categories
+    combined: Dict[str,List[str]] = {c:[] for c in CATEGORY_ORDER}
+    for b in sorted(betas):
+        block = find_section_block(content, b.tag())
+        cats = collect_section_categories(block)
+        for c, entries in cats.items():
+            if c not in combined: combined[c]=[]
+            # remove finalizing markers for readability
+            cleaned = [re.sub(r' \[beta-release\]$','', e) for e in entries]
+            combined[c].extend(cleaned)
+    # remove beta sections
+    for b in betas:
+        content = remove_version_section(content, b.tag())
+    # insert stable section
+    prev_stable,_ = latest_versions(content)
+    prev_stable = prev_stable or Version(0,0,0)
+    repo = os.environ.get("GITHUB_REPOSITORY","")
+    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    header = f"## [{base_tag}](https://github.com/{repo}/releases/tag/{base_tag}) ({today})"
+    new_lines=[header,""]
+    for c in CATEGORY_ORDER:
+        if combined.get(c):
+            new_lines += [f"### {c}",""]+combined[c]+[""]
+    new_lines += [ "### Other Changes","",
+                   f"- Convert beta releases ({', '.join(b.tag() for b in sorted(betas))}) to regular release {base_tag} @github-actions [beta-to-release]","",
+                   f"**Full Changelog**: https://github.com/{repo}/compare/{prev_stable.tag()}...{base_tag}",""]
+    # insert after main header
+    lines = content.splitlines()
+    out=[]; inserted=False
+    for line in lines:
+        out.append(line)
+        if not inserted and line.startswith("# "):
+            out += [""]+new_lines
+            inserted=True
+    if not inserted:
+        out = ["# Changelog",""]+new_lines+out
+    content = squeeze_blank("\n".join(out))+"\n"
+    write_changelog(content)
+    git_commit(f"Convert beta releases to release {base_tag} in CHANGELOG.md")
+
+    # create/update draft stable release
+    body = build_stable_body(base_version, content, prev_stable)
+    rel = gh.release_by_tag(base_tag)
+    if rel and rel.get("draft"):
+        gh.update_release(rel["id"], body=body, name=base_tag)
+    else:
+        gh.create_release(base_tag, base_tag, body, draft=True, prerelease=False, target="latest")
+
+def cmd_finalize_stable(args):
+    gh = GitHub(args.github_token, args.repo)
+    tag = args.version
+    v = Version.parse(tag)
+    if v.is_beta():
+        print("Use finalize beta for beta tags")
+        return
+    content = read_changelog()
+    entry = f"- Update CHANGELOG.md for release {tag} @github-actions [release]"
+    content = insert_entry(content, v, "Other Changes", entry, None)
+    write_changelog(content)
+    git_commit(f"Add changelog entry for release {tag} update")
+    prev_stable,_ = latest_versions(content)
+    # prev_stable now includes this new version; find previous
+    versions = [x for x in list_versions(content) if not x.is_beta()]
+    versions_sorted = sorted(versions)
+    if len(versions_sorted) > 1 and versions_sorted[-1] == v:
+        prev = versions_sorted[-2]
+    else:
+        prev = Version(0,0,0)
+    body = build_stable_body(v, content, prev)
+    rel = gh.release_by_tag(tag)
+    if rel and rel.get("id"):
+        gh.update_release(rel["id"], body=body)
+
+# ---------------- CLI ----------------
+def main():
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest="action", required=True)
+    m = sub.add_parser("pr-merged")
+    m.add_argument("--github-token", required=True)
+    m.add_argument("--repo", required=True)
+    m.add_argument("--pr-title", required=True)
+    m.add_argument("--pr-author", required=True)
+    m.add_argument("--pr-number", required=True)
+    m.add_argument("--pr-labels", default="[]")
+    m.add_argument("--base-branch", required=True)
+
+    fb = sub.add_parser("publish-beta")
+    fb.add_argument("--github-token", required=True)
+    fb.add_argument("--repo", required=True)
+    fb.add_argument("--version", required=True)
+    fb.add_argument("--release-body", required=False)
+
+    cb = sub.add_parser("convert-to-stable")
+    cb.add_argument("--github-token", required=True)
+    cb.add_argument("--repo", required=True)
+    cb.add_argument("--version", required=True)
+
+    fs = sub.add_parser("publish-stable")
+    fs.add_argument("--github-token", required=True)
+    fs.add_argument("--repo", required=True)
+    fs.add_argument("--version", required=True)
+    fs.add_argument("--release-body", required=False)
+
+    args = ap.parse_args()
+    if args.action == "pr-merged":
+        # Only act if base branch is beta-like
+        if not args.base_branch.startswith("beta"):
+            print("Base branch not beta*, ignoring.")
+            return
+        cmd_pr_merged(args)
+    elif args.action == "publish-beta":
+        cmd_finalize_beta(args)
+    elif args.action == "convert-to-stable":
+        cmd_convert_betas(args)
+    elif args.action == "publish-stable":
+        cmd_finalize_stable(args)
+    else:
+        print("Unknown action")
+
+if __name__ == "__main__":
     main()
