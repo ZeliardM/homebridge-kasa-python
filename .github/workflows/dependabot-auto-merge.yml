@@ -1,9 +1,8 @@
----
 name: Dependabot Auto-Merge
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, labeled]
 
 permissions:
   pull-requests: write
@@ -23,131 +22,70 @@ jobs:
       - name: Determine target branch type
         id: branch-type
         run: |
-          BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
-          echo "base_branch=$BASE_BRANCH" >> $GITHUB_OUTPUT
-          
-          if [[ "$BASE_BRANCH" == beta* ]]; then
+          BASE="${{ github.event.pull_request.base.ref }}"
+          echo "base_branch=$BASE" >> $GITHUB_OUTPUT
+          if [[ "$BASE" == beta* ]]; then
             echo "branch_type=beta" >> $GITHUB_OUTPUT
-            echo "Target is beta branch: $BASE_BRANCH"
-          elif [[ "$BASE_BRANCH" == "latest" ]]; then
-            echo "branch_type=main" >> $GITHUB_OUTPUT
-            echo "Target is main branch: $BASE_BRANCH"
+          elif [[ "$BASE" == latest ]]; then
+            echo "branch_type=latest" >> $GITHUB_OUTPUT
           else
             echo "branch_type=other" >> $GITHUB_OUTPUT
-            echo "Target is other branch: $BASE_BRANCH"
           fi
 
-      - name: Check for breaking changes and security concerns
-        id: safety-check
+      - name: Safety / breaking-change check
+        id: safety
         run: |
-          # Check PR labels for breaking changes
           LABELS='${{ toJson(github.event.pull_request.labels.*.name) }}'
-          UPDATE_TYPE="${{ steps.metadata.outputs.update-type }}"
-          
-          HAS_BREAKING_CHANGE=false
-          if echo "$LABELS" | grep -q "breaking-change"; then
-            HAS_BREAKING_CHANGE=true
-            echo "Breaking change label detected"
-          fi
-          
-          # Major updates are considered potentially breaking
-          IS_MAJOR_UPDATE=false
-          if [ "$UPDATE_TYPE" = "version-update:semver-major" ]; then
-            IS_MAJOR_UPDATE=true
-            echo "Major version update detected"
-          fi
-          
-          echo "has_breaking_change=$HAS_BREAKING_CHANGE" >> $GITHUB_OUTPUT
-          echo "is_major_update=$IS_MAJOR_UPDATE" >> $GITHUB_OUTPUT
-          
-          # Determine if auto-merge should be blocked
-          BLOCK_AUTO_MERGE=false
-          if [ "$HAS_BREAKING_CHANGE" = "true" ] || [ "$IS_MAJOR_UPDATE" = "true" ]; then
-            BLOCK_AUTO_MERGE=true
-            echo "Auto-merge will be blocked due to safety concerns"
-          fi
-          
-          echo "block_auto_merge=$BLOCK_AUTO_MERGE" >> $GITHUB_OUTPUT
+          UPDATE_TYPE='${{ steps.metadata.outputs.update-type }}'
+          has_breaking=false
+          echo "$LABELS" | grep -q '"breaking-change"' && has_breaking=true
+          is_major=false
+            [ "$UPDATE_TYPE" = "version-update:semver-major" ] && is_major=true
+          block=false
+          if $has_breaking || $is_major; then block=true; fi
+          echo "has_breaking=$has_breaking" >> $GITHUB_OUTPUT
+          echo "is_major=$is_major" >> $GITHUB_OUTPUT
+          echo "block=$block" >> $GITHUB_OUTPUT
 
-      - name: Label PR based on update type and target
+      - name: Label PR
         run: |
-          UPDATE_TYPE="${{ steps.metadata.outputs.update-type }}"
-          BRANCH_TYPE="${{ steps.branch-type.outputs.branch_type }}"
-          HAS_BREAKING_CHANGE="${{ steps.safety-check.outputs.has_breaking_change }}"
-          
-          # Always add dependency label
-          gh pr edit "$PR_URL" --add-label "dependency"
-          
-          # Add breaking change label if detected in metadata
-          if [ "$HAS_BREAKING_CHANGE" = "true" ]; then
-            gh pr edit "$PR_URL" --add-label "breaking-change"
-          fi
-          
-          # Add update type label
+          UPDATE_TYPE='${{ steps.metadata.outputs.update-type }}'
+          gh pr edit "$PR_URL" --add-label dependency
           case "$UPDATE_TYPE" in
-            "version-update:semver-major")
-              gh pr edit "$PR_URL" --add-label "dependency-major"
-              gh pr edit "$PR_URL" --add-label "semver-major"
-              ;;
-            "version-update:semver-minor")
-              gh pr edit "$PR_URL" --add-label "dependency-minor"
-              ;;
-            "version-update:semver-patch")
-              gh pr edit "$PR_URL" --add-label "dependency-patch"
-              ;;
+            version-update:semver-major) gh pr edit "$PR_URL" --add-label dependency-major ;;
+            version-update:semver-minor) gh pr edit "$PR_URL" --add-label dependency-minor ;;
+            version-update:semver-patch) gh pr edit "$PR_URL" --add-label dependency-patch ;;
           esac
-          
-          # Add target branch label
-          if [ "$BRANCH_TYPE" = "beta" ]; then
-            gh pr edit "$PR_URL" --add-label "beta"
+          if [ "${{ steps.safety.outputs.has_breaking }}" = "true" ]; then
+            gh pr edit "$PR_URL" --add-label breaking-change
           fi
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Auto-merge safe updates only
-        if: |
-          steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-patch' &&
-          steps.safety-check.outputs.block_auto_merge == 'false'
+      - name: Auto-merge safe updates
+        if: >
+          (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-patch') &&
+          steps.safety.outputs.block == 'false'
         run: |
-          UPDATE_TYPE="${{ steps.metadata.outputs.update-type }}"
-          BRANCH_TYPE="${{ steps.branch-type.outputs.branch_type }}"
-          
-          echo "Auto-merging safe $UPDATE_TYPE update targeting $BRANCH_TYPE branch"
-          
-          # Add auto-merged label
-          gh pr edit "$PR_URL" --add-label "auto-merged"
-          
-          # Enable auto-merge with squash
+          gh pr edit "$PR_URL" --add-label auto-merged
           gh pr merge --auto --squash "$PR_URL"
-          
-          echo "Auto-merge enabled for PR targeting ${{ steps.branch-type.outputs.base_branch }}"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Comment on major updates or breaking changes requiring manual review
-        if: |
-          steps.metadata.outputs.update-type == 'version-update:semver-major' ||
-          steps.safety-check.outputs.has_breaking_change == 'true'
+      - name: Comment for manual review
+        if: steps.safety.outputs.block == 'true'
         run: |
-          REASON=""
-          if [ "${{ steps.metadata.outputs.update-type }}" = "version-update:semver-major" ]; then
-            REASON="🚨 **Major version update detected**"
-          elif [ "${{ steps.safety-check.outputs.has_breaking_change }}" = "true" ]; then
-            REASON="⚠️ **Breaking change detected**"
-          fi
+          REASON="Potential breaking change or major update."
+          gh pr comment "$PR_URL" --body "⚠️ $REASON
 
-          gh pr comment "$PR_URL" --body "$REASON
+          Update Type: \`${{ steps.metadata.outputs.update-type }}\`
+          Target Branch: \`${{ steps.branch-type.outputs.base_branch }}\`
+          Breaking Label: ${{ steps.safety.outputs.has_breaking }}
 
-          This PR requires manual review before merging due to potential breaking changes.
-
-          **Update Type:** \`${{ steps.metadata.outputs.update-type }}\`
-          **Target Branch:** \`${{ steps.branch-type.outputs.base_branch }}\`
-          **Breaking Change Label:** ${{ steps.safety-check.outputs.has_breaking_change }}
-
-          Please review the changes carefully, check for breaking changes, and test thoroughly before merging."
+          Manual review required."
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
