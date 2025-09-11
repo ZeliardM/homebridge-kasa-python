@@ -3,36 +3,35 @@ name: Beta Release Flow
 on:
   pull_request:
     types: [closed]
-    branches: [beta, beta-*.*.*]
+    branches: [beta]
   release:
     types: [published]
   workflow_dispatch: {}
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: write
   pull-requests: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pr-merged:
-    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && startsWith(github.event.pull_request.base.ref, 'beta')
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'beta'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+        with: { python-version: '3.12' }
       - name: Update changelog & beta draft
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           python .github/scripts/release_manager.py pr-merged \
-            --github-token "${{ secrets.GITHUB_TOKEN }}" \
+            --github-token "${GITHUB_TOKEN}" \
             --repo "${{ github.repository }}" \
             --pr-title "${{ github.event.pull_request.title }}" \
             --pr-author "${{ github.event.pull_request.user.login }}" \
@@ -45,17 +44,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+        with: { python-version: '3.12' }
       - name: Finalize beta
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           python .github/scripts/release_manager.py publish-beta \
-            --github-token "${{ secrets.GITHUB_TOKEN }}" \
+            --github-token "${GITHUB_TOKEN}" \
             --repo "${{ github.repository }}" \
             --version "${{ github.event.release.tag_name }}" \
             --release-body "${{ github.event.release.body }}"
