@@ -10,9 +10,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-
     steps:
-      - name: Checkout validation script
+      - name: Checkout script
         uses: actions/checkout@v4
         with:
           sparse-checkout: |
@@ -20,15 +19,23 @@ jobs:
           fetch-depth: 0
 
       - name: Run validation
-        id: validate
+        id: run
         shell: bash
         run: |
-          python3 .github/scripts/validate_pr.py
+          set -euo pipefail
+          RESULT=$(python3 .github/scripts/validate_pr.py)
+          echo "$RESULT"
+          OK=$(echo "$RESULT" | jq -r '.ok')
+          if [ "$OK" != "true" ]; then
+            echo "error_message=$(echo "$RESULT" | jq -r '.message')" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
 
-      - name: Comment on failure
+      - name: Comment on failure with details
         if: failure()
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr comment ${{ github.event.pull_request.number }} --body "❌ PR validation failed. See workflow logs for details (base branch, labels, or breaking-change explanation)."
+          ERR="${{ steps.run.outputs.error_message }}"
+          gh pr comment ${{ github.event.pull_request.number }} --body "❌ PR validation failed:\n\`\`\`\n$ERR\n\`\`\`\nPlease correct and push updates."
