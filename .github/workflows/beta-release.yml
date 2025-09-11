@@ -1,10 +1,15 @@
+---
 name: Beta Release
+
+# This workflow handles the npm publishing and release creation for beta releases.
+# Beta changelog management is handled by the beta-management.yml workflow.
 
 on:
   release:
     types: [published]
 
 jobs:
+  # Only run for beta releases (prerelease=true and tag contains 'beta')
   build_lint_test:
     if: >
       github.event.release.prerelease == true &&
@@ -22,14 +27,15 @@ jobs:
       id-token: write
     uses: homebridge/.github/.github/workflows/npm-publish-esm.yml@latest
     with:
-      tag: beta
-      npm_version_command: pre
-      pre_id: beta
+      tag: 'beta'
+      npm_version_command: 'pre'
+      pre_id: 'beta'
       override_version: ${{ github.event.release.tag_name }}
     secrets:
       npm_auth_token: ${{ secrets.NPM_TOKEN }}
 
   beta-release-to-discord:
+    name: Discord Webhooks
     needs: [build_lint_test, publish]
     if: >
       github.event.release.prerelease == true &&
@@ -40,6 +46,7 @@ jobs:
       title: "Kasa Python Beta Release"
       description: |
         Version `${{ github.event.release.tag_name }}`
-      url: https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/${{ github.event.release.tag_name }}
+      url: >
+        https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/${{ github.event.release.tag_name }}
     secrets:
-      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
