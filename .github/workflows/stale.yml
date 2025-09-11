@@ -24,14 +24,13 @@ jobs:
           exempt-issue-labels: 'pinned,security,enhancement,bug,breaking-change,needs-info'
           exempt-pr-labels: 'pinned,security,work-in-progress,breaking-change'
           exempt-all-pr-assignees: true
-            # If you want needs-info issues to stale sooner, remove from exempt and add custom days.
           exempt-all-issue-assignees: true
           operations-per-run: 50
           stale-issue-message: |
-            This issue has been marked stale after 60 days of inactivity. It will close in 7 days unless updated.
+            This issue is stale after 60 days of inactivity. It will close in 7 days unless updated.
           close-issue-message: |
             Closing due to inactivity. Reopen if still valid.
           stale-pr-message: |
-            This PR has been marked stale after 30 days of inactivity. It will close in 7 days unless updated.
+            This PR is stale after 30 days of inactivity. It will close in 7 days unless updated.
           close-pr-message: |
-            Closing stale PR. Please reopen if you plan to continue work.
+            Closing stale PR. Reopen if you plan to continue.
