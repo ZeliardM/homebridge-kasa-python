@@ -1,12 +1,11 @@
 name: New Issue
 description: File a Bug, Feature Request, Support Question, Breaking Change Proposal, Docs or Dependency Issue
-labels: []  # Labels applied automatically by workflow
+labels: []
 body:
   - type: dropdown
     id: type
     attributes:
       label: Type
-      description: Select the primary classification for this issue.
       options:
         - Bug
         - Feature
@@ -20,41 +19,33 @@ body:
     id: summary
     attributes:
       label: Summary
-      description: One-line description of the issue or request.
-      placeholder: Short summary...
+      placeholder: One-line summary...
     validations:
       required: true
   - type: textarea
     id: details
     attributes:
       label: Details
-      description: 
-        For Bugs: steps to reproduce, observed vs expected.
-        For Features: motivation and desired behavior.
-        For Breaking Change: rationale, what breaks, impact.
+      description: Provide reproduction (bugs), motivation (features), or rationale (breaking).
       placeholder: |
         For Bugs:
-        1. Step one
-        2. Step two
-        Expected:
-        Actual:
-
+          Steps:
+          Expected:
+          Actual:
         For Features:
-        Motivation:
-        Proposed Behavior:
-
+          Motivation:
+          Proposed Behavior:
         For Breaking Change:
-        Rationale:
-        Impact:
+          Rationale:
+          Impact:
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
       label: Environment (Required for Bugs)
-      description: Provide versions if Type = Bug.
       placeholder: |
-        Plugin Version: vX.Y.Z
+        Plugin Version:
         Homebridge Version:
         Node.js Version:
         NPM Version:
@@ -66,10 +57,9 @@ body:
     id: migration
     attributes:
       label: Migration Strategy (Breaking Change Only)
-      description: Required if Type = Breaking Change. Provide concrete steps for users to upgrade.
       placeholder: |
-        1. ...
-        2. ...
+        1. Step
+        2. Step
     validations:
       required: false
   - type: textarea
@@ -77,13 +67,12 @@ body:
     attributes:
       label: Logs (If Relevant)
       render: text
-      description: Redact sensitive data.
+      description: Redact sensitive data
     validations:
       required: false
   - type: textarea
     id: extra
     attributes:
       label: Additional Context
-      description: Anything else helpful to understand or evaluate this.
     validations:
       required: false
