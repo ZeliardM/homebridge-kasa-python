@@ -19,27 +19,46 @@ jobs:
             .github/scripts/validate_pr_body.js
           fetch-depth: 0
 
-      - name: Collect PR metadata
+      - name: Collect PR metadata (base64 to avoid quoting issues)
         id: prmeta
         shell: bash
         run: |
-          # Directly serialize PR object to a single-line JSON output.
-          # toJson returns a properly escaped JSON string (newlines in body become \n).
-          echo "json=${{ toJson(github.event.pull_request) }}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          PR_B64=$(node - <<'NODE'
+const fs = require('fs');
+try {
+  const ev = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+  const pr = ev.pull_request || {};
+  const json = JSON.stringify(pr);          // single-line JSON
+  const b64 = Buffer.from(json, 'utf8').toString('base64');
+  process.stdout.write(b64);
+} catch (e) {
+  process.stderr.write("Failed to read/encode PR JSON: " + e.message + "\n");
+  process.exit(1);
+}
+NODE
+)
+          # Ensure non-empty
+          if [ -z "$PR_B64" ]; then
+            echo "Empty PR metadata (no pull_request object?)"
+            exit 1
+          fi
+          # Emit as a normal (single-line) output
+          echo "json_b64=$PR_B64" >> "$GITHUB_OUTPUT"
 
       - name: Validate
         shell: bash
         run: |
-            node .github/scripts/validate_pr_body.js
+          node .github/scripts/validate_pr_body.js
         env:
-          PR_DATA: ${{ steps.prmeta.outputs.json }}
+          PR_DATA_B64: ${{ steps.prmeta.outputs.json_b64 }}
           ACTOR: ${{ github.actor }}
 
       - name: Comment on failure
         if: failure()
         shell: bash
         run: |
-          gh pr comment "$PR_URL" --body "❌ Validation failed. Ensure base branch is 'beta', include at least one classification label, and (if breaking-change) provide a properly delimited explanation section."
+          gh pr comment "$PR_URL" --body "❌ Validation failed. Base must be 'beta', include a classification label, and (if breaking-change) provide required explanation markers & content."
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
