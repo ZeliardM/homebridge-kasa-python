@@ -56,5 +56,3 @@ Thank you for contributing to homebridge-kasa-python!
 
 ## Questions
 Open a support request issue or discussion.
-
-Happy hacking!
