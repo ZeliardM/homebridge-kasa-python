@@ -3,7 +3,7 @@
 PR Validation:
 - Base branch must be 'beta'
 - Needs at least one classification label: bug, fix, enhancement, feature, breaking-change, docs, dependency
-- If breaking-change: require markers with >= 60 chars explanation
+- If breaking-change: require markers with >= MIN_EXPL_CHARS explanation
 - Skip for github-actions[bot]
 Prints JSON to stdout:
   { "ok": true } on success
@@ -14,6 +14,7 @@ import json, os, sys
 CLASSIFICATION = {"bug","fix","enhancement","feature","breaking-change","docs","dependency"}
 START = "BREAKING_CHANGE_EXPLANATION_START"
 END = "BREAKING_CHANGE_EXPLANATION_END"
+MIN_EXPL_CHARS = 60
 
 def give(payload, code=0):
     print(json.dumps(payload))
@@ -58,9 +59,9 @@ def main():
             give({"ok": False, "code": "breaking_markers",
                   "message": f'breaking-change label requires markers:\n{START}\n...explanation...\n{END}'}, 1)
         expl = body[s+len(START):e].strip()
-        if len(expl) < 60:
+        if len(expl) < MIN_EXPL_CHARS:
             give({"ok": False, "code": "breaking_short",
-                  "message": f"Breaking change explanation too short ({len(expl)} chars). Provide rationale + migration steps."}, 1)
+                  "message": f"Breaking change explanation too short ({len(expl)} chars). Provide rationale + migration steps (min {MIN_EXPL_CHARS})."}, 1)
 
     give({"ok": True}, 0)
 
