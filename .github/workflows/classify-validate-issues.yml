@@ -1,0 +1,45 @@
+name: Classify & Validate Issues
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout script
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/scripts/classify_issue.py
+          fetch-depth: 0
+
+      - name: Classify
+        id: classify
+        run: |
+          set -euo pipefail
+          echo '${{ toJson(github.event.issue) }}' > issue.json
+          RESULT=$(ISSUE_JSON="$(cat issue.json)" python .github/scripts/classify_issue.py)
+          echo "$RESULT"
+          echo "result=$RESULT" >> "$GITHUB_OUTPUT"
+          NEEDS=$(echo "$RESULT" | jq -r '.needs_info')
+          LABEL=$(echo "$RESULT" | jq -r '.applied_label')
+          MSGS=$(echo "$RESULT" | jq -r '.messages | join("; ")')
+          if [ -n "$LABEL" ] && [ "$LABEL" != "null" ]; then
+            gh issue edit ${{ github.event.issue.number }} --add-label "$LABEL"
+          fi
+          if [ "$NEEDS" = "true" ]; then
+            gh issue edit ${{ github.event.issue.number }} --add-label needs-info
+            gh issue comment ${{ github.event.issue.number }} --body "⚠️ Additional information required:\n\n$MSGS"
+          else
+            if [ -n "$LABEL" ] && [ "$LABEL" != "null" ]; then
+              gh issue comment ${{ github.event.issue.number }} --body "✅ Classified as **$LABEL**."
+            fi
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
