@@ -2,7 +2,7 @@ name: Validate Pull Request
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened, labeled]
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled, ready_for_review]
 
 jobs:
   validate:
@@ -16,49 +16,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           sparse-checkout: |
-            .github/scripts/validate_pr_body.js
+            .github/scripts/validate_pr.py
           fetch-depth: 0
 
-      - name: Collect PR metadata (base64 to avoid quoting issues)
-        id: prmeta
+      - name: Run validation
+        id: validate
         shell: bash
         run: |
-          set -euo pipefail
-          PR_B64=$(node - <<'NODE'
-const fs = require('fs');
-try {
-  const ev = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
-  const pr = ev.pull_request || {};
-  const json = JSON.stringify(pr);          // single-line JSON
-  const b64 = Buffer.from(json, 'utf8').toString('base64');
-  process.stdout.write(b64);
-} catch (e) {
-  process.stderr.write("Failed to read/encode PR JSON: " + e.message + "\n");
-  process.exit(1);
-}
-NODE
-)
-          # Ensure non-empty
-          if [ -z "$PR_B64" ]; then
-            echo "Empty PR metadata (no pull_request object?)"
-            exit 1
-          fi
-          # Emit as a normal (single-line) output
-          echo "json_b64=$PR_B64" >> "$GITHUB_OUTPUT"
-
-      - name: Validate
-        shell: bash
-        run: |
-          node .github/scripts/validate_pr_body.js
-        env:
-          PR_DATA_B64: ${{ steps.prmeta.outputs.json_b64 }}
-          ACTOR: ${{ github.actor }}
+          python3 .github/scripts/validate_pr.py
 
       - name: Comment on failure
         if: failure()
         shell: bash
-        run: |
-          gh pr comment "$PR_URL" --body "❌ Validation failed. Base must be 'beta', include a classification label, and (if breaking-change) provide required explanation markers & content."
         env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "❌ PR validation failed. See workflow logs for details (base branch, labels, or breaking-change explanation)."
