@@ -12,7 +12,7 @@ Assumptions:
 - Tags: vX.Y.Z or vX.Y.Z-beta.N
 - Standard categories: Breaking Changes, Featured Changes, Bug Fixes, Other Changes
 """
-import os, re, json, sys, argparse, datetime, urllib.request, urllib.error
+import os, re, json, sys, subprocess, argparse, datetime, urllib.request, urllib.error
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Tuple, Set
 
@@ -302,16 +302,20 @@ def decide_beta_target(gh: GitHub, latest_stable: Optional[Version],
     return latest_published_beta.next_beta(), False
 
 def git_config():
-    os.system('git config --local user.email "action@github.com"')
-    os.system('git config --local user.name "GitHub Action"')
+    subprocess.run(["git", "config", "--local", "user.email", "action@github.com"], check=False)
+    subprocess.run(["git", "config", "--local", "user.name", "GitHub Action"], check=False)
 
 def git_commit(message: str):
     git_config()
-    diff = os.popen("git diff --name-only").read().strip().splitlines()
+    try:
+        diff = subprocess.check_output(["git", "diff", "--name-only"], text=True).strip().splitlines()
+    except subprocess.CalledProcessError:
+        diff = []
     if "CHANGELOG.md" in diff:
-        os.system("git add CHANGELOG.md")
-        os.system(f'git commit -m "{message}" || true')
-        os.system("git push || true")
+        subprocess.run(["git", "add", "CHANGELOG.md"], check=False)
+        # Use argument list to avoid shell interpolation issues
+        subprocess.run(["git", "commit", "-m", message], check=False)
+        subprocess.run(["git", "push"], check=False)
 
 def cmd_pr_merged(args):
     if args.base_branch != "beta":
