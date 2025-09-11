@@ -16,6 +16,12 @@ import os, re, json, sys, argparse, datetime, urllib.request, urllib.error
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Tuple, Set
 
+# If True, any "Breaking Changes" entries added after a beta release is published
+# will be automatically escalated (moved) to the next beta or stable release section.
+# Set to False if you want breaking changes to remain in the section where they were
+# originally added, even if that section has already been published.
+# Change this if your release process requires stricter or looser handling of
+# post-publication breaking changes in the changelog.
 ESCALATE_BREAKING_POST_PUBLISH = True
 CHANGELOG_FILE = "CHANGELOG.md"
 
