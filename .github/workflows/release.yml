@@ -10,7 +10,7 @@ jobs:
       github.event.release.prerelease == false &&
       github.event.release.target_commitish == 'latest' &&
       github.repository == 'ZeliardM/homebridge-kasa-python'
-    uses: ./.github/workflows/build.yml
+    uses: ./.github/workflows/build-lint-test.yml
 
   publish:
     needs: build_lint_test
@@ -24,8 +24,7 @@ jobs:
     secrets:
       npm_auth_token: ${{ secrets.NPM_TOKEN }}
 
-  github-releases-to-discord:
-    name: Discord Webhooks
+  release_to_discord:
     needs: [build_lint_test, publish]
     if: >
       github.event.release.prerelease == false &&
