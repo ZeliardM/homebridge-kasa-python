@@ -13,45 +13,33 @@ jobs:
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
-      - name: Dependabot metadata
+      - name: Fetch metadata
         id: metadata
         uses: dependabot/fetch-metadata@v2
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Determine target branch type
-        id: branch-type
-        run: |
-          BASE="${{ github.event.pull_request.base.ref }}"
-          echo "base_branch=$BASE" >> $GITHUB_OUTPUT
-          if [[ "$BASE" == beta* ]]; then
-            echo "branch_type=beta" >> $GITHUB_OUTPUT
-          elif [[ "$BASE" == latest ]]; then
-            echo "branch_type=latest" >> $GITHUB_OUTPUT
-          else
-            echo "branch_type=other" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Safety / breaking-change check
+      - name: Safety check
         id: safety
         run: |
+          set -euo pipefail
           LABELS='${{ toJson(github.event.pull_request.labels.*.name) }}'
-          UPDATE_TYPE='${{ steps.metadata.outputs.update-type }}'
-          has_breaking=false
-          echo "$LABELS" | grep -q '"breaking-change"' && has_breaking=true
+          UPDATE='${{ steps.metadata.outputs.update-type }}'
+          has_break=false
+          echo "$LABELS" | grep -q '"breaking-change"' && has_break=true
           is_major=false
-          [ "$UPDATE_TYPE" = "version-update:semver-major" ] && is_major=true
+            [ "$UPDATE" = "version-update:semver-major" ] && is_major=true
           block=false
-          if $has_breaking || $is_major; then block=true; fi
-          echo "has_breaking=$has_breaking" >> $GITHUB_OUTPUT
-          echo "is_major=$is_major" >> $GITHUB_OUTPUT
-          echo "block=$block" >> $GITHUB_OUTPUT
+          $has_break && block=true
+          $is_major && block=true
+          echo "block=$block" >> "$GITHUB_OUTPUT"
+          echo "update_type=$UPDATE" >> "$GITHUB_OUTPUT"
+          echo "has_breaking=$has_break" >> "$GITHUB_OUTPUT"
 
       - name: Label PR
         run: |
-          UPDATE_TYPE='${{ steps.metadata.outputs.update-type }}'
           gh pr edit "$PR_URL" --add-label dependency
-          case "$UPDATE_TYPE" in
+          case "${{ steps.metadata.outputs.update-type }}" in
             version-update:semver-major) gh pr edit "$PR_URL" --add-label dependency-major ;;
             version-update:semver-minor) gh pr edit "$PR_URL" --add-label dependency-minor ;;
             version-update:semver-patch) gh pr edit "$PR_URL" --add-label dependency-patch ;;
@@ -59,9 +47,7 @@ jobs:
           if [ "${{ steps.safety.outputs.has_breaking }}" = "true" ]; then
             gh pr edit "$PR_URL" --add-label breaking-change
           fi
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        env: { PR_URL: ${{ github.event.pull_request.html_url }}, GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
 
       - name: Auto-merge safe updates
         if: >
@@ -71,21 +57,10 @@ jobs:
         run: |
           gh pr edit "$PR_URL" --add-label auto-merged
           gh pr merge --auto --squash "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        env: { PR_URL: ${{ github.event.pull_request.html_url }}, GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
 
-      - name: Comment for manual review
+      - name: Comment for blocked updates
         if: steps.safety.outputs.block == 'true'
         run: |
-          REASON="Potential breaking change or major update."
-          gh pr comment "$PR_URL" --body "⚠️ $REASON
-
-          Update Type: \`${{ steps.metadata.outputs.update-type }}\`
-          Target Branch: \`${{ steps.branch-type.outputs.base_branch }}\`
-          Breaking Label: ${{ steps.safety.outputs.has_breaking }}
-
-          Manual review required."
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          gh pr comment "$PR_URL" --body "⚠️ Dependabot update requires manual review.\n\nType: \`${{ steps.metadata.outputs.update-type }}\`\nBreaking label: ${{ steps.safety.outputs.has_breaking }}\nAuto-merge skipped."
+        env: { PR_URL: ${{ github.event.pull_request.html_url }}, GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
