@@ -2,14 +2,14 @@
 name: Beta Release
 
 # This workflow handles the npm publishing and release creation for beta releases.
-# Beta changelog management is handled by the beta-management.yml workflow.
+# Beta changelog management is handled by the flow-beta.yml workflow.
 
 on:
   release:
     types: [published]
 
+# Only run for prereleases on the beta branch
 jobs:
-  # Only run for beta releases (prerelease=true and tag contains 'beta')
   build_lint_test:
     if: >
       github.event.release.prerelease == true &&
@@ -34,7 +34,7 @@ jobs:
     secrets:
       npm_auth_token: ${{ secrets.NPM_TOKEN }}
 
-  beta-release-to-discord:
+  beta_release_to_discord:
     name: Discord Webhooks
     needs: [build_lint_test, publish]
     if: >
