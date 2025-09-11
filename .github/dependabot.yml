@@ -13,21 +13,13 @@ updates:
     versioning-strategy: increase
     groups:
       typescript-eslint:
-        patterns:
-          - "@typescript-eslint/*"
-          - "typescript"
-          - "ts-essentials"
+        patterns: ["@typescript-eslint/*","typescript","ts-essentials"]
       eslint:
-        patterns:
-          - "@eslint/js"
-          - "eslint"
+        patterns: ["@eslint/js","eslint"]
       stylistic:
-        patterns:
-          - "@stylistic/eslint-plugin"
+        patterns: ["@stylistic/eslint-plugin"]
       md5:
-        patterns:
-          - "@types/md5"
-          - "md5"
+        patterns: ["@types/md5","md5"]
 
   - package-ecosystem: pip
     directory: /
