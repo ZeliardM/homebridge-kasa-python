@@ -23,17 +23,17 @@ jobs:
         id: prmeta
         shell: bash
         run: |
-          # Capture raw PR JSON safely (the expression is expanded by the Actions runner)
-          cat > pr_raw.json <<PRJSON
-${{ toJson(github.event.pull_request) }}
-PRJSON
+          # Write PR JSON to file (the expression is expanded before execution)
+          echo '${{ toJson(github.event.pull_request) }}' > pr_raw.json
 
-          # (Optional) Validate JSON (jq is usually preinstalled, but ensure)
+          # (Optional) Validate JSON structure
           if ! command -v jq >/dev/null 2>&1; then
             sudo apt-get update -y && sudo apt-get install -y jq
           fi
+            # Validate / pretty-print (discard output)
           jq . pr_raw.json >/dev/null
 
+          # Expose as multi-line workflow output
           {
             echo 'json<<EOF'
             cat pr_raw.json
@@ -50,7 +50,7 @@ PRJSON
       - name: Comment on failure
         if: failure()
         run: |
-          gh pr comment "$PR_URL" --body "❌ Validation failed. Ensure base branch is 'beta', at least one classification label is applied, and (if breaking-change) include the required explanation markers."
+          gh pr comment "$PR_URL" --body "❌ Validation failed. Ensure base branch is 'beta', add a classification label, and if breaking-change provide the required explanation section with markers."
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
