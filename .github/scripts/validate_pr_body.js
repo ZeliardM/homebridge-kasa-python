@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 /**
- * PR validation script:
- *  - Enforces base branch IS EXACTLY 'beta'
- *  - Requires at least one classification label (bug, enhancement, breaking-change, docs, dependency, fix, feature)
- *  - If breaking-change label present, requires explanation markers with minimum length
- *  - Bypasses validation for github-actions[bot]
+ * Strict PR validation (Option A / V3 semantics):
+ *  - Base branch MUST be exactly 'beta'
+ *  - Requires at least one classification label:
+ *      bug, fix, enhancement, feature, breaking-change, docs, dependency
+ *  - If breaking-change present:
+ *      Must contain markers:
+ *          BREAKING_CHANGE_EXPLANATION_START
+ *          BREAKING_CHANGE_EXPLANATION_END
+ *        with >= 60 chars of explanation content between them.
+ *  - Bypasses validation only for github-actions[bot].
  */
 
 function fail(msg) {
@@ -25,20 +30,23 @@ try {
 }
 
 const actor = process.env.ACTOR || '';
-const base = (pr.base && pr.base.ref) || '';
-const labels = Array.isArray(pr.labels) ? pr.labels.map(l => (l.name || '').toLowerCase()) : [];
-const body = pr.body || '';
-
 if (actor === 'github-actions[bot]') {
   console.log('Bypassing validation for github-actions[bot].');
   process.exit(0);
 }
 
-// Strict beta branch requirement
+const base = (pr.base && pr.base.ref) || '';
+const labels = Array.isArray(pr.labels)
+  ? pr.labels.map(l => (l.name || '').toLowerCase())
+  : [];
+const body = pr.body || '';
+
+// 1. Base branch enforcement
 if (base !== 'beta') {
-  fail(`PR base branch "${base}" is invalid. All contributions must target 'beta'.`);
+  fail(`PR base branch "${base}" is invalid. All PRs must target 'beta'.`);
 }
 
+// 2. Classification label requirement
 const CLASS_LABELS = [
   'bug',
   'fix',
@@ -57,25 +65,27 @@ if (!labels.some(l => CLASS_LABELS.includes(l))) {
   );
 }
 
-// Breaking change explanation validation
+// 3. Breaking change explanation requirement
 if (labels.includes('breaking-change')) {
   const startToken = 'BREAKING_CHANGE_EXPLANATION_START';
   const endToken = 'BREAKING_CHANGE_EXPLANATION_END';
   const startIdx = body.indexOf(startToken);
   const endIdx = body.indexOf(endToken);
+
   if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
     fail(
-      'breaking-change label present but explanation markers are missing or malformed. ' +
+      'breaking-change label present but explanation markers are missing or malformed.\n' +
       `Include:\n${startToken}\n... explanation ...\n${endToken}`
     );
   }
+
   const segment = body
     .substring(startIdx + startToken.length, endIdx)
     .trim();
 
   if (segment.length < 60) {
     fail(
-      `Breaking change explanation too short (<60 chars). Provide rationale and migration steps. Current length: ${segment.length}`
+      `Breaking change explanation too short (<60 chars). Provide rationale + migration steps. Current length: ${segment.length}`
     );
   }
 }
