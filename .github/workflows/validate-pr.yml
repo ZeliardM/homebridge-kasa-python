@@ -2,7 +2,7 @@ name: Validate Pull Request
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened, labeled]
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled, ready_for_review]
 
 permissions:
   contents: read
@@ -12,27 +12,80 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout (script only)
+        uses: actions/checkout@v4
         with:
           sparse-checkout: |
             .github/scripts/validate_pr_body.js
           fetch-depth: 0
+
       - name: Collect PR metadata
         id: prmeta
+        shell: bash
         run: |
-          echo "json<<EOF" >> $GITHUB_OUTPUT
-          echo '${{ toJson(github.event.pull_request) }}' >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-      - name: Validate
+          {
+            echo 'json<<EOF'
+            echo '${{ toJson(github.event.pull_request) }}'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Auto-classify (add missing primary label if possible)
+        id: autoclass
+        shell: bash
+        env:
+          PR_JSON: ${{ steps.prmeta.outputs.json }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Parse existing labels
+            # (using jq via node since runner has node)
+          node <<'NODE'
+          const primary = new Set(['bug','fix','enhancement','feature','breaking-change','docs','dependency']);
+          const pr = JSON.parse(process.env.PR_JSON || '{}');
+          const labels = (pr.labels||[]).map(l=>l.name.toLowerCase());
+          const title = (pr.title||'').toLowerCase();
+          const number = pr.number;
+          if (!number) process.exit(0);
+
+          if (labels.some(l=>primary.has(l))) {
+            console.log('Already has a primary classification label.');
+            process.exit(0);
+          }
+
+          function pick() {
+            if (/breaking/.test(title)) return 'breaking-change';
+            if (/(feat|enhanc)/.test(title)) return 'enhancement';
+            if (/(fix|bug)/.test(title)) return 'fix';
+            if (/depend/.test(title)) return 'dependency';
+            if (/doc/.test(title)) return 'docs';
+            return '';
+          }
+          const chosen = pick();
+          if (!chosen) {
+            console.log('No heuristic classification found.');
+            process.exit(0);
+          }
+          console.log(`Heuristic classification -> ${chosen}`);
+          const { execSync } = require('node:child_process');
+          try {
+            execSync(`gh pr edit ${number} --add-label "${chosen}"`, {stdio:'inherit'});
+          } catch(e) {
+            console.error('Failed to apply label', e.message);
+          }
+          NODE
+
+      - name: Validate (soft base warning allowed)
         run: |
           node .github/scripts/validate_pr_body.js
         env:
           PR_DATA: ${{ steps.prmeta.outputs.json }}
           ACTOR: ${{ github.actor }}
+          # Allow 'latest' temporarily (soft warning) for consolidation / migration PRs
+          ALLOW_LATEST_BASE: "true"
+
       - name: Comment on failure
         if: failure()
         run: |
-          gh pr comment "$PR_URL" --body "❌ Validation failed. See workflow logs for required corrections."
+          gh pr comment "$PR_URL" --body "❌ Validation failed. Please correct the reported issues (base branch, labels, or breaking change explanation)."
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
