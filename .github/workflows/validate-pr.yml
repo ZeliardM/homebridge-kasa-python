@@ -12,14 +12,14 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Checkout script
+      - name: Checkout validator
         uses: actions/checkout@v4
         with:
           sparse-checkout: |
             .github/scripts/validate_pr.py
           fetch-depth: 0
 
-      - name: Ensure jq is available
+      - name: Ensure jq
         shell: bash
         run: |
           if ! command -v jq >/dev/null 2>&1; then
@@ -27,37 +27,61 @@ jobs:
             sudo apt-get install -y jq
           fi
 
-      - name: Run validation
-        id: run
+      - name: Run validator and capture outputs
+        id: validate
         shell: bash
+        continue-on-error: true
         run: |
           set -euo pipefail
+          # Run the script but don't let a non-zero exit stop this step from producing outputs
+          set +e
           RESULT="$(python3 .github/scripts/validate_pr.py)"
-          echo "$RESULT"
+          STATUS=$?
+          set -e
+          echo "Validator exit code: $STATUS"
+          echo "Raw validator output: $RESULT"
 
-          OK="$(echo "$RESULT" | jq -r '.ok // empty')"
+          # Default outputs
+          OK="$(echo "$RESULT" | jq -r '.ok // empty' 2>/dev/null || true)"
+          MSG="$(echo "$RESULT" | jq -r '.message // ""' 2>/dev/null || true)"
+
+          # Normalize OK
+          if [ "$OK" = "true" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Store error message as base64-safe output
           if [ "$OK" != "true" ]; then
-            MSG="$(echo "$RESULT" | jq -r '.message // ""')"
-            {
-              echo "error_message<<EOF"
-              printf "%s\n" "$MSG"
-              echo "EOF"
-            } >> "$GITHUB_OUTPUT"
-            exit 1
+            MSG_B64="$(printf "%s" "$MSG" | base64 | tr -d '\n')"
+            echo "error_b64=$MSG_B64" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Comment on failure with details
-        if: failure()
+        if: steps.validate.outputs.ok != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          ERR="$(printf "%s" "${{ steps.validate.outputs.error_b64 }}" | base64 -d 2>/dev/null || true)"
+          if [ -z "$ERR" ]; then ERR="Validation failed."; fi
+
           {
             echo "❌ PR validation failed:"
             echo
-            echo "${{ steps.run.outputs.error_message }}"
+            echo '```'
+            echo "$ERR"
+            echo '```'
             echo
-            echo "Please correct and push updates."
+            echo 'Please correct and push updates.'
           } > body.txt
+
           gh pr comment ${{ github.event.pull_request.number }} --body-file body.txt
+
+      - name: Fail job if invalid
+        if: steps.validate.outputs.ok != 'true'
+        shell: bash
+        run: |
+          exit 1
