@@ -10,6 +10,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+
     steps:
       - name: Checkout script
         uses: actions/checkout@v4
@@ -23,11 +24,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          RESULT=$(python3 .github/scripts/validate_pr.py)
+          RESULT="$(python3 .github/scripts/validate_pr.py)"
           echo "$RESULT"
-          OK=$(echo "$RESULT" | jq -r '.ok')
+
+          # Parse with jq
+          OK="$(echo "$RESULT" | jq -r '.ok // empty')"
           if [ "$OK" != "true" ]; then
-            echo "error_message=$(echo "$RESULT" | jq -r '.message')" >> "$GITHUB_OUTPUT"
+            MSG="$(echo "$RESULT" | jq -r '.message // ""')"
+            # Pass message safely as base64 to avoid output parsing/newline issues
+            MSG_B64="$(printf "%s" "$MSG" | base64 | tr -d '\n')"
+            echo "error_message_b64=$MSG_B64" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
@@ -35,7 +41,18 @@ jobs:
         if: failure()
         shell: bash
         env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ERR="${{ steps.run.outputs.error_message }}"
-          gh pr comment ${{ github.event.pull_request.number }} --body "❌ PR validation failed:\n\`\`\`\n$ERR\n\`\`\`\nPlease correct and push updates."
+          set -euo pipefail
+          ERR="$(printf "%s" "${{ steps.run.outputs.error_message_b64 }}" | base64 -d || true)"
+          if [ -z "$ERR" ]; then ERR="Validation failed (no details provided)."; fi
+          {
+            echo "❌ PR validation failed:"
+            echo
+            echo '```'
+            echo "$ERR"
+            echo '```'
+            echo
+            echo 'Please correct and push updates.'
+          } > body.txt
+          gh pr comment ${{ github.event.pull_request.number }} --body-file body.txt
