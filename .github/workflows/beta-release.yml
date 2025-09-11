@@ -10,7 +10,7 @@ jobs:
       github.event.release.prerelease == true &&
       contains(github.event.release.tag_name, 'beta') &&
       github.repository == 'ZeliardM/homebridge-kasa-python'
-    uses: ./.github/workflows/build.yml
+    uses: ./.github/workflows/build-lint-test.yml
 
   publish:
     needs: build_lint_test
@@ -29,8 +29,7 @@ jobs:
     secrets:
       npm_auth_token: ${{ secrets.NPM_TOKEN }}
 
-  github-releases-to-discord:
-    name: Discord Webhooks
+  beta-release-to-discord:
     needs: [build_lint_test, publish]
     if: >
       github.event.release.prerelease == true &&
