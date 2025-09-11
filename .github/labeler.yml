@@ -1,38 +1,33 @@
-# Add 'branding' label to any changes within 'branding' folder
-branding:
-- changed-files:
-  - any-glob-to-any-file: branding/**
+# PR Auto Labeling Rules
+# (Issues are auto-labeled via workflow + classifier script)
 
-# Add 'docs' label to any change to .md files
 docs:
 - changed-files:
   - any-glob-to-any-file: '**/*.md'
 
-# Add 'enhancement' label to src or config schema changes
+branding:
+- changed-files:
+  - any-glob-to-any-file: branding/**
+
 enhancement:
-  - changed-files:
-    - any-glob-to-any-file: 'src/**/*'
-    - any-glob-to-any-file: 'config.schema.json'
+- changed-files:
+  - any-glob-to-any-file: 'src/**/*'
+  - any-glob-to-any-file: 'config.schema.json'
+- head-branch: '^feature/.*'
+- head-branch: '^feat/.*'
+- head-branch: '.*/feature-.*'
+- title: '^feat.*'
+- title: '^Feature.*'
 
-# Add 'dependency' label to dependency manifest changes
 dependency:
-  - changed-files:
-    - any-glob-to-any-file: 'package.json'
-    - any-glob-to-any-file: 'package-lock.json'
-    - any-glob-to-any-file: 'requirements.txt'
-
-beta:
-- base-branch: 'beta*'
-
-alpha:
-- base-branch: 'alpha*'
-
-latest:
-- base-branch: 'latest'
+- changed-files:
+  - any-glob-to-any-file: 'package.json'
+  - any-glob-to-any-file: 'package-lock.json'
+  - any-glob-to-any-file: 'requirements.txt'
 
 workflow:
 - changed-files:
-  - any-glob-to-any-file: .github/**
+  - any-glob-to-any-file: '.github/**'
 
 fix:
 - head-branch: '^fix/.*'
@@ -41,22 +36,21 @@ fix:
 - title: '^fix.*'
 - title: '^Fix.*'
 
-feature:
-- head-branch: '^feature/.*'
-- head-branch: '^feat/.*'
-- head-branch: '.*/feature-.*'
-- title: '^feat.*'
-- title: '^Feature.*'
-
 bug:
 - head-branch: '^bug/.*'
 - head-branch: '.*/bug-.*'
 - title: '.*[Bb]ug.*'
 
-# Unified breaking-change detection (case / variants)
 breaking-change:
 - head-branch: '.*breaking.*'
-- title: '.*breaking.*'
-- title: '.*BREAKING.*'
-- title: '.*breaking change.*'
 - title: '.*BREAKING CHANGE.*'
+- title: '.*breaking change.*'
+- title: '.*BREAKING.*'
+- title: '.*breaking.*'
+
+beta:
+- base-branch: 'beta*'
+latest:
+- base-branch: 'latest'
+alpha:
+- base-branch: 'alpha*'
