@@ -1,3 +1,20 @@
-/src/ @ZeliardM
-/config.schema.json @ZeliardM
-/.github/workflows/ @ZeliardM
+# Default owner for everything
+*                                   @ZeliardM
+
+# Core source and configuration
+/src/                               @ZeliardM
+/config.schema.json                  @ZeliardM
+/package.json                        @ZeliardM
+/requirements.txt                    @ZeliardM
+/CHANGELOG.md                        @ZeliardM
+/README.md                           @ZeliardM
+/CONTRIBUTING.md                     @ZeliardM
+
+# GitHub configuration and automation
+/.github/workflows/                  @ZeliardM
+/.github/scripts/                    @ZeliardM
+/.github/ISSUE_TEMPLATE/             @ZeliardM
+/.github/labeler.yml                 @ZeliardM
+/.github/dependabot.yml              @ZeliardM
+/.github/release-drafter.yml         @ZeliardM
+/.github/copilot-instructions.md     @ZeliardM
