@@ -12,7 +12,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Checkout script only
+      - name: Checkout validation script
         uses: actions/checkout@v4
         with:
           sparse-checkout: |
@@ -23,34 +23,23 @@ jobs:
         id: prmeta
         shell: bash
         run: |
-          # Write PR JSON to file (the expression is expanded before execution)
-          echo '${{ toJson(github.event.pull_request) }}' > pr_raw.json
-
-          # (Optional) Validate JSON structure
-          if ! command -v jq >/dev/null 2>&1; then
-            sudo apt-get update -y && sudo apt-get install -y jq
-          fi
-            # Validate / pretty-print (discard output)
-          jq . pr_raw.json >/dev/null
-
-          # Expose as multi-line workflow output
-          {
-            echo 'json<<EOF'
-            cat pr_raw.json
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
+          # Directly serialize PR object to a single-line JSON output.
+          # toJson returns a properly escaped JSON string (newlines in body become \n).
+          echo "json=${{ toJson(github.event.pull_request) }}" >> "$GITHUB_OUTPUT"
 
       - name: Validate
+        shell: bash
         run: |
-          node .github/scripts/validate_pr_body.js
+            node .github/scripts/validate_pr_body.js
         env:
           PR_DATA: ${{ steps.prmeta.outputs.json }}
           ACTOR: ${{ github.actor }}
 
       - name: Comment on failure
         if: failure()
+        shell: bash
         run: |
-          gh pr comment "$PR_URL" --body "❌ Validation failed. Ensure base branch is 'beta', add a classification label, and if breaking-change provide the required explanation section with markers."
+          gh pr comment "$PR_URL" --body "❌ Validation failed. Ensure base branch is 'beta', include at least one classification label, and (if breaking-change) provide a properly delimited explanation section."
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
