@@ -1,21 +1,16 @@
 ---
 name: Release
 
-# This workflow handles npm publishing for regular releases (not beta releases).
-# It is triggered when releases are published and only runs for:
-# - Non-prerelease releases (prerelease=false)
-# - Releases from the latest branch
-# - The official repository only
-#
-# Beta releases are handled by the beta-release.yml workflow instead.
+# This workflow handles the npm publishing and release creation for stable releases.
+# Changelog management is handled by the flow-stable.yml workflow.
 
 on:
   release:
     types: [published]
 
+# Only run for non-beta releases on the latest branch
 jobs:
   build_lint_test:
-    # Only run for non-beta releases on the latest branch
     if: >
       github.event.release.prerelease == false &&
       github.event.release.target_commitish == 'latest' &&
