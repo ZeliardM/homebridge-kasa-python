@@ -16,15 +16,15 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           days-before-issue-stale: 60
-            # ...
           days-before-issue-close: 7
           days-before-pr-stale: 30
           days-before-pr-close: 7
           stale-issue-label: stale
           stale-pr-label: stale
-          exempt-issue-labels: 'pinned,security,enhancement,bug,breaking-change,dont-stale'
-          exempt-pr-labels: 'pinned,security,work-in-progress,breaking-change,dont-stale'
+          exempt-issue-labels: 'pinned,security,enhancement,bug,breaking-change,needs-info'
+          exempt-pr-labels: 'pinned,security,work-in-progress,breaking-change'
           exempt-all-pr-assignees: true
+            # If you want needs-info issues to stale sooner, remove from exempt and add custom days.
           exempt-all-issue-assignees: true
           operations-per-run: 50
           stale-issue-message: |
