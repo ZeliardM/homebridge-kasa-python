@@ -1,13 +1,4 @@
----
 name: Release
-
-# This workflow handles npm publishing for regular releases (not beta releases).
-# It is triggered when releases are published and only runs for:
-# - Non-prerelease releases (prerelease=false)
-# - Releases from the latest branch
-# - The official repository only
-#
-# Beta releases are handled by the beta-release.yml workflow instead.
 
 on:
   release:
@@ -15,7 +6,6 @@ on:
 
 jobs:
   build_lint_test:
-    # Only run for non-beta releases on the latest branch
     if: >
       github.event.release.prerelease == false &&
       github.event.release.target_commitish == 'latest' &&
@@ -34,21 +24,18 @@ jobs:
     secrets:
       npm_auth_token: ${{ secrets.NPM_TOKEN }}
 
-    # Optional Discord notification (commented out)
-    # github-releases-to-discord:
-  #   name: Discord Webhooks
-  #   needs: [build_lint_test, publish]
-  #   if: >
-  #     github.event.release.prerelease == false &&
-  #     github.event.release.target_commitish == 'latest' &&
-  #     github.repository == 'ZeliardM/homebridge-kasa-python'
-  #   uses: homebridge/.github/.github/workflows/discord-webhooks.yml@latest
-  #   with:
-  #     title: "Kasa Python Release"
-  #     description: |
-  #       Version `${{ github.event.release.tag_name }}`
-  #     url: >
-  #       https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/${{
-  #       github.event.release.tag_name }}
-  #   secrets:
-  #     DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL_LATEST }}
+  github-releases-to-discord:
+    name: Discord Webhooks
+    needs: [build_lint_test, publish]
+    if: >
+      github.event.release.prerelease == false &&
+      github.event.release.target_commitish == 'latest' &&
+      github.repository == 'ZeliardM/homebridge-kasa-python'
+    uses: homebridge/.github/.github/workflows/discord-webhooks.yml@latest
+    with:
+      title: "Kasa Python Release"
+      description: |
+        Version `${{ github.event.release.tag_name }}`
+      url: https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/${{ github.event.release.tag_name }}
+    secrets:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
