@@ -1,17 +1,17 @@
----
 name: Build, Lint, and Test
 
 on:
   push:
     branches: [latest]
     paths-ignore:
-      - '**.md'
+      - '**/*.md'
       - 'docs/**'
       - '.github/workflows/flow-*.yml'
   pull_request:
     paths-ignore:
-      - '**.md'
+      - '**/*.md'
       - 'docs/**'
+      - '.github/workflows/flow-*.yml'
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -38,10 +38,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ${{ fromJson(inputs.node_versions ||
-          '["20","22","24"]') }}
-        python-version: ${{ fromJson(inputs.python_versions ||
-          '["3.11","3.12","3.13"]') }}
+        node-version: ${{ fromJson(inputs.node_versions || '["20","22","24"]') }}
+        python-version: ${{ fromJson(inputs.python_versions || '["3.11","3.12","3.13"]') }}
 
     steps:
       - uses: actions/checkout@v4
@@ -49,8 +47,8 @@ jobs:
       - name: Set up Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
+            node-version: ${{ matrix.node-version }}
+            cache: npm
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -96,7 +94,6 @@ jobs:
               mod=$(echo "$pkg" | cut -d'=' -f1 | tr '-' '_')
               case "$mod" in
                 python_kasa) mod="kasa" ;;
-                # add more mappings here if needed
               esac
               echo "Checking import: $mod"
               python -c "import ${mod}"
