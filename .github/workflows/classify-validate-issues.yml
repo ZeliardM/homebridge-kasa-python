@@ -19,27 +19,45 @@ jobs:
             .github/scripts/classify_issue.py
           fetch-depth: 0
 
+      - name: Ensure jq
+        shell: bash
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
       - name: Classify
         id: classify
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           echo '${{ toJson(github.event.issue) }}' > issue.json
-          RESULT=$(ISSUE_JSON="$(cat issue.json)" python .github/scripts/classify_issue.py)
+          RESULT="$(ISSUE_JSON="$(cat issue.json)" python .github/scripts/classify_issue.py)"
           echo "$RESULT"
           echo "result=$RESULT" >> "$GITHUB_OUTPUT"
-          NEEDS=$(echo "$RESULT" | jq -r '.needs_info')
-          LABEL=$(echo "$RESULT" | jq -r '.applied_label')
-          MSGS=$(echo "$RESULT" | jq -r '.messages | join("; ")')
-          if [ -n "$LABEL" ] && [ "$LABEL" != "null" ]; then
+
+          NEEDS="$(echo "$RESULT" | jq -r '.needs_info // false')"
+          LABEL="$(echo "$RESULT" | jq -r '.applied_label // empty')"
+          MSGS="$(echo "$RESULT" | jq -r '.messages | join("; ") // empty')"
+
+          if [ -n "$LABEL" ]; then
             gh issue edit ${{ github.event.issue.number }} --add-label "$LABEL"
           fi
+
           if [ "$NEEDS" = "true" ]; then
             gh issue edit ${{ github.event.issue.number }} --add-label needs-info
-            gh issue comment ${{ github.event.issue.number }} --body "⚠️ Additional information required:\n\n$MSGS"
+            {
+              echo "⚠️ Additional information required:"
+              echo
+              echo "$MSGS"
+            } > body.txt
+            gh issue comment ${{ github.event.issue.number }} --body-file body.txt
           else
-            if [ -n "$LABEL" ] && [ "$LABEL" != "null" ]; then
+            if [ -n "$LABEL" ]; then
+              echo "✅ Classified as $LABEL"
               gh issue comment ${{ github.event.issue.number }} --body "✅ Classified as **$LABEL**."
             fi
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
