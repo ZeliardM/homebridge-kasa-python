@@ -40,7 +40,7 @@ jobs:
           has_breaking=false
           echo "$LABELS" | grep -q '"breaking-change"' && has_breaking=true
           is_major=false
-            [ "$UPDATE_TYPE" = "version-update:semver-major" ] && is_major=true
+          [ "$UPDATE_TYPE" = "version-update:semver-major" ] && is_major=true
           block=false
           if $has_breaking || $is_major; then block=true; fi
           echo "has_breaking=$has_breaking" >> $GITHUB_OUTPUT
