@@ -8,7 +8,7 @@
  *      Must contain markers:
  *          BREAKING_CHANGE_EXPLANATION_START
  *          BREAKING_CHANGE_EXPLANATION_END
- *        with >= 60 chars of explanation content between them.
+ *        with >= 60 chars between them.
  *  - Bypasses validation only for github-actions[bot].
  */
 
