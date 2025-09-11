@@ -1,0 +1,38 @@
+name: Validate Pull Request
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/scripts/validate_pr_body.js
+          fetch-depth: 0
+      - name: Collect PR metadata
+        id: prmeta
+        run: |
+          echo "json<<EOF" >> $GITHUB_OUTPUT
+          echo '${{ toJson(github.event.pull_request) }}' >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Validate
+        run: |
+          node .github/scripts/validate_pr_body.js
+        env:
+          PR_DATA: ${{ steps.prmeta.outputs.json }}
+          ACTOR: ${{ github.actor }}
+      - name: Comment on failure
+        if: failure()
+        run: |
+          gh pr comment "$PR_URL" --body "❌ Validation failed. See workflow logs for required corrections."
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
