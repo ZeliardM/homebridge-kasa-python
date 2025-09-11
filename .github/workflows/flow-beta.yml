@@ -28,16 +28,22 @@ jobs:
       - name: Update changelog & beta draft
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           python .github/scripts/release_manager.py pr-merged \
             --github-token "${GITHUB_TOKEN}" \
-            --repo "${{ github.repository }}" \
-            --pr-title "${{ github.event.pull_request.title }}" \
-            --pr-author "${{ github.event.pull_request.user.login }}" \
-            --pr-number "${{ github.event.pull_request.number }}" \
-            --pr-labels '${{ toJson(github.event.pull_request.labels.*.name) }}' \
-            --base-branch "${{ github.event.pull_request.base.ref }}"
+            --repo "${REPO}" \
+            --pr-title "${PR_TITLE}" \
+            --pr-author "${PR_AUTHOR}" \
+            --pr-number "${PR_NUMBER}" \
+            --pr-labels "${PR_LABELS}" \
+            --base-branch "${BASE_BRANCH}"
 
   finalize-beta:
     if: github.event_name == 'release' && github.event.release.prerelease == true && contains(github.event.release.tag_name, 'beta')
@@ -50,10 +56,11 @@ jobs:
       - name: Finalize beta
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
           python .github/scripts/release_manager.py publish-beta \
             --github-token "${GITHUB_TOKEN}" \
-            --repo "${{ github.repository }}" \
-            --version "${{ github.event.release.tag_name }}" \
-            --release-body "${{ github.event.release.body }}"
+            --repo "${REPO}" \
+            --version "${TAG}"
