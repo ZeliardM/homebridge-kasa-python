@@ -96,9 +96,10 @@ jobs:
           CID="$(gh api repos/$REPO/issues/$PR_NUM/comments --paginate \
             --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
           if [ -n "$CID" ]; then
-            gh api repos/$REPO/issues/comments/$CID -X PATCH -f body=@body.txt
+            BODY="$(cat body.txt)"
+            gh api repos/$REPO/issues/comments/$CID -X PATCH -f body="$BODY"
           else
-            gh api repos/$REPO/issues/$PR_NUM/comments -f body=@body.txt
+            gh pr comment "$PR_NUM" --body-file body.txt
           fi
 
       - name: Remove sticky comment when no longer blocked
