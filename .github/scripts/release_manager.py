@@ -3,9 +3,9 @@
 Unified Release Manager (beta + stable):
 Actions:
   pr-merged         (update or create beta draft & CHANGELOG; align package.json/lock)
-  publish-beta      (finalize beta section/date + housekeeping entry)
+  publish-beta      (finalize beta section/date + housekeeping entry; retag to include finalize commit)
   convert-to-stable (aggregate published betas into stable draft; align package.json/lock)
-  publish-stable    (finalize stable section/date + housekeeping entry)
+  publish-stable    (finalize stable section/date + housekeeping entry; retag to include finalize commit)
 
 Assumptions:
 - Only one canonical beta branch: 'beta'
@@ -16,13 +16,6 @@ import os, re, json, sys, subprocess, argparse, datetime, urllib.request, urllib
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Tuple
 
-# If True, any "Breaking Changes" entries added after a beta release is published
-# will be automatically escalated (moved) to the next beta or stable release section.
-# Set to False if you want breaking changes to remain in the section where they were
-# originally added, even if that section has already been published.
-# Change this if your release process requires stricter or looser handling of
-# post-publication breaking changes in the changelog.
-ESCALATE_BREAKING_POST_PUBLISH = True
 CHANGELOG_FILE = "CHANGELOG.md"
 
 CATEGORY_ORDER = [
@@ -34,7 +27,8 @@ CATEGORY_ORDER = [
 
 LABEL_BREAKING = {"breaking-change"}
 LABEL_FEATURE = {"enhancement", "feature"}
-LABEL_FIX = {"fix", "bug", "bugfix", "docs", "documentation", "dependency"}
+LABEL_FIX = {"fix", "bug", "bugfix"}
+LABEL_DOCS = {"docs", "documentation"}
 
 SEMVER = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$")
 SECTION_RE = re.compile(r"^## \[(v[0-9]+\.[0-9]+\.[0-9]+(?:-beta\.[0-9]+)?)\]", re.MULTILINE)
@@ -137,6 +131,7 @@ def categorize(labels: List[str]) -> str:
     if low & LABEL_BREAKING: return "Breaking Changes"
     if low & LABEL_FEATURE: return "Featured Changes"
     if low & LABEL_FIX: return "Bug Fixes"
+    if low & LABEL_DOCS: return "Other Changes"
     return "Other Changes"
 
 def bump_type(labels: List[str]) -> str:
@@ -173,14 +168,8 @@ def npm_write_version(new_version_no_v: str) -> bool:
         print("[release-manager] npm not available; cannot align package versions.")
         return False
     try:
-        subprocess.run(
-            ["npm", "pkg", "set", f"version={new_version_no_v}"],
-            check=True
-        )
-        subprocess.run(
-            ["npm", "i", "--package-lock-only"],
-            check=False
-        )
+        subprocess.run(["npm", "pkg", "set", f"version={new_version_no_v}"], check=True)
+        subprocess.run(["npm", "i", "--package-lock-only"], check=False)
         print(f"[release-manager] Updated package.json version -> {new_version_no_v}")
         return True
     except subprocess.CalledProcessError as e:
@@ -214,6 +203,25 @@ def ensure_repo_node_version(version: Version, context: str):
             ["package.json", "package-lock.json"],
             f"chore: align package versions to {version.tag()} ({context})"
         )
+
+def git_tag_force(tag: str):
+    """Move tag to current HEAD (include finalize commits) and push."""
+    try:
+        subprocess.run(["git", "fetch", "--tags"], check=False)
+        subprocess.run(["git", "tag", "-f", tag], check=True)
+        subprocess.run(["git", "push", "--force", "origin", tag], check=True)
+        print(f"[release-manager] Tag {tag} updated to HEAD")
+    except subprocess.CalledProcessError as e:
+        print(f"[release-manager] Failed to update tag {tag}: {e}", file=sys.stderr)
+
+def git_delete_tag(tag: str):
+    """Delete a remote tag (ghost tag cleanup)."""
+    try:
+        subprocess.run(["git", "fetch", "--tags"], check=False)
+        subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=True)
+        print(f"[release-manager] Deleted remote tag {tag}")
+    except subprocess.CalledProcessError as e:
+        print(f"[release-manager] Failed to delete tag {tag}: {e}", file=sys.stderr)
 
 def insert_entry(content: str, version: Version, category: str, entry: str,
                  compare_from: Optional[str], add_date=False, publish_date=None) -> str:
@@ -340,11 +348,15 @@ def latest_versions(changelog: str) -> Tuple[Optional[Version], Optional[Version
     return (max(stable) if stable else None, max(beta) if beta else None)
 
 def find_unpublished_beta_draft(gh: GitHub) -> Optional[Version]:
+    drafts: List[Version] = []
     for r in gh.releases():
-        if r.get("draft") and r.get("prerelease") and "beta" in r.get("tag_name",""):
-            try: return Version.parse(r["tag_name"])
-            except: continue
-    return None
+        tn = r.get("tag_name","")
+        if r.get("draft") and r.get("prerelease") and "beta" in tn:
+            try:
+                drafts.append(Version.parse(tn))
+            except:
+                continue
+    return max(drafts) if drafts else None
 
 def find_latest_draft_stable(gh: GitHub) -> Optional[Tuple[Version, dict]]:
     """Return the newest draft stable release (vX.Y.Z, draft=true, prerelease=false) if any."""
@@ -375,19 +387,15 @@ def decide_beta_target(gh: GitHub, latest_stable: Optional[Version],
                        labels: List[str]) -> Tuple[Version,bool]:
     bump = bump_type(labels)
     required_base = bump_base(latest_stable, bump)
-    if existing_unpublished:
-        if not is_published(gh, existing_unpublished):
-            if required_base > existing_unpublished.base():
-                return Version(required_base.major, required_base.minor, required_base.patch, 0), True
-            return existing_unpublished, False
-    if latest_published_beta is None:
-        return Version(required_base.major, required_base.minor, required_base.patch, 0), False
-    if bump=="major" and ESCALATE_BREAKING_POST_PUBLISH:
-        new_base=latest_published_beta.base().bump_major()
-        return Version(new_base.major,new_base.minor,new_base.patch,0), False
-    if required_base > latest_published_beta.base():
-        return Version(required_base.major, required_base.minor, required_base.patch,0), False
-    return latest_published_beta.next_beta(), False
+    if existing_unpublished and not is_published(gh, existing_unpublished):
+        if required_base > existing_unpublished.base():
+            return Version(required_base.major, required_base.minor, required_base.patch, 0), True
+        return existing_unpublished, False
+    if latest_published_beta is not None:
+        if required_base > latest_published_beta.base():
+            return Version(required_base.major, required_base.minor, required_base.patch, 0), False
+        return latest_published_beta.next_beta(), False
+    return Version(required_base.major, required_base.minor, required_base.patch, 0), False
 
 def git_config():
     subprocess.run(["git", "config", "--local", "user.email", "action@github.com"], check=False)
@@ -409,7 +417,12 @@ def cmd_pr_merged(args):
         print("[release-manager] PR base not beta, ignoring.")
         return
     gh=GitHub(args.github_token, args.repo)
-    labels=json.loads(args.pr_labels or "[]")
+    if getattr(args, "pr_labels_file", None) and args.pr_labels_file and os.path.exists(args.pr_labels_file):
+        with open(args.pr_labels_file, "r", encoding="utf-8") as f:
+            labels = json.load(f)
+    else:
+        labels=json.loads(args.pr_labels or "[]")
+
     content=read_changelog()
     latest_stable,_=latest_versions(content)
 
@@ -423,13 +436,11 @@ def cmd_pr_merged(args):
     existing_unpublished=find_unpublished_beta_draft(gh)
 
     draft_stable = find_latest_draft_stable(gh)
-    convert_from_stable: Optional[Tuple[Version, dict]] = draft_stable
-
     category=categorize(labels)
     entry=f"- {args.pr_title} @{args.pr_author} [#{args.pr_number}]"
 
-    if convert_from_stable:
-        base_version, stable_rel = convert_from_stable
+    if draft_stable:
+        base_version, stable_rel = draft_stable
         target_version = Version(base_version.major, base_version.minor, base_version.patch, 0)
 
         if f"## [{base_version.tag()}]" in content:
@@ -460,7 +471,10 @@ def cmd_pr_merged(args):
 
         if stable_rel.get("id"):
             gh.delete_release(stable_rel["id"])
-            print(f"[release-manager] Deleted draft stable release {base_version.tag()} after converting to {target_version.tag()}")
+            print(f"[release-manager] Deleted draft stable release {base_version.tag()}")
+
+        if (os.environ.get("DELETE_DRAFT_STABLE_TAG","").lower() == "true"):
+            git_delete_tag(base_version.tag())
 
         print(f"[release-manager] Converted draft stable {base_version.tag()} -> beta draft {target_version.tag()}")
         return
@@ -514,6 +528,7 @@ def cmd_finalize_beta(args):
     content=add_publish_date(content, v.tag(), date)
     write_changelog(content)
     git_commit(f"Finalize beta release {v.tag()} in CHANGELOG.md")
+    git_tag_force(v.tag())
     latest_stable,_=latest_versions(content)
     body=build_beta_body(v, content, latest_stable)
     rel=gh.release_by_tag(v.tag())
@@ -595,6 +610,7 @@ def cmd_finalize_stable(args):
     content=add_publish_date(content, v.tag(), date)
     write_changelog(content)
     git_commit(f"Finalize stable release {v.tag()} in CHANGELOG.md")
+    git_tag_force(v.tag())
     versions=[x for x in list_versions(content) if not x.is_beta()]
     versions_sorted=sorted(versions)
     prev=Version(0,0,0)
@@ -616,6 +632,7 @@ def main():
     m.add_argument("--pr-author", required=True)
     m.add_argument("--pr-number", required=True)
     m.add_argument("--pr-labels", default="[]")
+    m.add_argument("--pr-labels-file", default="")
     m.add_argument("--base-branch", required=True)
     fb=sub.add_parser("publish-beta")
     fb.add_argument("--github-token", required=True)

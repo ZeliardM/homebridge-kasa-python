@@ -3,12 +3,8 @@ name: Build, Lint, and Test
 on:
   push:
     branches: [latest, beta]
-    paths-ignore:
-      - '**/*.md'
   pull_request:
     branches: [latest, beta]
-    paths-ignore:
-      - '**/*.md'
   workflow_dispatch:
   workflow_call:
     inputs:

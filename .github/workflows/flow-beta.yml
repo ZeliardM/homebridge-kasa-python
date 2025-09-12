@@ -28,15 +28,21 @@ jobs:
           node-version: 22
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
+
+      - name: Write PR labels to file (safe serialization)
+        run: |
+          mkdir -p .github
+          printf '%s\n' '${{ toJson(github.event.pull_request.labels.*.name) }}' > .github/pr-labels.json
+
       - name: Update changelog, beta draft, and align package versions
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
           BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
           REPO: ${{ github.repository }}
+          DELETE_DRAFT_STABLE_TAG: 'true'
         run: |
           set -euo pipefail
           python .github/scripts/release_manager.py pr-merged \
@@ -45,7 +51,7 @@ jobs:
             --pr-title "${PR_TITLE}" \
             --pr-author "${PR_AUTHOR}" \
             --pr-number "${PR_NUMBER}" \
-            --pr-labels "${PR_LABELS}" \
+            --pr-labels-file ".github/pr-labels.json" \
             --base-branch "${BASE_BRANCH}"
 
   finalize-beta:
