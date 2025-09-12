@@ -27,7 +27,7 @@ jobs:
       id-token: write
     uses: homebridge/.github/.github/workflows/npm-publish-esm.yml@latest
     secrets:
-      npm_auth_token: ${{ secrets.npm_token }}
+      npm_auth_token: ${{ secrets.NPM_TOKEN }}
 
   release_to_discord:
     needs: [build_lint_test, publish]
@@ -43,4 +43,4 @@ jobs:
       url: >
         https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/${{ github.event.release.tag_name }}
     secrets:
-      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}

@@ -28,7 +28,6 @@ jobs:
           fi
 
       - name: Classify
-        id: classify
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -36,8 +35,6 @@ jobs:
           set -euo pipefail
           echo '${{ toJson(github.event.issue) }}' > issue.json
           RESULT="$(ISSUE_JSON="$(cat issue.json)" python .github/scripts/classify_issue.py)"
-          echo "$RESULT"
-          echo "result=$RESULT" >> "$GITHUB_OUTPUT"
 
           NEEDS="$(echo "$RESULT" | jq -r '.needs_info // false')"
           LABEL="$(echo "$RESULT" | jq -r '.applied_label // empty')"
@@ -47,17 +44,35 @@ jobs:
             gh issue edit ${{ github.event.issue.number }} --add-label "$LABEL"
           fi
 
+          MARK="<!-- COPILOT-STICKY:ISSUE-CLASSIFIER -->"
+          REPO="${{ github.repository }}"
+          NUM="${{ github.event.issue.number }}"
+
           if [ "$NEEDS" = "true" ]; then
-            gh issue edit ${{ github.event.issue.number }} --add-label needs-info
+            gh issue edit "$NUM" --add-label needs-info || true
+
             {
               echo "⚠️ Additional information required:"
               echo
               echo "$MSGS"
+              echo
+              echo "$MARK"
             } > body.txt
-            gh issue comment ${{ github.event.issue.number }} --body-file body.txt
+
+            CID="$(gh api repos/$REPO/issues/$NUM/comments --paginate \
+              --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
+
+            if [ -n "$CID" ]; then
+              gh api repos/$REPO/issues/comments/$CID -X PATCH -f body=@body.txt
+            else
+              gh api repos/$REPO/issues/$NUM/comments -f body=@body.txt
+            fi
           else
-            if [ -n "$LABEL" ]; then
-              echo "✅ Classified as $LABEL"
-              gh issue comment ${{ github.event.issue.number }} --body "✅ Classified as **$LABEL**."
+            gh issue edit "$NUM" --remove-label needs-info || true
+
+            CID="$(gh api repos/$REPO/issues/$NUM/comments --paginate \
+              --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
+            if [ -n "$CID" ]; then
+              gh api repos/$REPO/issues/comments/$CID -X DELETE || true
             fi
           fi

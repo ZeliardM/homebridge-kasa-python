@@ -1,4 +1,3 @@
----
 name: Beta Release
 
 # This workflow handles the npm publishing and release creation for beta releases.
@@ -27,10 +26,8 @@ jobs:
       id-token: write
     uses: homebridge/.github/.github/workflows/npm-publish-esm.yml@latest
     with:
-      tag: 'beta'
-      npm_version_command: 'pre'
-      pre_id: 'beta'
-      override_version: ${{ github.event.release.tag_name }}
+      tag: beta
+      dynamically_adjust_version: true
     secrets:
       npm_auth_token: ${{ secrets.NPM_TOKEN }}
 
@@ -49,4 +46,4 @@ jobs:
       url: >
         https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/${{ github.event.release.tag_name }}
     secrets:
-      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}

@@ -57,5 +57,4 @@ jobs:
           python .github/scripts/release_manager.py publish-stable \
             --github-token "${GITHUB_TOKEN}" \
             --repo "${{ github.repository }}" \
-            --version "${{ github.event.release.tag_name }}" \
-            --release-body "${{ github.event.release.body }}"
+            --version "${{ github.event.release.tag_name }}"

@@ -7,6 +7,7 @@ on:
 permissions:
   pull-requests: write
   contents: write
+  issues: write
 
 jobs:
   auto-merge:
@@ -70,14 +71,17 @@ jobs:
           gh pr edit "$PR_URL" --add-label auto-merged
           gh pr merge --auto --squash "$PR_URL"
 
-      - name: Comment for blocked updates
+      - name: Post or update sticky review-required comment
         if: steps.safety.outputs.block == 'true'
         shell: bash
         env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          PR_NUM="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+          MARK="<!-- COPILOT-STICKY:DEPENDABOT-BLOCKED -->"
+
           {
             echo "⚠️ Dependabot update requires manual review."
             echo
@@ -85,5 +89,30 @@ jobs:
             echo "Breaking label: ${{ steps.safety.outputs.has_breaking }}"
             echo
             echo "Auto-merge skipped."
+            echo
+            echo "$MARK"
           } > body.txt
-          gh pr comment "$PR_URL" --body-file body.txt
+
+          CID="$(gh api repos/$REPO/issues/$PR_NUM/comments --paginate \
+            --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
+          if [ -n "$CID" ]; then
+            gh api repos/$REPO/issues/comments/$CID -X PATCH -f body=@body.txt
+          else
+            gh api repos/$REPO/issues/$PR_NUM/comments -f body=@body.txt
+          fi
+
+      - name: Remove sticky comment when no longer blocked
+        if: steps.safety.outputs.block != 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PR_NUM="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+          MARK="<!-- COPILOT-STICKY:DEPENDABOT-BLOCKED -->"
+          CID="$(gh api repos/$REPO/issues/$PR_NUM/comments --paginate \
+            --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
+          if [ -n "$CID" ]; then
+            gh api repos/$REPO/issues/comments/$CID -X DELETE || true
+          fi

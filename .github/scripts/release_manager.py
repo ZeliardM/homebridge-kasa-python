@@ -39,6 +39,9 @@ LABEL_FIX = {"fix", "bug", "bugfix", "docs", "documentation", "dependency"}
 SEMVER = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$")
 SECTION_RE = re.compile(r"^## \[(v[0-9]+\.[0-9]+\.[0-9]+(?:-beta\.[0-9]+)?)\]", re.MULTILINE)
 
+def header_has_date(line: str) -> bool:
+    return bool(re.search(r"\(\d{4}-\d{2}-\d{2}\)\s*$", line))
+
 @dataclass(order=True, frozen=True)
 class Version:
     major: int
@@ -165,8 +168,8 @@ def insert_entry(content: str, version: Version, category: str, entry: str,
             out=["# Changelog",""]+new_sec+out
         return squeeze_blank("\n".join(out))+"\n"
 
-    if add_date and "(" not in lines[header_idx]:
-        lines[header_idx] = build_section_header(tag, True, publish_date)
+    if add_date and not header_has_date(lines[header_idx]):
+        lines[header_idx] = f"{lines[header_idx]} ({publish_date})"
 
     i=header_idx+1; end=len(lines)
     while i<len(lines):
@@ -211,7 +214,7 @@ def rename_version_section(content: str, old_tag: str, new_tag: str) -> str:
 def add_publish_date(content: str, tag: str, date: str) -> str:
     lines=content.splitlines(); prefix=f"## [{tag}]"
     for i,l in enumerate(lines):
-        if l.startswith(prefix) and "(" not in l:
+        if l.startswith(prefix) and not header_has_date(l):
             lines[i]=l+f" ({date})"; break
     return "\n".join(lines)+"\n"
 
@@ -313,7 +316,6 @@ def git_commit(message: str):
         diff = []
     if "CHANGELOG.md" in diff:
         subprocess.run(["git", "add", "CHANGELOG.md"], check=False)
-        # Use argument list to avoid shell interpolation issues
         subprocess.run(["git", "commit", "-m", message], check=False)
         subprocess.run(["git", "push"], check=False)
 
