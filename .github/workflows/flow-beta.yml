@@ -43,6 +43,7 @@ jobs:
           BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
           REPO: ${{ github.repository }}
           DELETE_DRAFT_STABLE_TAG: 'true'
+          DELETE_DRAFT_BETA_TAG: 'true'
         run: |
           set -euo pipefail
           python .github/scripts/release_manager.py pr-merged \
@@ -59,7 +60,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.release.target_commitish }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22

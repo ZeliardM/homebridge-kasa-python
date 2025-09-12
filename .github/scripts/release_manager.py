@@ -485,9 +485,12 @@ def cmd_pr_merged(args):
 
     if replace and existing_unpublished and existing_unpublished.tag() != target_version.tag():
         content=rename_version_section(content, existing_unpublished.tag(), target_version.tag())
-        old_rel=gh.release_by_tag(existing_unpublished.tag())
+        old_tag = existing_unpublished.tag()
+        old_rel=gh.release_by_tag(old_tag)
         if old_rel and old_rel.get("id"):
             gh.update_release(old_rel["id"], tag_name=target_version.tag(), name=target_version.tag())
+        if (os.environ.get("DELETE_DRAFT_BETA_TAG","").lower() == "true"):
+            git_delete_tag(old_tag)
         print(f"[release-manager] Escalated draft to {target_version.tag()}")
 
     if f"## [{target_version.tag()}]" not in content:
