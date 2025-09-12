@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.8.2](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.2) (2025-09-11)
+## [v2.8.2](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.2) (2025-09-11)
 
 ### Other Changes
 
@@ -12,7 +12,7 @@
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.8.1...v2.8.2
 
-## [2.8.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.1) (2025-09-05)
+## [v2.8.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.1) (2025-09-05)
 
 ### Other Changes
 
@@ -24,7 +24,7 @@
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.8.0...v2.8.1
 
-## [2.8.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.0) (2025-09-05)
+## [v2.8.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.0) (2025-09-05)
 
 ### Breaking Changes
 

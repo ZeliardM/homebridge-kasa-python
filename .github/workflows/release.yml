@@ -26,6 +26,8 @@ jobs:
     permissions:
       id-token: write
     uses: homebridge/.github/.github/workflows/npm-publish-esm.yml@latest
+    with:
+      dynamically_adjust_version: true
     secrets:
       npm_auth_token: ${{ secrets.NPM_TOKEN }}
 

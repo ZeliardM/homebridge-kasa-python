@@ -71,12 +71,13 @@ class GitHub:
         headers = {
             "Accept":"application/vnd.github+json",
             "Authorization": f"Bearer {self.token}",
-            "Content-Type":"application/json"
+            "Content-Type":"application/json",
+            "User-Agent": f"release-manager (+https://github.com/{self.repo})"
         }
         body = json.dumps(data).encode() if data is not None else None
         req = urllib.request.Request(url, data=body, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(req) as r:
+            with urllib.request.urlopen(req, timeout=30) as r:
                 raw = r.read().decode()
                 return json.loads(raw) if raw.strip() else {}
         except urllib.error.HTTPError as e:
@@ -177,6 +178,9 @@ def insert_entry(content: str, version: Version, category: str, entry: str,
             end=i; break
         i+=1
     section = lines[header_idx:end]
+
+    if entry in section:
+        return squeeze_blank("\n".join(lines)) + "\n"
 
     cat_header = f"### {category}"
     if cat_header not in section:
