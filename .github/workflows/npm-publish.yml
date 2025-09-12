@@ -1,0 +1,130 @@
+name: NPM Publish
+
+on:
+  workflow_call:
+    inputs:
+      node_version:
+        description: Node version to run the publish job
+        default: 22
+        required: false
+        type: number
+      tag:
+        description: Optional npm dist-tag to publish under (e.g. "beta")
+        required: false
+        type: string
+      set_version_from_release_tag:
+        description: Set package.json version from the GitHub release tag (strips leading "v")
+        default: true
+        required: false
+        type: boolean
+      fail_if_mismatch:
+        description: Fail if package.json version does not match the computed version
+        default: true
+        required: false
+        type: boolean
+      install_cmd:
+        description: Install command to run before publish
+        default: npm ci
+        required: false
+        type: string
+      build_cmd:
+        description: Optional build command to run before publish (leave empty to skip)
+        default: npm run build
+        required: false
+        type: string
+      extra_publish_args:
+        description: Extra arguments to pass to npm publish
+        default: ""
+        required: false
+        type: string
+    secrets:
+      npm_auth_token:
+        description: The npm access token used to publish the package
+        required: true
+    outputs:
+      NPM_VERSION:
+        value: ${{ jobs.publish_npm.outputs.NPM_VERSION }}
+
+jobs:
+  publish_npm:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+
+    outputs:
+      NPM_VERSION: ${{ steps.get-version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install
+        run: ${{ inputs.install_cmd }}
+
+      - name: Determine expected version from tag
+        id: expected
+        if: inputs.set_version_from_release_tag == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Prefer release tag if present, otherwise fall back to ref name
+          TAG="${{ github.event.release.tag_name || github.ref_name }}"
+          if [ -z "${TAG:-}" ]; then
+            echo "No tag found from event context"; exit 1
+          fi
+          # Strip leading "v" if present
+          EXPECTED="${TAG#v}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${EXPECTED}" >> "$GITHUB_OUTPUT"
+          echo "Expected version from tag: $EXPECTED"
+
+      - name: Set package.json version from release tag
+        if: inputs.set_version_from_release_tag == true
+        run: |
+          set -euo pipefail
+          npm version "${{ steps.expected.outputs.version }}" --no-git-tag-version
+
+      - name: Verify version matches expectation
+        if: inputs.set_version_from_release_tag == true && inputs.fail_if_mismatch == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          PKG_VER="$(node -p "require('./package.json').version")"
+          EXP_VER="${{ steps.expected.outputs.version }}"
+          if [ "$PKG_VER" != "$EXP_VER" ]; then
+            echo "::error::package.json version ($PKG_VER) does not match expected version from tag ($EXP_VER)"
+            exit 1
+          fi
+
+      - name: Build
+        if: inputs.build_cmd != ''
+        run: ${{ inputs.build_cmd }}
+
+      - name: Publish to npm (no dist-tag)
+        if: inputs.tag == ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm_auth_token }}
+        run: |
+          set -euo pipefail
+          npm publish --access public --provenance ${{ inputs.extra_publish_args }}
+
+      - name: Publish to npm (with dist-tag)
+        if: inputs.tag != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm_auth_token }}
+        run: |
+          set -euo pipefail
+          npm publish --access public --tag="${{ inputs.tag }}" --provenance ${{ inputs.extra_publish_args }}
+
+      - name: Output published version
+        id: get-version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Notice
+        run: echo "::notice::Published on npm - ${{ steps.get-version.outputs.version }}"

@@ -24,10 +24,11 @@ jobs:
       github.repository == 'ZeliardM/homebridge-kasa-python'
     permissions:
       id-token: write
-    uses: homebridge/.github/.github/workflows/npm-publish-esm.yml@latest
+    uses: ./.github/workflows/npm-publish.yml
     with:
+      set_version_from_release_tag: true
       tag: beta
-      dynamically_adjust_version: true
+      build_cmd: npm run build
     secrets:
       npm_auth_token: ${{ secrets.NPM_TOKEN }}
 

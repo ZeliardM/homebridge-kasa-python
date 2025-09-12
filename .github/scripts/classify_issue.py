@@ -7,7 +7,7 @@ Issue classifier:
 - Validates required fields depending on type; signals needs-info if insufficient.
 Outputs a JSON summary for workflow steps.
 """
-import json, os, re, sys
+import json, os, re
 
 MAP = {
     "bug":"bug",
