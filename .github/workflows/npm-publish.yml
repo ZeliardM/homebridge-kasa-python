@@ -162,18 +162,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.expected.outputs.tag }}"
-          # Prefer event payload fields first
-          REL_ID_JS='try{const e=require(process.env.GITHUB_EVENT_PATH);process.stdout.write(String(e.release?.id||""))}catch{process.stdout.write("")}'
-          REL_PRE_JS='try{const e=require(process.env.GITHUB_EVENT_PATH);process.stdout.write(String(e.release?.prerelease ?? ""))}catch{process.stdout.write("")}'
-          REL_ID="$(node -e "${REL_ID_JS}")"
-          REL_PRE="$(node -e "${REL_PRE_JS}")"
 
+          # Ensure jq is available (usually present on ubuntu-latest, but guard just in case)
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
+          TAG="${{ steps.expected.outputs.tag }}"
+
+          # Read from event payload first
+          REL_ID="$(jq -r '.release.id // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")"
+          REL_PRE="$(jq -r '.release.prerelease // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")"
+
+          # If not present in event snapshot, fall back to API
           if [ -z "$REL_ID" ]; then
             API="https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}"
             RESP="$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$API" || true)"
-            REL_ID="$(printf '%s' "$RESP" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);process.stdout.write(String(j.id||""))}catch{process.stdout.write("")}})')"
-            REL_PRE="$(printf '%s' "$RESP" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);process.stdout.write(String(j.prerelease ?? ""))}catch{process.stdout.write("")}})')"
+            REL_ID="$(printf '%s' "$RESP" | jq -r '.id // empty')"
+            REL_PRE="$(printf '%s' "$RESP" | jq -r '.prerelease // empty')"
           fi
 
           echo "id=${REL_ID}" >> "$GITHUB_OUTPUT"
