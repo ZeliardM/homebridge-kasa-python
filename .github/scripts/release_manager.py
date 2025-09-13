@@ -76,18 +76,35 @@ class GitHub:
                 raw = r.read().decode()
                 return json.loads(raw) if raw.strip() else {}
         except urllib.error.HTTPError as e:
-            try: msg = e.read().decode()
-            except: msg=str(e)
-            print(f"[release-manager] API {e.code}: {msg}", file=sys.stderr)
-            return {}
+            try:
+                raw = e.read().decode()
+                parsed = json.loads(raw) if raw.strip() else {}
+            except Exception:
+                parsed = {}
+            if not parsed:
+                parsed = {"message": str(e)}
+            print(f"[release-manager] API {e.code}: {parsed.get('message','HTTPError')}", file=sys.stderr)
+            return parsed
         except Exception as e:
             print(f"[release-manager] API exception: {e}", file=sys.stderr)
             return {}
-    def releases(self) -> List[dict]: return self._request("GET","/releases?per_page=100") or []
+    def releases(self, per_page: int = 100, max_pages: int = 50) -> List[dict]:
+        out: List[dict] = []
+        page = 1
+        while page <= max_pages:
+            batch = self._request("GET", f"/releases?per_page={per_page}&page={page}")
+            if not isinstance(batch, list) or not batch:
+                break
+            out.extend(batch)
+            if len(batch) < per_page:
+                break
+            page += 1
+        return out
     def release_by_tag(self, tag: str) -> Optional[dict]:
         r = self._request("GET", f"/releases/tags/{tag}")
-        if r.get("message") == "Not Found": return None
-        return r or None
+        if not r or r.get("message") == "Not Found":
+            return None
+        return r
     def create_release(self, tag: str, name: str, body: str, draft: bool, prerelease: bool, target: str="beta") -> dict:
         return self._request("POST","/releases", {
             "tag_name": tag, "name": name, "body": body,
