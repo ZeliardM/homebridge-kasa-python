@@ -8,9 +8,13 @@ updates:
       time: "15:00"
       timezone: "America/New_York"
     target-branch: "beta"
-    labels: ["dependency", "dependencies"]
+    labels: ["dependency"]
     assignees: ["ZeliardM"]
     versioning-strategy: "increase"
+    commit-message:
+      prefix: "npm"
+      prefix-development: "npm"
+      include: "scope"
     groups:
       typescript-eslint:
         patterns: ["@typescript-eslint/*", "typescript", "ts-essentials"]
@@ -29,9 +33,13 @@ updates:
       time: "15:00"
       timezone: "America/New_York"
     target-branch: "beta"
-    labels: ["dependency", "dependencies"]
+    labels: ["dependency"]
     assignees: ["ZeliardM"]
     versioning-strategy: "increase"
+    commit-message:
+      prefix: "pip"
+      prefix-development: "pip"
+      include: "scope"
     groups:
       pydantic:
         patterns: ["pydantic", "pydantic_core", "pydantic-core"]
@@ -49,3 +57,6 @@ updates:
       timezone: "America/New_York"
     target-branch: "beta"
     assignees: ["ZeliardM"]
+    commit-message:
+      prefix: "ci"
+      include: "scope"
