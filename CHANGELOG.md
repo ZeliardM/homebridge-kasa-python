@@ -1,8 +1,9 @@
 # Changelog
 
-## [v2.8.2-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.2-beta.0)
+## [v2.8.2-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.2-beta.0) (2025-09-13)
 
 ### Other Changes
+- Update CHANGELOG.md for beta release v2.8.2-beta.0 @github-actions [beta-release]
 
 - Fix CHANGELOG.md workflow not syncing properly with GitHub releases, add automated changelog maintenance, consolidate release workflows, implement comprehensive beta management system, optimize workflow code quality, and resolve Unreleased section handling @Copilot [#76]
 
