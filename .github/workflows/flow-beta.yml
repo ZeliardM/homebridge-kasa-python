@@ -44,6 +44,7 @@ jobs:
           REPO: ${{ github.repository }}
           DELETE_DRAFT_STABLE_TAG: 'true'
           DELETE_DRAFT_BETA_TAG: 'true'
+          NPM_VERIFY_PUBLISHED_BETA: 'true'
         run: |
           set -euo pipefail
           python .github/scripts/release_manager.py pr-merged \
@@ -56,7 +57,7 @@ jobs:
             --base-branch "${BASE_BRANCH}"
 
   finalize-beta:
-    if: github.event_name == 'release' && github.event.release.prerelease == true && contains(github.event.release.tag_name, 'beta')
+    if: github.event_name == 'release' && github.event.release.prerelease == true && contains(github.event.release.tag_name, 'beta') && github.event.release.target_commitish == 'beta'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -37,6 +37,7 @@ jobs:
       - name: Convert betas to stable draft (and align package versions)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_VERIFY_PUBLISHED_BETA: 'true'
         run: |
           set -euo pipefail
           python .github/scripts/release_manager.py convert-to-stable \
@@ -45,7 +46,7 @@ jobs:
             --version "${{ github.event.inputs.convert_beta_version }}"
 
   finalize-stable:
-    if: github.event_name == 'release' && github.event.release.prerelease == false && !contains(github.event.release.tag_name, 'beta')
+    if: github.event_name == 'release' && github.event.release.prerelease == false && !contains(github.event.release.tag_name, 'beta') && github.event.release.target_commitish == 'latest'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

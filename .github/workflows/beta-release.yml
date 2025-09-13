@@ -1,18 +1,18 @@
 name: Beta Release
 
-# This workflow handles the npm publishing and release creation for beta releases.
-# Beta changelog management is handled by the flow-beta.yml workflow.
+# Handles npm publishing and Discord for beta prereleases.
+# Beta changelog management and tag finalize happen in flow-beta.yml.
 
 on:
   release:
     types: [published]
 
-# Only run for prereleases on the beta branch
 jobs:
   build_lint_test:
     if: >
       github.event.release.prerelease == true &&
       contains(github.event.release.tag_name, 'beta') &&
+      github.event.release.target_commitish == 'beta' &&
       github.repository == 'ZeliardM/homebridge-kasa-python'
     uses: ./.github/workflows/build-lint-test.yml
 
@@ -21,6 +21,7 @@ jobs:
     if: >
       github.event.release.prerelease == true &&
       contains(github.event.release.tag_name, 'beta') &&
+      github.event.release.target_commitish == 'beta' &&
       github.repository == 'ZeliardM/homebridge-kasa-python'
     permissions:
       id-token: write
@@ -38,6 +39,7 @@ jobs:
     if: >
       github.event.release.prerelease == true &&
       contains(github.event.release.tag_name, 'beta') &&
+      github.event.release.target_commitish == 'beta' &&
       github.repository == 'ZeliardM/homebridge-kasa-python'
     uses: homebridge/.github/.github/workflows/discord-webhooks.yml@latest
     with:

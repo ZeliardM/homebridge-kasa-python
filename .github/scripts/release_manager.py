@@ -12,9 +12,9 @@ Assumptions:
 - Tags: vX.Y.Z or vX.Y.Z-beta.N
 - Standard categories: Breaking Changes, Featured Changes, Bug Fixes, Other Changes
 """
-import os, re, json, sys, subprocess, argparse, datetime, urllib.request, urllib.error
+import os, re, json, sys, subprocess, argparse, datetime, urllib.request, urllib.error, urllib.parse
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Set
 
 CHANGELOG_FILE = "CHANGELOG.md"
 
@@ -174,10 +174,6 @@ def _file_exists(path: str) -> bool:
     except: return False
 
 def npm_write_version(new_version_no_v: str) -> bool:
-    """
-    Update package.json version and refresh package-lock.json without tagging or committing.
-    Uses 'npm pkg set' and 'npm i --package-lock-only' to avoid running version scripts.
-    """
     if not _file_exists("package.json"):
         print("[release-manager] package.json not found; skipping npm version alignment.")
         return False
@@ -210,10 +206,6 @@ def git_commit_files(files: List[str], message: str):
     subprocess.run(["git", "push"], check=False)
 
 def ensure_repo_node_version(version: Version, context: str):
-    """
-    Ensure package.json/package-lock.json reflect the provided version.
-    version: semantic tag object (vX.Y.Z[-beta.N]); converted to X.Y.Z[-beta.N]
-    """
     target = version.tag().lstrip("v")
     if npm_write_version(target):
         git_commit_files(
@@ -221,8 +213,49 @@ def ensure_repo_node_version(version: Version, context: str):
             f"chore: align package versions to {version.tag()} ({context})"
         )
 
+def _read_package_name() -> Optional[str]:
+    try:
+        if not _file_exists("package.json"): return None
+        with open("package.json","r",encoding="utf-8") as f:
+            d=json.load(f)
+        name=d.get("name")
+        if isinstance(name,str) and name.strip():
+            return name.strip()
+        return None
+    except Exception:
+        return None
+
+_NPM_VERSIONS_CACHE: Optional[Set[str]] = None
+def npm_registry_versions(pkg_name: str, timeout: int = 30) -> Optional[Set[str]]:
+    global _NPM_VERSIONS_CACHE
+    if _NPM_VERSIONS_CACHE is not None:
+        return _NPM_VERSIONS_CACHE
+    try:
+        url=f"https://registry.npmjs.org/{urllib.parse.quote(pkg_name)}"
+        req=urllib.request.Request(url, headers={"Accept":"application/vnd.npm.install-v1+json","User-Agent":"release-manager/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw=r.read().decode()
+            data=json.loads(raw)
+            versions=data.get("versions", {})
+            if isinstance(versions, dict):
+                _NPM_VERSIONS_CACHE=set(versions.keys())
+                return _NPM_VERSIONS_CACHE
+    except Exception as e:
+        print(f"[release-manager] npm registry lookup failed for {pkg_name}: {e}", file=sys.stderr)
+    return None
+
+def npm_has_version(version_str_no_v: str) -> Optional[bool]:
+    if os.environ.get("NPM_VERIFY_PUBLISHED_BETA","").lower() != "true":
+        return None
+    pkg=_read_package_name()
+    if not pkg:
+        return None
+    vers = npm_registry_versions(pkg)
+    if vers is None:
+        return None
+    return version_str_no_v in vers
+
 def git_tag_force(tag: str):
-    """Move tag to current HEAD (include finalize commits) and push."""
     try:
         subprocess.run(["git", "fetch", "--tags"], check=False)
         subprocess.run(["git", "tag", "-f", tag], check=True)
@@ -232,7 +265,6 @@ def git_tag_force(tag: str):
         print(f"[release-manager] Failed to update tag {tag}: {e}", file=sys.stderr)
 
 def git_delete_tag(tag: str):
-    """Delete a remote tag (ghost tag cleanup)."""
     try:
         subprocess.run(["git", "fetch", "--tags"], check=False)
         subprocess.run(["git", "push", "origin", f":refs/tags/{tag}"], check=True)
@@ -247,7 +279,6 @@ def insert_entry(content: str, version: Version, category: str, entry: str,
     header_pattern = f"## [{tag}]"
     lines = content.splitlines()
     header_idx = next((i for i,l in enumerate(lines) if l.startswith(header_pattern)), None)
-
     if header_idx is None:
         section_header = build_section_header(tag, add_date, publish_date)
         new_sec = [section_header,"", f"### {category}","", entry,""]
@@ -261,20 +292,16 @@ def insert_entry(content: str, version: Version, category: str, entry: str,
         if not inserted:
             out=["# Changelog",""]+new_sec+out
         return squeeze_blank("\n".join(out))+"\n"
-
     if add_date and not header_has_date(lines[header_idx]):
         lines[header_idx] = f"{lines[header_idx]} ({publish_date})"
-
     i=header_idx+1; end=len(lines)
     while i<len(lines):
         if lines[i].startswith("## [v") and not lines[i].startswith(header_pattern):
             end=i; break
         i+=1
     section = lines[header_idx:end]
-
     if entry in section:
         return squeeze_blank("\n".join(lines)) + "\n"
-
     cat_header = f"### {category}"
     if cat_header not in section:
         fc_index = next((idx for idx,l in enumerate(section) if l.startswith("**Full Changelog**")), None)
@@ -291,15 +318,12 @@ def insert_entry(content: str, version: Version, category: str, entry: str,
                 new_sec.append(entry); inserted=True
             j+=1
         section=new_sec
-
     if compare_from and not any("**Full Changelog**" in l for l in section):
         section += [f"**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{tag}",""]
-
     new_content = lines[:header_idx]+section+lines[end:]
     return squeeze_blank("\n".join(new_content))+"\n"
 
 def rename_version_section(content: str, old_tag: str, new_tag: str) -> str:
-    repo = os.environ.get("GITHUB_REPOSITORY","")
     old_header=f"## [{old_tag}]"; new_header=build_section_header(new_tag, False)
     lines=content.splitlines()
     for i,l in enumerate(lines):
@@ -376,7 +400,6 @@ def find_unpublished_beta_draft(gh: GitHub) -> Optional[Version]:
     return max(drafts) if drafts else None
 
 def find_latest_draft_stable(gh: GitHub) -> Optional[Tuple[Version, dict]]:
-    """Return the newest draft stable release (vX.Y.Z, draft=true, prerelease=false) if any."""
     candidates: List[Tuple[Version, dict]] = []
     for r in gh.releases():
         tn=r.get("tag_name","")
@@ -439,30 +462,38 @@ def cmd_pr_merged(args):
             labels = json.load(f)
     else:
         labels=json.loads(args.pr_labels or "[]")
-
     content=read_changelog()
     latest_stable,_=latest_versions(content)
-
+    verify_betas = os.environ.get("NPM_VERIFY_PUBLISHED_BETA","").lower() == "true"
+    npm_versions: Optional[Set[str]] = None
+    if verify_betas:
+        pkg = _read_package_name()
+        if pkg:
+            npm_versions = npm_registry_versions(pkg)
+        else:
+            print("[release-manager] NPM_VERIFY_PUBLISHED_BETA is true but no package.json/package name found; skipping npm verification.", file=sys.stderr)
     published_beta_versions=[]
     for r in gh.releases():
         tn=r.get("tag_name","")
         if "beta" in tn and not r.get("draft") and r.get("prerelease"):
-            try: published_beta_versions.append(Version.parse(tn))
-            except: pass
+            try:
+                v=Version.parse(tn)
+            except:
+                continue
+            if npm_versions is not None:
+                if v.tag().lstrip("v") not in npm_versions:
+                    continue
+            published_beta_versions.append(v)
     latest_published_beta=max(published_beta_versions) if published_beta_versions else None
     existing_unpublished=find_unpublished_beta_draft(gh)
-
     draft_stable = find_latest_draft_stable(gh)
     category=categorize(labels)
     entry=f"- {args.pr_title} @{args.pr_author} [#{args.pr_number}]"
-
     if draft_stable:
         base_version, stable_rel = draft_stable
         target_version = Version(base_version.major, base_version.minor, base_version.patch, 0)
-
         if f"## [{base_version.tag()}]" in content:
             content = rename_version_section(content, base_version.tag(), target_version.tag())
-
         if existing_unpublished and existing_unpublished.tag() != target_version.tag():
             if f"## [{existing_unpublished.tag()}]" in content:
                 content = rename_version_section(content, existing_unpublished.tag(), target_version.tag())
@@ -470,36 +501,27 @@ def cmd_pr_merged(args):
             if old_rel and old_rel.get("id"):
                 gh.update_release(old_rel["id"], tag_name=target_version.tag(), name=target_version.tag(), prerelease=True, draft=True)
             print(f"[release-manager] Rebased existing beta draft to {target_version.tag()}")
-
         compare_from = latest_stable.tag() if latest_stable else "v0.0.0"
         content = insert_entry(content, target_version, category, entry, compare_from, add_date=False)
-
         write_changelog(content)
         git_commit(f"Convert draft stable {base_version.tag()} to {target_version.tag()} and update CHANGELOG.md for PR #{args.pr_number}")
-
         ensure_repo_node_version(target_version, context=f"convert stable draft {base_version.tag()} -> {target_version.tag()} (PR #{args.pr_number})")
-
         rel = gh.release_by_tag(target_version.tag())
         body = build_beta_body(target_version, content, latest_stable)
         if rel and rel.get("id"):
             gh.update_release(rel["id"], body=body, name=target_version.tag(), prerelease=True, draft=True)
         else:
             gh.create_release(target_version.tag(), target_version.tag(), body, draft=True, prerelease=True)
-
         if stable_rel.get("id"):
             gh.delete_release(stable_rel["id"])
             print(f"[release-manager] Deleted draft stable release {base_version.tag()}")
-
         if (os.environ.get("DELETE_DRAFT_STABLE_TAG","").lower() == "true"):
             git_delete_tag(base_version.tag())
-
         print(f"[release-manager] Converted draft stable {base_version.tag()} -> beta draft {target_version.tag()}")
         return
-
     target_version, replace = decide_beta_target(
         gh, latest_stable, latest_published_beta, existing_unpublished, labels
     )
-
     if replace and existing_unpublished and existing_unpublished.tag() != target_version.tag():
         content=rename_version_section(content, existing_unpublished.tag(), target_version.tag())
         old_tag = existing_unpublished.tag()
@@ -509,7 +531,6 @@ def cmd_pr_merged(args):
         if (os.environ.get("DELETE_DRAFT_BETA_TAG","").lower() == "true"):
             git_delete_tag(old_tag)
         print(f"[release-manager] Escalated draft to {target_version.tag()}")
-
     if f"## [{target_version.tag()}]" not in content:
         compare_from = (latest_stable.tag() if target_version.beta == 0 and latest_stable else
                         f"v{target_version.major}.{target_version.minor}.{target_version.patch}-beta.{target_version.beta-1}"
@@ -524,12 +545,9 @@ def cmd_pr_merged(args):
                             f"v{target_version.major}.{target_version.minor}.{target_version.patch}-beta.{target_version.beta-1}"
                             if target_version.beta and target_version.beta>0 else None)
         content=insert_entry(content, target_version, category, entry, compare_from, add_date=False)
-
     write_changelog(content)
     git_commit(f"Update CHANGELOG.md for beta PR #{args.pr_number}")
-
     ensure_repo_node_version(target_version, context=f"beta PR #{args.pr_number}")
-
     rel=gh.release_by_tag(target_version.tag())
     body=build_beta_body(target_version, content, latest_stable)
     if rel and rel.get("id"):
@@ -563,13 +581,24 @@ def cmd_convert_betas(args):
     if f"## [{base_version.tag()}]" in content:
         print("[release-manager] Stable section already exists, abort.")
         return
+    verify_betas = os.environ.get("NPM_VERIFY_PUBLISHED_BETA","").lower() == "true"
+    npm_versions: Optional[Set[str]] = None
+    if verify_betas:
+        pkg = _read_package_name()
+        if pkg:
+            npm_versions = npm_registry_versions(pkg)
     releases=gh.releases()
     betas=[]
     for r in releases:
         tn=r.get("tag_name","")
         if tn.startswith(base_version.tag()+"-beta.") and not r.get("draft") and r.get("prerelease"):
-            try: betas.append(Version.parse(tn))
-            except: pass
+            try:
+                v=Version.parse(tn)
+            except:
+                continue
+            if npm_versions is not None and v.tag().lstrip("v") not in npm_versions:
+                continue
+            betas.append(v)
     if not betas:
         print("[release-manager] No published betas to convert.")
         return
@@ -583,7 +612,6 @@ def cmd_convert_betas(args):
                 if e.endswith("[beta-release]"): continue
                 if e not in seen:
                     aggregated[cat].append(e); seen.add(e)
-
     repo=os.environ.get("GITHUB_REPOSITORY","")
     header=build_section_header(base_version.tag(), add_date=False)
     prev_stable,_=latest_versions(content)
@@ -606,9 +634,7 @@ def cmd_convert_betas(args):
     content=squeeze_blank("\n".join(out))+"\n"
     write_changelog(content)
     git_commit(f"Add stable draft section {base_version.tag()} to CHANGELOG.md")
-
     ensure_repo_node_version(base_version, context=f"convert betas to {base_version.tag()}")
-
     body=build_stable_body(base_version, content, prev_stable)
     rel=gh.release_by_tag(base_version.tag())
     if rel and rel.get("draft"):
