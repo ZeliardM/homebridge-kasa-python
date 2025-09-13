@@ -1,16 +1,17 @@
 # Changelog
 
-## [v2.8.2](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.2) (2025-09-11)
+## [v2.8.2-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.2-beta.0)
 
 ### Other Changes
 
 - Fix CHANGELOG.md workflow not syncing properly with GitHub releases, add automated changelog maintenance, consolidate release workflows, implement comprehensive beta management system, optimize workflow code quality, and resolve Unreleased section handling @Copilot [#76]
 
 ### Bug Fixes
+- Complete release workflow consolidation - replace complex inline Python with unified release manager @Copilot [#81]
 
 - Fix workflow issues: stale management, changelog updates, dependabot integration, labeler configuration, draft release section handling, and comprehensive testing validation @Copilot [#80]
 
-**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.8.1...v2.8.2
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.8.1...v2.8.2-beta.0
 
 ## [v2.8.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.1) (2025-09-05)
 
