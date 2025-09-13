@@ -3,6 +3,9 @@ name: Release
 # Handles npm publishing and Discord for releases.
 # Changelog management and tag finalize happen in flow-stable.yml.
 
+permissions:
+  contents: write
+
 on:
   release:
     types: [published]
