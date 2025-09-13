@@ -84,11 +84,20 @@ jobs:
           echo "version=${EXPECTED}" >> "$GITHUB_OUTPUT"
           echo "Expected version from tag: $EXPECTED"
 
-      - name: Set package.json version from release tag
+      - name: Set package.json version from release tag (only if different)
         if: inputs.set_version_from_release_tag == true
+        shell: bash
         run: |
           set -euo pipefail
-          npm version "${{ steps.expected.outputs.version }}" --no-git-tag-version
+          PKG_VER="$(node -p "require('./package.json').version")"
+          EXP_VER="${{ steps.expected.outputs.version }}"
+          echo "package.json version: $PKG_VER"
+          echo "expected version:   $EXP_VER"
+          if [ "$PKG_VER" = "$EXP_VER" ]; then
+            echo "package.json already at expected version; skipping npm version."
+          else
+            npm version "$EXP_VER" --no-git-tag-version
+          fi
 
       - name: Verify version matches expectation
         if: inputs.set_version_from_release_tag == true && inputs.fail_if_mismatch == true
