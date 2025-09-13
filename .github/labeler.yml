@@ -1,67 +1,49 @@
-# Add 'branding' label to any changes within 'docs' folder or any subfolders
-branding:
-- changed-files:
-  - any-glob-to-any-file: branding/**
-
-# Add 'docs' label to any change to .md files within the entire repository 
 docs:
-- changed-files:
-  - any-glob-to-any-file: '**/*.md'
+  - changed-files:
+    - any-glob-to-any-file: '**/*.md'
 
-# Add 'enhancement' label to any change to src files within the source dir
+branding:
+  - changed-files:
+    - any-glob-to-any-file: branding/**
+
 enhancement:
   - changed-files:
     - any-glob-to-any-file: 'src/**/*'
     - any-glob-to-any-file: 'config.schema.json'
+  - head-branch: '^feature/.*'
+  - head-branch: '^feat/.*'
+  - title: '^feat.*'
 
-# Add 'dependency' label to any change to dependency files
 dependency:
   - changed-files:
     - any-glob-to-any-file: 'package.json'
     - any-glob-to-any-file: 'package-lock.json'
     - any-glob-to-any-file: 'requirements.txt'
 
-# Add 'beta' label to any PR that is opened against beta branches
-beta:
-- base-branch: 'beta*'
-
-# Add 'alpha' label to any PR that is opened against the `alpha` branch
-alpha:
-- base-branch: 'alpha*'
-
-# Add 'latest' label to any PR that is opened against the `latest` branch
-latest:
-- base-branch: 'latest'
-
-# Add 'workflow' to any changes within '.github' folder or any subfolders
 workflow:
-- changed-files:
-  - any-glob-to-any-file: .github/**
+  - changed-files:
+    - any-glob-to-any-file: '.github/**'
 
-# Add 'fix' label to PRs with fix-related keywords in title or branch
 fix:
-- head-branch: '^fix/.*'
-- head-branch: '^hotfix/.*'
-- head-branch: '.*/fix-.*'
-- title: '^fix.*'
-- title: '^Fix.*'
+  - head-branch: '^fix/.*'
+  - head-branch: '^hotfix/.*'
+  - head-branch: '.*/fix-.*'
+  - title: '^fix.*'
+  - title: '^Fix.*'
 
-# Add 'feature' label to PRs with feature-related keywords in title or branch
-feature:
-- head-branch: '^feature/.*'
-- head-branch: '^feat/.*'
-- head-branch: '.*/feature-.*'
-- title: '^feat.*'
-- title: '^Feature.*'
-
-# Add 'bug' label to PRs with bug-related keywords
 bug:
-- head-branch: '^bug/.*'
-- head-branch: '.*/bug-.*'
-- title: '.*[Bb]ug.*'
+  - head-branch: '^bug/.*'
+  - head-branch: '.*/bug-.*'
+  - title: '.*[Bb]ug.*'
 
-# Add 'breaking-change' label for potential breaking changes
 breaking-change:
-- head-branch: '.*breaking.*'
-- title: '.*breaking.*'
-- title: '.*BREAKING.*'
+  - head-branch: '.*breaking.*'
+  - title: '.*BREAKING CHANGE.*'
+  - title: '.*breaking change.*'
+  - title: '.*BREAKING.*'
+  - title: '.*breaking.*'
+
+beta:
+  - base-branch: 'beta'
+latest:
+  - base-branch: 'latest'

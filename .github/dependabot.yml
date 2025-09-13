@@ -1,77 +1,51 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: "/"
+    directory: /
     schedule:
       interval: weekly
       day: friday
       time: "15:00"
-      timezone: "America/New_York"
-    target-branch: 'beta.*.*.*'
-    labels:
-      - dependency
-    assignees:
-      - ZeliardM
-    commit-message:
-      prefix: "npm"
+      timezone: America/New_York
+    target-branch: beta
+    labels: [dependency]
+    assignees: [ZeliardM]
     versioning-strategy: increase
     groups:
       typescript-eslint:
-        patterns:
-          - "@typescript-eslint/*"
-          - "typescript"
-          - "ts-essentials"
+        patterns: ["@typescript-eslint/*","typescript","ts-essentials"]
       eslint:
-        patterns:
-          - "@eslint/js"
-          - "eslint"
+        patterns: ["@eslint/js","eslint"]
       stylistic:
-        patterns:
-          - "@stylistic/eslint-plugin"
+        patterns: ["@stylistic/eslint-plugin"]
       md5:
-        patterns:
-          - "@types/md5"
-          - "md5"
+        patterns: ["@types/md5","md5"]
 
   - package-ecosystem: pip
-    directory: "/"
+    directory: /
     schedule:
       interval: weekly
       day: friday
       time: "15:00"
-      timezone: "America/New_York"
-    target-branch: 'beta.*.*.*'
-    labels:
-      - dependency
-    assignees:
-      - ZeliardM
-    commit-message:
-      prefix: "pip"
+      timezone: America/New_York
+    target-branch: beta
+    labels: [dependency]
+    assignees: [ZeliardM]
     versioning-strategy: increase
     groups:
       pydantic:
-        patterns:
-          - "pydantic"
-          - "pydantic_core"
-          - "pydantic-core"
+        patterns: ["pydantic","pydantic_core","pydantic-core"]
       crypt:
-        patterns:
-          - "cryptography"
-          - "chacha20poly1305-reuseable"
+        patterns: ["cryptography","chacha20poly1305-reuseable"]
       aio:
-        patterns:
-          - "aiosignal"
-          - "aiohttp"
+        patterns: ["aiosignal","aiohttp"]
 
   - package-ecosystem: github-actions
-    directory: "/"
+    directory: /
     schedule:
       interval: weekly
       day: friday
       time: "15:00"
-      timezone: "America/New_York"
-    target-branch: 'beta.*.*.*'
-    assignees:
-      - ZeliardM
-    commit-message:
-      prefix: "ci"
+      timezone: America/New_York
+    target-branch: beta
+    assignees: [ZeliardM]

@@ -1,0 +1,78 @@
+name: New Issue
+description: File a Bug, Feature Request, Support Question, Breaking Change Proposal, Docs or Dependency Issue
+labels: []
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      options:
+        - Bug
+        - Feature
+        - Support
+        - Breaking Change
+        - Docs
+        - Dependency
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      placeholder: One-line summary...
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Provide reproduction (bugs), motivation (features), or rationale (breaking).
+      placeholder: |
+        For Bugs:
+          Steps:
+          Expected:
+          Actual:
+        For Features:
+          Motivation:
+          Proposed Behavior:
+        For Breaking Change:
+          Rationale:
+          Impact:
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment (Required for Bugs)
+      placeholder: |
+        Plugin Version:
+        Homebridge Version:
+        Node.js Version:
+        NPM Version:
+        Python Version:
+        OS:
+    validations:
+      required: false
+  - type: textarea
+    id: migration
+    attributes:
+      label: Migration Strategy (Breaking Change Only)
+      placeholder: |
+        1. Step
+        2. Step
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (If Relevant)
+      render: text
+      description: Redact sensitive data
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional Context
+    validations:
+      required: false

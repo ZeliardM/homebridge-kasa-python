@@ -1,0 +1,115 @@
+name: Validate Pull Request
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled, ready_for_review]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout validator
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/scripts/validate_pr.py
+          fetch-depth: 0
+
+      - name: Ensure jq
+        shell: bash
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
+      - name: Run validator and capture outputs
+        id: validate
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          set +e
+          RESULT="$(python3 .github/scripts/validate_pr.py)"
+          STATUS=$?
+          set -e
+          echo "Validator exit code: $STATUS"
+          echo "Raw validator output: $RESULT"
+
+          OK="$(echo "$RESULT" | jq -r '.ok // empty' 2>/dev/null || true)"
+          MSG="$(echo "$RESULT" | jq -r '.message // ""' 2>/dev/null || true)"
+
+          if [ "$OK" = "true" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ "$OK" != "true" ]; then
+            MSG_B64="$(printf "%s" "$MSG" | base64 | tr -d '\n')"
+            echo "error_b64=$MSG_B64" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post or update sticky failure comment
+        if: steps.validate.outputs.ok != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PR_NUM="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+          MARK="<!-- COPILOT-STICKY:PR-VALIDATION -->"
+          ERR="$(printf "%s" "${{ steps.validate.outputs.error_b64 }}" | base64 -d 2>/dev/null || true)"
+          if [ -z "$ERR" ]; then ERR="Validation failed (no details provided)."; fi
+
+          {
+            echo "❌ PR validation failed:"
+            echo
+            echo '```'
+            echo "$ERR"
+            echo '```'
+            echo
+            echo "Please correct and push updates."
+            echo
+            echo "$MARK"
+          } > body.txt
+
+          CID="$(gh api repos/$REPO/issues/$PR_NUM/comments --paginate \
+            --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
+
+          if [ -n "$CID" ]; then
+            BODY="$(cat body.txt)"
+            gh api repos/$REPO/issues/comments/$CID -X PATCH -f body="$BODY"
+          else
+            gh pr comment "$PR_NUM" --body-file body.txt
+          fi
+
+      - name: Remove sticky comment on success
+        if: steps.validate.outputs.ok == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PR_NUM="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+          MARK="<!-- COPILOT-STICKY:PR-VALIDATION -->"
+
+          CID="$(gh api repos/$REPO/issues/$PR_NUM/comments --paginate \
+            --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
+          if [ -n "$CID" ]; then
+            gh api repos/$REPO/issues/comments/$CID -X DELETE || true
+          fi
+
+      - name: Fail job if invalid
+        if: steps.validate.outputs.ok != 'true'
+        shell: bash
+        run: exit 1

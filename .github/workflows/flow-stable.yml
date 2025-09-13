@@ -1,0 +1,68 @@
+name: Stable Release Flow
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      convert_beta_version:
+        description: 'Base stable version to convert (e.g. v2.9.0)'
+        required: false
+        type: string
+      confirm_conversion:
+        description: 'Type CONFIRM to proceed'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  convert-betas:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.convert_beta_version != '' && github.event.inputs.confirm_conversion == 'CONFIRM'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Convert betas to stable draft (and align package versions)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python .github/scripts/release_manager.py convert-to-stable \
+            --github-token "${GITHUB_TOKEN}" \
+            --repo "${{ github.repository }}" \
+            --version "${{ github.event.inputs.convert_beta_version }}"
+
+  finalize-stable:
+    if: github.event_name == 'release' && github.event.release.prerelease == false && !contains(github.event.release.tag_name, 'beta')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.release.target_commitish }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Finalize stable
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python .github/scripts/release_manager.py publish-stable \
+            --github-token "${GITHUB_TOKEN}" \
+            --repo "${{ github.repository }}" \
+            --version "${{ github.event.release.tag_name }}"

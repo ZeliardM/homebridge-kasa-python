@@ -126,3 +126,4 @@ dist
 
 # Webstorm
 .idea
+__pycache__/
