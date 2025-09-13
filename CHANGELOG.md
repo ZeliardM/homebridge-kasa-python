@@ -7,6 +7,7 @@
 - Fix CHANGELOG.md workflow not syncing properly with GitHub releases, add automated changelog maintenance, consolidate release workflows, implement comprehensive beta management system, optimize workflow code quality, and resolve Unreleased section handling @Copilot [#76]
 
 ### Bug Fixes
+- Issue/fix dependabot @ZeliardM [#87]
 
 - Issue/fix npm publish failures @ZeliardM [#86]
 - Fix publish version matching package version @ZeliardM [#84]
