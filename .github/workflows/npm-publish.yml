@@ -37,6 +37,11 @@ on:
         default: ""
         required: false
         type: string
+      rollback_delete_tag:
+        description: If npm publish fails, also delete the release tag (advanced)
+        default: false
+        required: false
+        type: boolean
     secrets:
       npm_auth_token:
         description: The npm access token used to publish the package
@@ -49,13 +54,18 @@ jobs:
   publish_npm:
     runs-on: ubuntu-latest
     permissions:
+      contents: write
       id-token: write
 
     outputs:
       NPM_VERSION: ${{ steps.get-version.outputs.version }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout release tag (or ref)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.release.tag_name || github.ref_name }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -69,23 +79,29 @@ jobs:
 
       - name: Determine expected version from tag
         id: expected
-        if: inputs.set_version_from_release_tag == true
         shell: bash
         run: |
           set -euo pipefail
-          # Prefer release tag if present, otherwise fall back to ref name
           TAG="${{ github.event.release.tag_name || github.ref_name }}"
           if [ -z "${TAG:-}" ]; then
             echo "No tag found from event context"; exit 1
           fi
-          # Strip leading "v" if present
           EXPECTED="${TAG#v}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${EXPECTED}" >> "$GITHUB_OUTPUT"
           echo "Expected version from tag: $EXPECTED"
 
+      - name: Refresh to latest retarget of tag (post-finalize)
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.expected.outputs.tag }}"
+          # Ensure we have the latest tag state (finalize workflows may force-move the tag)
+          git fetch --tags --force origin
+          # Re-checkout the tag to pick up any retarget
+          git -c advice.detachedHead=false checkout -f "tags/${TAG}" || git checkout -f "refs/tags/${TAG}"
+
       - name: Set package.json version from release tag (only if different)
-        if: inputs.set_version_from_release_tag == true
         shell: bash
         run: |
           set -euo pipefail
@@ -100,7 +116,7 @@ jobs:
           fi
 
       - name: Verify version matches expectation
-        if: inputs.set_version_from_release_tag == true && inputs.fail_if_mismatch == true
+        if: inputs.fail_if_mismatch == true
         shell: bash
         run: |
           set -euo pipefail
@@ -137,3 +153,58 @@ jobs:
 
       - name: Notice
         run: echo "::notice::Published on npm - ${{ steps.get-version.outputs.version }}"
+
+      - name: Resolve GitHub release by tag
+        id: rel
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.expected.outputs.tag }}"
+          # Prefer event payload fields first
+          REL_ID_JS='try{const e=require(process.env.GITHUB_EVENT_PATH);process.stdout.write(String(e.release?.id||""))}catch{process.stdout.write("")}'
+          REL_PRE_JS='try{const e=require(process.env.GITHUB_EVENT_PATH);process.stdout.write(String(e.release?.prerelease ?? ""))}catch{process.stdout.write("")}'
+          REL_ID="$(node -e "${REL_ID_JS}")"
+          REL_PRE="$(node -e "${REL_PRE_JS}")"
+
+          if [ -z "$REL_ID" ]; then
+            API="https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}"
+            RESP="$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$API" || true)"
+            REL_ID="$(printf '%s' "$RESP" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);process.stdout.write(String(j.id||""))}catch{process.stdout.write("")}})')"
+            REL_PRE="$(printf '%s' "$RESP" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);process.stdout.write(String(j.prerelease ?? ""))}catch{process.stdout.write("")}})')"
+          fi
+
+          echo "id=${REL_ID}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${REL_PRE}" >> "$GITHUB_OUTPUT"
+
+      - name: Roll back GitHub release to draft (npm publish failed)
+        if: failure() && steps.rel.outputs.id != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          REL_ID="${{ steps.rel.outputs.id }}"
+          TAG="${{ steps.rel.outputs.tag }}"
+          PR="${{ steps.rel.outputs.prerelease }}"
+          # Normalize PR to true/false literal
+          if [ "$PR" != "true" ]; then PR="false"; fi
+          API="https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${REL_ID}"
+          echo "Rolling back release ${REL_ID} (tag ${TAG}) to draft (prerelease=${PR})..."
+          curl -sS -X PATCH "${API}" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -d "{\"draft\":true,\"prerelease\":${PR}}" >/dev/null
+          echo "::warning::Release rolled back to draft: ${TAG}"
+
+      - name: Optionally delete tag on rollback (advanced)
+        if: failure() && inputs.rollback_delete_tag == true && steps.rel.outputs.tag != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.rel.outputs.tag }}"
+          echo "Deleting tag ${TAG} due to npm publish failure..."
+          git push origin ":refs/tags/${TAG}" || echo "::warning::Failed to delete tag ${TAG} (it may not exist remotely)"

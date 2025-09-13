@@ -1,14 +1,12 @@
----
 name: Release
 
-# This workflow handles the npm publishing and release creation for stable releases.
-# Changelog management is handled by the flow-stable.yml workflow.
+# Handles npm publishing and Discord for releases.
+# Changelog management and tag finalize happen in flow-stable.yml.
 
 on:
   release:
     types: [published]
 
-# Only run for non-beta releases on the latest branch
 jobs:
   build_lint_test:
     if: >
