@@ -45,5 +45,6 @@ breaking-change:
 
 beta:
   - base-branch: 'beta'
+
 latest:
   - base-branch: 'latest'

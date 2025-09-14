@@ -1,0 +1,167 @@
+name: Label, Enforce, & Validate PR
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-validate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  clear-labels:
+    if: github.actor != 'github-actions[bot]'
+    name: Clear PR labels (full reset)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clear all labels from PR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          PR="${{ github.event.pull_request.number }}"
+          printf '{"labels":[]}\n' > payload.json
+          gh api --method PUT -H "Accept: application/vnd.github+json" repos/$REPO/issues/$PR/labels --input payload.json
+
+  apply-labels:
+    if: github.actor != 'github-actions[bot]'
+    name: Apply labels via labeler
+    needs: clear-labels
+    uses: homebridge/.github/.github/workflows/labeler.yml@latest
+    permissions:
+      contents: read
+      pull-requests: write
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN }}
+
+  validate:
+    if: github.actor != 'github-actions[bot]'
+    name: Validate PR
+    needs: apply-labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout validator
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/scripts/pr_manager.py
+          fetch-depth: 0
+
+      - name: Ensure jq
+        shell: bash
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
+      - name: Validate and capture outputs
+        id: validate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          RESULT="$(python3 .github/scripts/pr_manager.py)"
+          echo "Raw validator output: $RESULT"
+
+          OK="$(echo "$RESULT" | jq -r '.ok // false')"
+          MSG="$(echo "$RESULT" | jq -r '.message // ""')"
+          CODE="$(echo "$RESULT" | jq -r '.code // ""')"
+
+          echo "ok=$OK" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          printf "%s" "$MSG" | base64 | tr -d '\n' > msg.b64
+          echo "error_b64=$(cat msg.b64)" >> "$GITHUB_OUTPUT"
+
+      - name: Post or update sticky failure comment
+        if: steps.validate.outputs.ok != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PR_NUM="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+          MARK="<!-- COPILOT-STICKY:PR-VALIDATION -->"
+          ERR="$(printf "%s" "${{ steps.validate.outputs.error_b64 }}" | base64 -d 2>/dev/null || true)"
+          if [ -z "$ERR" ]; then ERR="Validation failed (no details provided)."; fi
+
+          {
+            echo "❌ PR validation failed:"
+            echo
+            echo '```'
+            echo "$ERR"
+            echo '```'
+            echo
+            echo "Please correct and push updates."
+            echo
+            echo "$MARK"
+          } > body.txt
+
+          CID="$(gh api repos/$REPO/issues/$PR_NUM/comments --paginate --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
+          if [ -n "$CID" ]; then
+            gh api repos/$REPO/issues/comments/$CID -X PATCH -f body="$(cat body.txt)"
+          else
+            gh pr comment "$PR_NUM" --body-file body.txt
+          fi
+
+      - name: Update sticky success summary
+        if: steps.validate.outputs.ok == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          PR_NUM="${{ github.event.pull_request.number }}"
+          MARK="<!-- COPILOT-STICKY:PR-VALIDATION -->"
+
+          LABELS_JSON="$(gh api repos/$REPO/issues/$PR_NUM/labels --paginate || echo '[]')"
+          LABELS_LINE="$(echo "$LABELS_JSON" | jq -r '.[].name' | paste -sd ', ' - || true)"
+          BASE="$(gh pr view "$PR_NUM" --json baseRefName --jq .baseRefName || echo '')"
+
+          # Derive a "classification" summary from labels
+          CLASS_SET="breaking-change bug dependency docs enhancement feature fix"
+          CLASS=""
+          for L in $(echo "$LABELS_JSON" | jq -r '.[].name' | tr '[:upper:]' '[:lower:]'); do
+            for C in $CLASS_SET; do
+              if [ "$L" = "$C" ]; then CLASS="$L"; break; fi
+            done
+            [ -n "$CLASS" ] && break
+          done
+
+          {
+            echo "✅ PR validated successfully!"
+            echo
+            echo "- Base branch: ${BASE:-<unknown>}"
+            echo "- Classification: ${CLASS:-<none>}"
+            echo "- Current labels: ${LABELS_LINE:-<none>}"
+            echo
+            echo "Thank you. This PR has the required labels and satisfies validation."
+            echo
+            echo "$MARK"
+          } > success.txt
+
+          CID="$(gh api repos/$REPO/issues/$PR_NUM/comments --paginate --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
+          if [ -n "$CID" ]; then
+            gh api repos/$REPO/issues/comments/$CID -X PATCH -f body="$(cat success.txt)"
+          else
+            gh pr comment "$PR_NUM" --body-file success.txt
+          fi
+
+      - name: Fail job if invalid
+        if: steps.validate.outputs.ok != 'true'
+        shell: bash
+        run: exit 1

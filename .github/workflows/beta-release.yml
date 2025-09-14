@@ -3,6 +3,9 @@ name: Beta Release
 # Handles npm publishing and Discord for beta prereleases.
 # Beta changelog management and tag finalize happen in flow-beta.yml.
 
+permissions:
+  contents: write
+
 on:
   release:
     types: [published]
