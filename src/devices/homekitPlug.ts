@@ -89,6 +89,11 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
     const service: Service =
       this.homebridgeAccessory.getService(serviceType) ?? this.addService(serviceType, this.name);
     this.checkCharacteristics(service);
+    
+    // Add Energy Monitoring Service if device supports energy monitoring
+    if (this.kasaDevice.feature_info.energy && this.kasaDevice.sys_info.energy) {
+      this.checkEnergyMonitoringService();
+    }
   }
 
   private getServiceType() {
@@ -118,6 +123,44 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
     return characteristics;
   }
 
+  private getEnergyMonitoringCharacteristics() {
+    const characteristics: { type: WithUUID<new () => Characteristic>; name: string | undefined }[] = [];
+    characteristics.push(
+      {
+        type: this.platform.CustomCharacteristics.Volts,
+        name: 'Volts',
+      },
+      {
+        type: this.platform.CustomCharacteristics.Amperes,
+        name: 'Amperes',
+      },
+      {
+        type: this.platform.CustomCharacteristics.Watts,
+        name: 'Watts',
+      },
+      {
+        type: this.platform.CustomCharacteristics.KilowattHours,
+        name: 'KilowattHours',
+      },
+    );
+    return characteristics;
+  }
+
+  private checkEnergyMonitoringService() {
+    // Add custom characteristics to the existing Outlet service
+    const service = this.getService();
+    if (service) {
+      this.checkEnergyMonitoringCharacteristics(service);
+    }
+  }
+
+  private checkEnergyMonitoringCharacteristics(service: Service) {
+    const characteristics = this.getEnergyMonitoringCharacteristics();
+    characteristics.forEach(({ type, name }) => {
+      this.getOrAddEnergyCharacteristic(service, type, name);
+    });
+  }
+
   private getOrAddCharacteristic(
     service: Service,
     characteristicType: WithUUID<new () => Characteristic>,
@@ -129,6 +172,16 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
     if (characteristicType === this.platform.Characteristic.On) {
       characteristic.onSet(this.handleOnSet.bind(this, service, characteristicType, characteristicName));
     }
+  }
+
+  private getOrAddEnergyCharacteristic(
+    service: Service,
+    characteristicType: WithUUID<new () => Characteristic>,
+    characteristicName: string | undefined,
+  ) {
+    const characteristic: Characteristic = service.getCharacteristic(characteristicType) ??
+      service.addCharacteristic(characteristicType);
+    characteristic.onGet(this.handleEnergyOnGet.bind(this, service, characteristicType, characteristicName));
   }
 
   private async handleOnGet(
@@ -170,6 +223,47 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
       }
     }
     return false;
+  }
+
+  private getEnergyInitialValue(characteristicType: WithUUID<new () => Characteristic>): CharacteristicValue {
+    if (this.kasaDevice.feature_info.energy && this.kasaDevice.sys_info.energy) {
+      if (characteristicType === this.platform.CustomCharacteristics.Volts) {
+        return this.kasaDevice.sys_info.energy.voltage ?? 0;
+      }
+      if (characteristicType === this.platform.CustomCharacteristics.Amperes) {
+        return this.kasaDevice.sys_info.energy.current ?? 0;
+      }
+      if (characteristicType === this.platform.CustomCharacteristics.Watts) {
+        return this.kasaDevice.sys_info.energy.power ?? 0;
+      }
+      if (characteristicType === this.platform.CustomCharacteristics.KilowattHours) {
+        return this.kasaDevice.sys_info.energy.total ?? 0;
+      }
+    }
+    return 0;
+  }
+
+  private async handleEnergyOnGet(
+    service: Service,
+    characteristicType: WithUUID<new () => Characteristic>,
+    characteristicName: string | undefined,
+  ): Promise<CharacteristicValue> {
+    if (this.kasaDevice.offline || this.platform.isShuttingDown) {
+      this.log.warn(`Device is offline or platform is shutting down, cannot get energy value for characteristic ${characteristicName}`);
+      return 0;
+    }
+    try {
+      let characteristicValue = service.getCharacteristic(characteristicType).value;
+      if (characteristicValue === undefined || characteristicValue === null) {
+        characteristicValue = this.getEnergyInitialValue(characteristicType);
+        service.getCharacteristic(characteristicType).updateValue(characteristicValue);
+      }
+      this.log.debug(`Got energy value for characteristic ${characteristicName}: ${characteristicValue}`);
+      return characteristicValue ?? 0;
+    } catch (error) {
+      this.log.error(`Error getting energy value for characteristic ${characteristicName} for device: ${this.name}:`, error);
+      return 0;
+    }
   }
 
   private async handleOnSet(
@@ -300,6 +394,34 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
         }
         this.log.debug(`Updated state for child device: ${this.name} to ${this.kasaDevice.sys_info.state}`);
       }
+      
+      // Update energy characteristics if energy monitoring is supported
+      if (this.kasaDevice.feature_info.energy && this.kasaDevice.sys_info.energy) {
+        this.updateEnergyCharacteristics();
+      }
+    }
+  }
+
+  private updateEnergyCharacteristics() {
+    const service = this.getService();
+    if (service && this.kasaDevice.sys_info.energy) {
+      // Update voltage
+      const voltage = this.kasaDevice.sys_info.energy.voltage ?? 0;
+      this.updateValue(service, service.getCharacteristic(this.platform.CustomCharacteristics.Volts), this.name, voltage);
+      
+      // Update current
+      const current = this.kasaDevice.sys_info.energy.current ?? 0;
+      this.updateValue(service, service.getCharacteristic(this.platform.CustomCharacteristics.Amperes), this.name, current);
+      
+      // Update power
+      const power = this.kasaDevice.sys_info.energy.power ?? 0;
+      this.updateValue(service, service.getCharacteristic(this.platform.CustomCharacteristics.Watts), this.name, power);
+      
+      // Update total consumption
+      const totalConsumption = this.kasaDevice.sys_info.energy.total ?? 0;
+      this.updateValue(service, service.getCharacteristic(this.platform.CustomCharacteristics.KilowattHours), this.name, totalConsumption);
+      
+      this.log.debug(`Updated energy characteristics for device: ${this.name} - Volts: ${voltage}V, Amperes: ${current}A, Watts: ${power}W, kWh: ${totalConsumption}`);
     }
   }
 
@@ -310,6 +432,11 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
       this.updateCharacteristics(service);
     } else {
       this.log.debug(`Service not found for device: ${this.name}`);
+    }
+    
+    // Update energy monitoring characteristics if supported
+    if (this.kasaDevice.feature_info.energy && this.kasaDevice.sys_info.energy) {
+      this.updateEnergyCharacteristics();
     }
   }
 

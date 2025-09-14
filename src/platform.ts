@@ -22,6 +22,7 @@ import { parseConfig } from './config.js';
 import { TaskQueue } from './taskQueue.js';
 import { deferAndCombine, runCommand } from './utils.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
+import { createCustomCharacteristics, type CustomCharacteristics } from './customCharacteristics.js';
 import {
   checkForUpgrade,
   getAvailablePort,
@@ -46,6 +47,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public readonly Characteristic: typeof Characteristic;
+  public readonly CustomCharacteristics: CustomCharacteristics;
   public readonly configuredAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
   public readonly offlineAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
   public readonly Service: typeof Service;
@@ -67,6 +69,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   constructor(public readonly log: Logging, config: PlatformConfig, public readonly api: API) {
     this.Service = this.api.hap.Service;
     this.Characteristic = this.api.hap.Characteristic;
+    this.CustomCharacteristics = createCustomCharacteristics(this.api);
     this.storagePath = this.api.user.storagePath();
     this.config = parseConfig(config);
     this.periodicDeviceDiscoveryEmitter = new EventEmitter();
