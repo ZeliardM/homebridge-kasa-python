@@ -3,9 +3,6 @@ name: Beta Release
 # Handles npm publishing and Discord for beta prereleases.
 # Beta changelog management and tag finalize happen in flow-beta.yml.
 
-permissions:
-  contents: write
-
 on:
   release:
     types: [published]
@@ -27,6 +24,7 @@ jobs:
       github.event.release.target_commitish == 'beta' &&
       github.repository == 'ZeliardM/homebridge-kasa-python'
     permissions:
+      contents: write
       id-token: write
     uses: ./.github/workflows/npm-publish.yml
     with:
