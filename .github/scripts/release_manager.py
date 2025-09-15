@@ -25,6 +25,8 @@ CATEGORY_ORDER = [
     "Other Changes",
 ]
 
+STABLE_RELEASE_PRIORITY = 10_000
+
 LABEL_BREAKING = {"breaking-change"}
 LABEL_FEATURE = {"enhancement", "feature"}
 LABEL_FIX = {"fix", "bug", "bugfix"}
@@ -57,6 +59,9 @@ class Version:
     def bump_minor(self): return Version(self.major,self.minor+1,0)
     def bump_patch(self): return Version(self.major,self.minor,self.patch+1)
     def next_beta(self): return Version(self.major,self.minor,self.patch,0 if self.beta is None else self.beta+1)
+
+def version_sort_key(v: Version) -> Tuple[int,int,int,int]:
+    return (v.major, v.minor, v.patch, STABLE_RELEASE_PRIORITY if v.beta is None else v.beta)
 
 class GitHub:
     def __init__(self, token: str, repo: str):
@@ -128,9 +133,7 @@ def list_versions(content: str) -> List[Version]:
     for m in SECTION_RE.finditer(content):
         try: out.append(Version.parse(m.group(1)))
         except: pass
-    def sort_key(v: Version) -> Tuple[int,int,int,int]:
-        return (v.major, v.minor, v.patch, 10_000 if v.beta is None else v.beta)
-    return sorted(set(out), key=sort_key)
+    return sorted(set(out), key=version_sort_key)
 
 def find_section_block(content: str, tag: str) -> str:
     pattern = rf"^## \[{re.escape(tag)}\].*?\n(.*?)(?=^## \[v|\Z)"
@@ -456,12 +459,10 @@ def build_stable_body(version: Version, changelog: str, prev_stable: Version) ->
 
 def latest_versions(changelog: str) -> Tuple[Optional[Version], Optional[Version]]:
     versions=list_versions(changelog)
-    def sort_key(v: Version) -> Tuple[int,int,int,int]:
-        return (v.major, v.minor, v.patch, 10_000 if v.beta is None else v.beta)
     stable=[v for v in versions if not v.is_beta()]
     beta=[v for v in versions if v.is_beta()]
-    latest_stable = max(stable, key=sort_key) if stable else None
-    latest_beta = max(beta, key=sort_key) if beta else None
+    latest_stable = max(stable, key=version_sort_key) if stable else None
+    latest_beta = max(beta, key=version_sort_key) if beta else None
     return latest_stable, latest_beta
 
 def find_unpublished_beta_draft(gh: GitHub) -> Optional[Version]:
@@ -473,7 +474,7 @@ def find_unpublished_beta_draft(gh: GitHub) -> Optional[Version]:
                 drafts.append(Version.parse(tn))
             except:
                 continue
-    return max(drafts) if drafts else None
+    return max(drafts, key=version_sort_key) if drafts else None
 
 def find_latest_draft_stable(gh: GitHub) -> Optional[Tuple[Version, dict]]:
     candidates: List[Tuple[Version, dict]] = []
@@ -485,7 +486,7 @@ def find_latest_draft_stable(gh: GitHub) -> Optional[Tuple[Version, dict]]:
             except:
                 continue
     if not candidates: return None
-    return max(candidates, key=lambda x: x[0])
+    return max(candidates, key=lambda x: version_sort_key(x[0]))
 
 def is_published(gh: GitHub, version: Version) -> bool:
     rel=gh.release_by_tag(version.tag())
@@ -560,7 +561,7 @@ def cmd_pr_merged(args):
                 if v.tag().lstrip("v") not in npm_versions:
                     continue
             published_beta_versions.append(v)
-    latest_published_beta=max(published_beta_versions) if published_beta_versions else None
+    latest_published_beta=max(published_beta_versions, key=version_sort_key) if published_beta_versions else None
     existing_unpublished=find_unpublished_beta_draft(gh)
     draft_stable = find_latest_draft_stable(gh)
     category=categorize(labels)
@@ -638,8 +639,6 @@ def cmd_finalize_beta(args):
     content=read_changelog()
     entry=f"- Update CHANGELOG.md for beta release {v.tag()} @github-actions [beta-release]"
     content=insert_entry(content, v, "Other Changes", entry, None, add_date=False)
-    date=datetime.datetime.utcnow().strftime("%Y-%m-%d")
-    content=add_publish_date(content, v.tag(), date)
     write_changelog(content)
     git_commit(f"Finalize beta release {v.tag()} in CHANGELOG.md")
     git_tag_force(v.tag())
@@ -679,7 +678,7 @@ def cmd_convert_betas(args):
         print("[release-manager] No published betas to convert.")
         return
     aggregated={c:[] for c in CATEGORY_ORDER}; seen=set()
-    for b in sorted(betas):
+    for b in sorted(betas, key=version_sort_key):
         block=find_section_block(content, b.tag())
         cats=collect_section_categories(block)
         for cat, entries in cats.items():
@@ -688,7 +687,7 @@ def cmd_convert_betas(args):
                 if e.endswith("[beta-release]"): continue
                 if e not in seen:
                     aggregated[cat].append(e); seen.add(e)
-    conversion_note = f"- Convert beta releases ({', '.join(b.tag() for b in sorted(betas))}) to regular release {base_version.tag()} @github-actions [beta-to-release]"
+    conversion_note = f"- Convert beta releases ({', '.join(b.tag() for b in sorted(betas, key=version_sort_key))}) to regular release {base_version.tag()} @github-actions [beta-to-release]"
     aggregated.setdefault("Other Changes", []).append(conversion_note)
     repo=os.environ.get("GITHUB_REPOSITORY","")
     header=build_section_header(base_version.tag(), add_date=False)
@@ -734,7 +733,7 @@ def cmd_finalize_stable(args):
     git_commit(f"Finalize stable release {v.tag()} in CHANGELOG.md")
     git_tag_force(v.tag())
     versions=[x for x in list_versions(content) if not x.is_beta()]
-    versions_sorted=sorted(versions)
+    versions_sorted=sorted(versions, key=version_sort_key)
     prev=Version(0,0,0)
     if len(versions_sorted)>1 and versions_sorted[-1]==v:
         prev=versions_sorted[-2]
