@@ -3,6 +3,7 @@
 
 ### Bug Fixes
 
+- Update section ordering in release_manager.py @ZeliardM [#90]
 - Fix npm-publish permissions @ZeliardM [#89]
 - Fix release permissions @ZeliardM [#88]
 - Issue/fix dependabot @ZeliardM [#87]
