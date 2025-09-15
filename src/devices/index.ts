@@ -137,6 +137,14 @@ export default abstract class HomeKitDevice {
         return energyChar.name === this.platform.getCharacteristicName(characteristic);
       });
 
+
+    this.log.info(`
+      Object.values(EnergyCharacteristics) ${Object.values(EnergyCharacteristics)},
+      Characteristic name ${this.platform.getCharacteristicName(characteristic)},
+      isEnergyMonitoring: ${isEnergyMonitoring},
+      logEnergyMonitoring: ${this.platform.config.advancedOptions.logEnergyMonitoring}
+      `);
+
     if (!isEnergyMonitoring || this.platform.config.advancedOptions.logEnergyMonitoring) {
       this.log.info(`Updating ${this.platform.lsc(service, characteristic)} on ${deviceAlias} to ${value}`);
     }
