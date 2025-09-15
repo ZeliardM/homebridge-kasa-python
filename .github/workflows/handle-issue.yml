@@ -235,8 +235,8 @@ jobs:
           NUM="${{ github.event.issue.number }}"
           MARK="<!-- COPILOT-STICKY:ISSUE-CLASSIFIER -->"
 
-          LABELS_JSON="$(gh api repos/$REPO/issues/$NUM/labels --paginate)"
-          LABELS_LINE="$(echo "$LABELS_JSON" | jq -r '.[].name' | paste -sd ', ' -)"
+          LABELS_JSON="$(gh api repos/$REPO/issues/$NUM/labels --paginate || echo '[]')"
+          LABELS_LINE="$(echo "$LABELS_JSON" | jq -r '[.[].name] | sort | join(", ")' || true)"
 
           CLASS="${{ needs.classify.outputs.applied_label }}"
 

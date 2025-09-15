@@ -14,9 +14,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  retarget-base:
+    if: github.actor != 'github-actions[bot]'
+    name: Ensure base branch is beta
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Retarget PR base to beta if needed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PR="${{ github.event.pull_request.number }}"
+          BASE="$(gh pr view "$PR" --json baseRefName --jq .baseRefName || echo '')"
+          if [ "$BASE" != "beta" ]; then
+            echo "Retargeting PR #$PR base from '$BASE' to 'beta'."
+            gh pr edit "$PR" --base beta || echo "::warning::Failed to retarget base to beta."
+          else
+            echo "PR #$PR base is already 'beta'."
+          fi
+
   clear-labels:
     if: github.actor != 'github-actions[bot]'
     name: Clear PR labels (full reset)
+    needs: retarget-base
     runs-on: ubuntu-latest
     steps:
       - name: Clear all labels from PR
@@ -129,11 +154,11 @@ jobs:
           MARK="<!-- COPILOT-STICKY:PR-VALIDATION -->"
 
           LABELS_JSON="$(gh api repos/$REPO/issues/$PR_NUM/labels --paginate || echo '[]')"
-          LABELS_LINE="$(echo "$LABELS_JSON" | jq -r '.[].name' | paste -sd ', ' - || true)"
+          LABELS_LINE="$(echo "$LABELS_JSON" | jq -r '[.[].name] | sort | join(", ")' || true)"
           BASE="$(gh pr view "$PR_NUM" --json baseRefName --jq .baseRefName || echo '')"
 
           # Derive a "classification" summary from labels
-          CLASS_SET="breaking-change bug dependency docs enhancement feature fix"
+          CLASS_SET="breaking-change bug dependency docs enhancement feature fix internal workflow"
           CLASS=""
           for L in $(echo "$LABELS_JSON" | jq -r '.[].name' | tr '[:upper:]' '[:lower:]'); do
             for C in $CLASS_SET; do
