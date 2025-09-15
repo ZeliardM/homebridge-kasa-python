@@ -128,7 +128,9 @@ def list_versions(content: str) -> List[Version]:
     for m in SECTION_RE.finditer(content):
         try: out.append(Version.parse(m.group(1)))
         except: pass
-    return sorted(set(out))
+    def sort_key(v: Version) -> Tuple[int,int,int,int]:
+        return (v.major, v.minor, v.patch, 10_000 if v.beta is None else v.beta)
+    return sorted(set(out), key=sort_key)
 
 def find_section_block(content: str, tag: str) -> str:
     pattern = rf"^## \[{re.escape(tag)}\].*?\n(.*?)(?=^## \[v|\Z)"
@@ -272,6 +274,53 @@ def git_delete_tag(tag: str):
     except subprocess.CalledProcessError as e:
         print(f"[release-manager] Failed to delete tag {tag}: {e}", file=sys.stderr)
 
+def _normalize_section_spacing(section: List[str]) -> List[str]:
+    if not section:
+        return section[:]
+    fc_idx = None
+    for i, l in enumerate(section):
+        if l.startswith("**Full Changelog**"):
+            fc_idx = i
+            break
+    header = section[0]
+    body = section[1:fc_idx] if fc_idx is not None else section[1:]
+    fc_line = section[fc_idx] if fc_idx is not None else None
+    out: List[str] = [header, ""]
+    i = 0
+    while i < len(body):
+        line = body[i]
+        if line.startswith("### "):
+            out.append(line)
+            out.append("")
+            i += 1
+            items: List[str] = []
+            while i < len(body):
+                cur = body[i]
+                if cur.startswith("### ") or cur.startswith("**Full Changelog**"):
+                    break
+                if cur.startswith("- "):
+                    items.append(cur)
+                i += 1
+            out.extend(items)
+            if items:
+                out.append("")
+        else:
+            i += 1
+    if fc_line:
+        if out and out[-1] != "":
+            out.append("")
+        out.append(fc_line)
+        out.append("")
+    normalized: List[str] = []
+    prev_blank = False
+    for l in out:
+        is_blank = (l.strip() == "")
+        if is_blank and prev_blank:
+            continue
+        normalized.append(l)
+        prev_blank = is_blank
+    return normalized
+
 def insert_entry(content: str, version: Version, category: str, entry: str,
                  compare_from: Optional[str], add_date=False, publish_date=None) -> str:
     tag = version.tag()
@@ -281,9 +330,9 @@ def insert_entry(content: str, version: Version, category: str, entry: str,
     header_idx = next((i for i,l in enumerate(lines) if l.startswith(header_pattern)), None)
     if header_idx is None:
         section_header = build_section_header(tag, add_date, publish_date)
-        new_sec = [section_header,"", f"### {category}","", entry,""]
+        new_sec = [section_header, "", f"### {category}", "", entry, ""]
         if compare_from:
-            new_sec += [f"**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{tag}",""]
+            new_sec += [f"**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{tag}", ""]
         out=[]; inserted=False
         for i,l in enumerate(lines):
             out.append(l)
@@ -301,13 +350,35 @@ def insert_entry(content: str, version: Version, category: str, entry: str,
         i+=1
     section = lines[header_idx:end]
     if entry in section:
-        return squeeze_blank("\n".join(lines)) + "\n"
+        normalized = _normalize_section_spacing(section)
+        new_content = lines[:header_idx] + normalized + lines[end:]
+        return squeeze_blank("\n".join(new_content)) + "\n"
     cat_header = f"### {category}"
+
+    def section_category_positions(sec_lines: List[str]) -> Tuple[List[Tuple[int,int]], Optional[int]]:
+        cat_pos: List[Tuple[int,int]] = []
+        fc_idx: Optional[int] = None
+        for idx, l in enumerate(sec_lines):
+            if l.startswith("### "):
+                cname = l[4:].strip()
+                prio = CATEGORY_ORDER.index(cname) if cname in CATEGORY_ORDER else 999
+                cat_pos.append((idx, prio))
+            if fc_idx is None and l.startswith("**Full Changelog**"):
+                fc_idx = idx
+        return cat_pos, fc_idx
+
     if cat_header not in section:
-        fc_index = next((idx for idx,l in enumerate(section) if l.startswith("**Full Changelog**")), None)
-        insert_at = fc_index if fc_index is not None else len(section)
+        cat_pos, fc_idx = section_category_positions(section)
+        desired_prio = CATEGORY_ORDER.index(category) if category in CATEGORY_ORDER else 999
+        insertion_local_idx: Optional[int] = None
+        for idx, prio in cat_pos:
+            if prio > desired_prio:
+                insertion_local_idx = idx
+                break
+        if insertion_local_idx is None:
+            insertion_local_idx = fc_idx if fc_idx is not None else len(section)
         to_insert=[cat_header,"", entry,""]
-        section = section[:insert_at]+to_insert+section[insert_at:]
+        section = section[:insertion_local_idx] + to_insert + section[insertion_local_idx:]
     else:
         new_sec=[]; j=0; inserted=False
         while j < len(section):
@@ -320,6 +391,7 @@ def insert_entry(content: str, version: Version, category: str, entry: str,
         section=new_sec
     if compare_from and not any("**Full Changelog**" in l for l in section):
         section += [f"**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{tag}",""]
+    section = _normalize_section_spacing(section)
     new_content = lines[:header_idx]+section+lines[end:]
     return squeeze_blank("\n".join(new_content))+"\n"
 
@@ -330,7 +402,7 @@ def rename_version_section(content: str, old_tag: str, new_tag: str) -> str:
         if l.startswith(old_header): lines[i]=new_header
         if "**Full Changelog**" in l and l.endswith(f"...{old_tag}"):
             lines[i]=re.sub(rf"\.\.{re.escape(old_tag)}$", f"..{new_tag}", l)
-    return "\n".join(lines) + ("\n" if not lines[-1].endswith("\n") else "")
+    return "\n".join(lines) + "\n"
 
 def add_publish_date(content: str, tag: str, date: str) -> str:
     lines=content.splitlines(); prefix=f"## [{tag}]"
@@ -384,9 +456,13 @@ def build_stable_body(version: Version, changelog: str, prev_stable: Version) ->
 
 def latest_versions(changelog: str) -> Tuple[Optional[Version], Optional[Version]]:
     versions=list_versions(changelog)
+    def sort_key(v: Version) -> Tuple[int,int,int,int]:
+        return (v.major, v.minor, v.patch, 10_000 if v.beta is None else v.beta)
     stable=[v for v in versions if not v.is_beta()]
     beta=[v for v in versions if v.is_beta()]
-    return (max(stable) if stable else None, max(beta) if beta else None)
+    latest_stable = max(stable, key=sort_key) if stable else None
+    latest_beta = max(beta, key=sort_key) if beta else None
+    return latest_stable, latest_beta
 
 def find_unpublished_beta_draft(gh: GitHub) -> Optional[Version]:
     drafts: List[Version] = []
@@ -612,6 +688,8 @@ def cmd_convert_betas(args):
                 if e.endswith("[beta-release]"): continue
                 if e not in seen:
                     aggregated[cat].append(e); seen.add(e)
+    conversion_note = f"- Convert beta releases ({', '.join(b.tag() for b in sorted(betas))}) to regular release {base_version.tag()} @github-actions [beta-to-release]"
+    aggregated.setdefault("Other Changes", []).append(conversion_note)
     repo=os.environ.get("GITHUB_REPOSITORY","")
     header=build_section_header(base_version.tag(), add_date=False)
     prev_stable,_=latest_versions(content)
@@ -621,9 +699,7 @@ def cmd_convert_betas(args):
         if aggregated.get(cat):
             parts.append(f"### {cat}"); parts.append("")
             parts.extend(aggregated[cat]); parts.append("")
-    parts+=["### Other Changes","",
-            f"- Convert beta releases ({', '.join(b.tag() for b in sorted(betas))}) to regular release {base_version.tag()} @github-actions [beta-to-release]","",
-            f"**Full Changelog**: https://github.com/{repo}/compare/{prev_stable.tag()}...{base_version.tag()}",""]
+    parts += [f"**Full Changelog**: https://github.com/{repo}/compare/{prev_stable.tag()}...{base_version.tag()}",""]
     lines=content.splitlines(); out=[]; inserted=False
     for l in lines:
         out.append(l)
