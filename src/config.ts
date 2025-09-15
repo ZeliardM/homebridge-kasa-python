@@ -48,6 +48,7 @@ export interface KasaPythonConfigInput {
   waitTimeUpdate?: number;
   pythonPath?: string;
   advancedPythonLogging?: boolean;
+  logEnergyMonitoring?: boolean;
 }
 
 export type KasaPythonConfig = {
@@ -71,6 +72,7 @@ export type KasaPythonConfig = {
     waitTimeUpdate: number;
     pythonPath?: string;
     advancedPythonLogging: boolean;
+    logEnergyMonitoring: boolean;
   };
 };
 
@@ -95,6 +97,7 @@ export const defaultConfig: KasaPythonConfig = {
     waitTimeUpdate: 100,
     pythonPath: '',
     advancedPythonLogging: false,
+    logEnergyMonitoring: false,
   },
 };
 
@@ -146,6 +149,7 @@ function validateConfig(config: Record<string, unknown>): string[] {
   validateType(config, 'waitTimeUpdate', 'number', errors);
   validateType(config, 'pythonPath', 'string', errors);
   validateType(config, 'advancedPythonLogging', 'boolean', errors);
+  validateType(config, 'logEnergyMonitoring', 'boolean', errors);
 
   return errors;
 }
@@ -194,6 +198,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
       waitTimeUpdate: c.waitTimeUpdate ?? defaultConfig.advancedOptions.waitTimeUpdate,
       pythonPath: c.pythonPath ?? defaultConfig.advancedOptions.pythonPath,
       advancedPythonLogging: c.advancedPythonLogging ?? defaultConfig.advancedOptions.advancedPythonLogging,
+      logEnergyMonitoring: c.logEnergyMonitoring ?? defaultConfig.advancedOptions.logEnergyMonitoring,
     },
   };
 }

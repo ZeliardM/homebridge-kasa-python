@@ -17,6 +17,7 @@ import { prefixLogger } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
 import type { KasaDevice } from './kasaDevices.js';
 import type { KasaPythonAccessoryContext } from '../platform.js';
+import { EnergyCharacteristics } from '../customCharacteristics.js';
 
 export default abstract class HomeKitDevice {
   readonly log: Logger;
@@ -129,7 +130,14 @@ export default abstract class HomeKitDevice {
     deviceAlias: string,
     value: Nullable<CharacteristicValue> | Error | HapStatusError,
   ): void {
-    this.log.info(`Updating ${this.platform.lsc(service, characteristic)} on ${deviceAlias} to ${value}`);
+    const characteristicName = this.platform.getCharacteristicName(characteristic);
+    const isEnergyMonitoring = Object(EnergyCharacteristics).values.contains(characteristicName);
+
+    if (isEnergyMonitoring && !this.platform.config.advancedOptions.logEnergyMonitoring) {
+    } else {
+      this.log.info(`Updating ${this.platform.lsc(service, characteristic)} on ${deviceAlias} to ${value}`);
+    }
+
     characteristic.updateValue(value);
   }
 }

@@ -133,6 +133,12 @@
         "type": "boolean",
         "description": "Enable detailed logging for Python scripts. Only shows logs when Debug Mode in Homebridge is enabled.",
         "default": false
+      },
+      "logEnergyMonitoring": {
+        "title": "Log Energy Monitoring Events",
+        "type": "boolean",
+        "description": "Enable logging of power/energy monitoring characteristic updates (Volts, Amperes, Watts, KilowattHours). Can be noisy if enabled.",
+        "default": false
       }
     }
   },
@@ -195,7 +201,8 @@
               "key": "manualDevices",
               "type": "array",
               "items": [
-                "manualDevices[].host", "manualDevices[].alias"
+                "manualDevices[].host",
+                "manualDevices[].alias"
               ]
             },
             {
@@ -246,7 +253,8 @@
       "items": [
         "waitTimeUpdate",
         "pythonPath",
-        "advancedPythonLogging"
+        "advancedPythonLogging",
+        "logEnergyMonitoring"
       ]
     }
   ]

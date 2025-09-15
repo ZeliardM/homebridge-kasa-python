@@ -1,4 +1,11 @@
-import type { Characteristic, Formats, Perms, Units, WithUUID } from 'homebridge';
+import type { API, Characteristic, WithUUID } from 'homebridge';
+
+export const EnergyCharacteristics = {
+  VOLTS: 'Volts',
+  AMPERES: 'Amperes',
+  WATTS: 'Watts',
+  KILOWATT_HOURS: 'KilowattHours',
+} as const;
 
 export interface CustomCharacteristics {
   Volts: WithUUID<new () => Characteristic>;
@@ -7,7 +14,7 @@ export interface CustomCharacteristics {
   KilowattHours: WithUUID<new () => Characteristic>;
 }
 
-export function createCustomCharacteristics(api: any): CustomCharacteristics {
+export function createCustomCharacteristics(api: API): CustomCharacteristics {
   const { Characteristic, Formats, Perms, Units } = api.hap;
 
   // Custom characteristic for Volts
@@ -15,9 +22,9 @@ export function createCustomCharacteristics(api: any): CustomCharacteristics {
     static readonly UUID: string = 'E863F10A-079E-48FF-8F27-9C2605A29F52';
 
     constructor() {
-      super('Volts', Volts.UUID, {
+      super(EnergyCharacteristics.VOLTS, Volts.UUID, {
         format: Formats.FLOAT,
-        unit: Units.NONE, // Volts
+        unit: undefined, // Volts
         minValue: 0,
         maxValue: 65535,
         minStep: 0.1,
@@ -32,9 +39,9 @@ export function createCustomCharacteristics(api: any): CustomCharacteristics {
     static readonly UUID: string = 'E863F126-079E-48FF-8F27-9C2605A29F52';
 
     constructor() {
-      super('Amperes', Amperes.UUID, {
+      super(EnergyCharacteristics.AMPERES, Amperes.UUID, {
         format: Formats.FLOAT,
-        unit: Units.NONE, // Amperes
+        unit: undefined, // Amperes
         minValue: 0,
         maxValue: 65535,
         minStep: 0.01,
@@ -49,9 +56,9 @@ export function createCustomCharacteristics(api: any): CustomCharacteristics {
     static readonly UUID: string = 'E863F10D-079E-48FF-8F27-9C2605A29F52';
 
     constructor() {
-      super('Watts', Watts.UUID, {
+      super(EnergyCharacteristics.WATTS, Watts.UUID, {
         format: Formats.FLOAT,
-        unit: Units.NONE, // Watts
+        unit: undefined, // Watts
         minValue: 0,
         maxValue: 65535,
         minStep: 0.1,
@@ -66,9 +73,9 @@ export function createCustomCharacteristics(api: any): CustomCharacteristics {
     static readonly UUID: string = 'E863F10C-079E-48FF-8F27-9C2605A29F52';
 
     constructor() {
-      super('KilowattHours', KilowattHours.UUID, {
+      super(EnergyCharacteristics.KILOWATT_HOURS, KilowattHours.UUID, {
         format: Formats.FLOAT,
-        unit: Units.NONE, // kWh
+        unit: undefined, // kWh
         minValue: 0,
         maxValue: 65535,
         minStep: 0.001,
