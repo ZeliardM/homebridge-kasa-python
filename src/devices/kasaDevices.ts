@@ -1,12 +1,5 @@
 export type KasaDevice = LightBulb | Plug | PowerStrip | Switch;
 
-export const EnergyCharacteristics = {
-  VOLTS: 'Volts',
-  AMPERES: 'Amperes',
-  WATTS: 'Watts',
-  KILOWATT_HOURS: 'KilowattHours',
-} as const;
-
 export interface SysInfo {
   alias: string;
   brightness?: number;
