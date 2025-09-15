@@ -153,14 +153,18 @@ jobs:
           PR_NUM="${{ github.event.pull_request.number }}"
           MARK="<!-- COPILOT-STICKY:PR-VALIDATION -->"
 
-          LABELS_JSON="$(gh api repos/$REPO/issues/$PR_NUM/labels --paginate || echo '[]')"
-          LABELS_LINE="$(echo "$LABELS_JSON" | jq -r '[.[].name] | sort | join(", ")' || true)"
+          # Get label names as newline-separated values (handles pagination safely)
+          LABELS_RAW="$(gh api repos/$REPO/issues/$PR_NUM/labels --paginate --jq '.[].name' || true)"
+
+          # Build a single, comma+space separated line in sorted order
+          LABELS_LINE="$(printf '%s\n' "$LABELS_RAW" | awk 'NF' | sort -fu | paste -sd ', ' -)"
+
           BASE="$(gh pr view "$PR_NUM" --json baseRefName --jq .baseRefName || echo '')"
 
           # Derive a "classification" summary from labels
           CLASS_SET="breaking-change bug dependency docs enhancement feature fix internal workflow"
           CLASS=""
-          for L in $(echo "$LABELS_JSON" | jq -r '.[].name' | tr '[:upper:]' '[:lower:]'); do
+          for L in $(printf '%s\n' "$LABELS_RAW" | tr '[:upper:]' '[:lower:]'); do
             for C in $CLASS_SET; do
               if [ "$L" = "$C" ]; then CLASS="$L"; break; fi
             done
