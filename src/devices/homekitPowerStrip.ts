@@ -136,19 +136,19 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
     characteristics.push(
       {
         type: this.platform.CustomCharacteristics.Volts,
-        name: EnergyCharacteristics.VOLTS,
+        name: EnergyCharacteristics.VOLTS.name,
       },
       {
         type: this.platform.CustomCharacteristics.Amperes,
-        name: EnergyCharacteristics.AMPERES,
+        name: EnergyCharacteristics.AMPERES.name,
       },
       {
         type: this.platform.CustomCharacteristics.Watts,
-        name: EnergyCharacteristics.WATTS,
+        name: EnergyCharacteristics.WATTS.name,
       },
       {
         type: this.platform.CustomCharacteristics.KilowattHours,
-        name: EnergyCharacteristics.KILOWATT_HOURS,
+        name: EnergyCharacteristics.KILOWATT_HOURS.name,
       },
     );
     return characteristics;
