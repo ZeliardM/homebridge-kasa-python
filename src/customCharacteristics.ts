@@ -15,7 +15,7 @@ export interface CustomCharacteristics {
 }
 
 export function createCustomCharacteristics(api: API): CustomCharacteristics {
-  const { Characteristic, Formats, Perms, Units } = api.hap;
+  const { Characteristic, Formats, Perms } = api.hap;
 
   // Custom characteristic for Volts
   const Volts = class extends Characteristic {
