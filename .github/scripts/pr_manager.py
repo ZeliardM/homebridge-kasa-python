@@ -2,7 +2,8 @@
 """
 PR Validation:
 - Base branch must be 'beta'
-- Needs at least one classification label: bug, fix, enhancement, feature, breaking-change, docs, dependency
+- Needs at least one classification label:
+    bug, fix, enhancement, feature, breaking-change, docs, dependency, internal, workflow
 - If breaking-change: require markers with >= MIN_EXPL_CHARS explanation bounded by:
     BREAKING_CHANGE_EXPLANATION_START ... BREAKING_CHANGE_EXPLANATION_END
 - Skip for github-actions[bot] and for draft PRs
@@ -14,7 +15,17 @@ Prints JSON to stdout:
 
 import json, os, sys, urllib.request
 
-CLASSIFICATION = {"bug","fix","enhancement","feature","breaking-change","docs","dependency"}
+CLASSIFICATION = {
+    "bug",
+    "fix",
+    "enhancement",
+    "feature",
+    "breaking-change",
+    "docs",
+    "dependency",
+    "internal",
+    "workflow",
+}
 START = "BREAKING_CHANGE_EXPLANATION_START"
 END = "BREAKING_CHANGE_EXPLANATION_END"
 MIN_EXPL_CHARS = 60

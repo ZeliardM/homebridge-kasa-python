@@ -38,8 +38,13 @@ on:
         required: false
         type: string
       rollback_delete_tag:
-        description: If npm publish fails, also delete the release tag (advanced)
-        default: false
+        description: If npm publish fails, also delete the release tag
+        default: true
+        required: false
+        type: boolean
+      rollback_delete_release:
+        description: If npm publish fails and a published release exists, delete it (instead of converting to draft)
+        default: true
         required: false
         type: boolean
     secrets:
@@ -48,20 +53,20 @@ on:
         required: true
     outputs:
       NPM_VERSION:
-        value: ${{ jobs.publish_npm.outputs.NPM_VERSION }}
+        value: ${{ jobs.publish_package.outputs.NPM_VERSION }}
 
 jobs:
-  publish_npm:
+  publish_package:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
 
     outputs:
-      NPM_VERSION: ${{ steps.get-version.outputs.version }}
+      NPM_VERSION: ${{ steps.publish.outputs.NPM_VERSION }}
 
     steps:
-      - name: Checkout release tag (or ref)
+      - name: Checkout source at tag (or ref)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -74,144 +79,25 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      - name: Install
-        run: ${{ inputs.install_cmd }}
-
-      - name: Determine expected version from tag
-        id: expected
+      - name: Publish package and handle rollback
+        id: publish
         shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${{ github.event.release.tag_name || github.ref_name }}"
-          if [ -z "${TAG:-}" ]; then
-            echo "No tag found from event context"; exit 1
-          fi
-          EXPECTED="${TAG#v}"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "version=${EXPECTED}" >> "$GITHUB_OUTPUT"
-          echo "Expected version from tag: $EXPECTED"
-
-      - name: Refresh to latest retarget of tag (post-finalize)
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${{ steps.expected.outputs.tag }}"
-          # Ensure we have the latest tag state (finalize workflows may force-move the tag)
-          git fetch --tags --force origin
-          # Re-checkout the tag to pick up any retarget
-          git -c advice.detachedHead=false checkout -f "tags/${TAG}" || git checkout -f "refs/tags/${TAG}"
-
-      - name: Set package.json version from release tag (only if different)
-        shell: bash
-        run: |
-          set -euo pipefail
-          PKG_VER="$(node -p "require('./package.json').version")"
-          EXP_VER="${{ steps.expected.outputs.version }}"
-          echo "package.json version: $PKG_VER"
-          echo "expected version:   $EXP_VER"
-          if [ "$PKG_VER" = "$EXP_VER" ]; then
-            echo "package.json already at expected version; skipping npm version."
-          else
-            npm version "$EXP_VER" --no-git-tag-version
-          fi
-
-      - name: Verify version matches expectation
-        if: inputs.fail_if_mismatch == true
-        shell: bash
-        run: |
-          set -euo pipefail
-          PKG_VER="$(node -p "require('./package.json').version")"
-          EXP_VER="${{ steps.expected.outputs.version }}"
-          if [ "$PKG_VER" != "$EXP_VER" ]; then
-            echo "::error::package.json version ($PKG_VER) does not match expected version from tag ($EXP_VER)"
-            exit 1
-          fi
-
-      - name: Build
-        if: inputs.build_cmd != ''
-        run: ${{ inputs.build_cmd }}
-
-      - name: Publish to npm (no dist-tag)
-        if: inputs.tag == ''
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.npm_auth_token }}
+          INPUT_NODE_VERSION: ${{ inputs.node_version }}
+          INPUT_DIST_TAG: ${{ inputs.tag }}
+          INPUT_SET_VERSION_FROM_TAG: ${{ inputs.set_version_from_release_tag }}
+          INPUT_FAIL_IF_MISMATCH: ${{ inputs.fail_if_mismatch }}
+          INPUT_INSTALL_CMD: ${{ inputs.install_cmd }}
+          INPUT_BUILD_CMD: ${{ inputs.build_cmd }}
+          INPUT_EXTRA_PUBLISH_ARGS: ${{ inputs.extra_publish_args }}
+          INPUT_ROLLBACK_DELETE_TAG: ${{ inputs.rollback_delete_tag }}
+          INPUT_ROLLBACK_DELETE_RELEASE: ${{ inputs.rollback_delete_release }}
         run: |
           set -euo pipefail
-          npm publish --access public --provenance ${{ inputs.extra_publish_args }}
-
-      - name: Publish to npm (with dist-tag)
-        if: inputs.tag != ''
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.npm_auth_token }}
-        run: |
-          set -euo pipefail
-          npm publish --access public --tag="${{ inputs.tag }}" --provenance ${{ inputs.extra_publish_args }}
-
-      - name: Output published version
-        id: get-version
-        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          python3 .github/scripts/release_publish.py
 
       - name: Notice
-        run: echo "::notice::Published on npm - ${{ steps.get-version.outputs.version }}"
-
-      - name: Resolve GitHub release by tag
-        id: rel
-        if: failure()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          # Ensure jq is available (usually present on ubuntu-latest, but guard just in case)
-          if ! command -v jq >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y jq
-          fi
-
-          TAG="${{ steps.expected.outputs.tag }}"
-
-          # Read from event payload first
-          REL_ID="$(jq -r '.release.id // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")"
-          REL_PRE="$(jq -r '.release.prerelease // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")"
-
-          # If not present in event snapshot, fall back to API
-          if [ -z "$REL_ID" ]; then
-            API="https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}"
-            RESP="$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$API" || true)"
-            REL_ID="$(printf '%s' "$RESP" | jq -r '.id // empty')"
-            REL_PRE="$(printf '%s' "$RESP" | jq -r '.prerelease // empty')"
-          fi
-
-          echo "id=${REL_ID}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "prerelease=${REL_PRE}" >> "$GITHUB_OUTPUT"
-
-      - name: Roll back GitHub release to draft (npm publish failed)
-        if: failure() && steps.rel.outputs.id != ''
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          REL_ID="${{ steps.rel.outputs.id }}"
-          TAG="${{ steps.rel.outputs.tag }}"
-          PR="${{ steps.rel.outputs.prerelease }}"
-          # Normalize PR to true/false literal
-          if [ "$PR" != "true" ]; then PR="false"; fi
-          API="https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${REL_ID}"
-          echo "Rolling back release ${REL_ID} (tag ${TAG}) to draft (prerelease=${PR})..."
-          curl -sS -X PATCH "${API}" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -d "{\"draft\":true,\"prerelease\":${PR}}" >/dev/null
-          echo "::warning::Release rolled back to draft: ${TAG}"
-
-      - name: Optionally delete tag on rollback (advanced)
-        if: failure() && inputs.rollback_delete_tag == true && steps.rel.outputs.tag != ''
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${{ steps.rel.outputs.tag }}"
-          echo "Deleting tag ${TAG} due to npm publish failure..."
-          git push origin ":refs/tags/${TAG}" || echo "::warning::Failed to delete tag ${TAG} (it may not exist remotely)"
+        run: echo "::notice::Published on npm - ${{ steps.publish.outputs.NPM_VERSION }}"

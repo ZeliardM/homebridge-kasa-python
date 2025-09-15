@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Single-script issue handler with two modes:
-- MODE=classify: determine canonical label (bug/enhancement/question/breaking-change/docs/dependency),
+- MODE=classify: determine canonical label (bug/enhancement/question/breaking-change/docs/dependency/internal/workflow),
   decide needs-info, and produce hints.
 - MODE=validate: enforce presence of a classification label, fail if needs-info is present or
   minimal content is missing. Outputs messages for the workflow to post to the sticky.
@@ -24,9 +24,14 @@ MAP = {
     "docs":"docs",
     "documentation":"docs",
     "dependency":"dependency",
-    "dependencies":"dependency"
+    "dependencies":"dependency",
+    "internal":"internal",
+    "workflow":"workflow",
+    "ci":"workflow",
+    "housekeeping":"internal",
+    "chore":"internal",
 }
-CLASSIFICATION = {"bug","enhancement","question","breaking-change","docs","dependency"}
+CLASSIFICATION = {"bug","enhancement","question","breaking-change","docs","dependency","internal","workflow"}
 
 def gh_get(url: str, token: str):
     req = urllib.request.Request(url, headers={
@@ -70,6 +75,17 @@ def guess_kind(body: str) -> str:
         return "dependency"
     if any(k in lower for k in ("support", "help", "question")):
         return "support"
+    if any(k in lower for k in ("workflow", "github actions", "ci", "pipeline")):
+        return "workflow"
+    if any(k in lower for k in ("internal", "housekeeping", "chore")):
+        return "internal"
+    return ""
+
+def _first_existing_classification(labels: list[str]) -> str:
+    for l in labels:
+        ll = (l or "").lower()
+        if ll in CLASSIFICATION:
+            return ll
     return ""
 
 def do_classify(token: str, repo: str, num: str) -> dict:
@@ -80,6 +96,10 @@ def do_classify(token: str, repo: str, num: str) -> dict:
 
     kind = guess_kind(body)
     canonical = MAP.get(kind, "")
+    if not canonical:
+        existing = _first_existing_classification(current_labels)
+        if existing:
+            canonical = existing
     needs_info = False
     messages = []
 
@@ -99,7 +119,7 @@ def do_classify(token: str, repo: str, num: str) -> dict:
             needs_info = True; msg("Migration Strategy needs >=30 chars.")
         if not re.search(r"(impact|rationale|break)", details, re.IGNORECASE):
             needs_info = True; msg("Details should mention impact or rationale for breaking change.")
-    elif canonical in ("enhancement","question","docs","dependency"):
+    elif canonical in ("enhancement","question","docs","dependency","internal","workflow"):
         if not body or len(body.strip()) < 20:
             needs_info = True; msg("Please provide more details about this request.")
 
