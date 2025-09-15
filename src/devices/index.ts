@@ -130,11 +130,8 @@ export default abstract class HomeKitDevice {
     deviceAlias: string,
     value: Nullable<CharacteristicValue> | Error | HapStatusError,
   ): void {
-    const characteristicName = this.platform.getCharacteristicName(characteristic);
-
-    const isEnergyMonitoring =
-      characteristicName !== undefined
-      && (Object.values(EnergyCharacteristics) as (string)[]).includes(characteristicName);
+    // Check if this is an energy monitoring characteristic by UUID
+    const isEnergyMonitoring = Object.values(EnergyCharacteristics).some(energyChar => energyChar.uuid === characteristic.UUID);
 
     if (!isEnergyMonitoring || this.platform.config.advancedOptions.logEnergyMonitoring) {
       this.log.info(`Updating ${this.platform.lsc(service, characteristic)} on ${deviceAlias} to ${value}`);

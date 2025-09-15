@@ -1,11 +1,23 @@
 import type { API, Characteristic, WithUUID } from 'homebridge';
 
 export const EnergyCharacteristics = {
-  VOLTS: 'Volts',
-  AMPERES: 'Amperes',
-  WATTS: 'Watts',
-  KILOWATT_HOURS: 'KilowattHours',
-} as const;
+  VOLTS: {
+    name: 'Volts',
+    uuid: 'E863F10A-079E-48FF-8F27-9C2605A29F52',
+  },
+  AMPERES: {
+    name: 'Amperes',
+    uuid: 'E863F126-079E-48FF-8F27-9C2605A29F52',
+  },
+  WATTS: {
+    name: 'Watts',
+    uuid: 'E863F10D-079E-48FF-8F27-9C2605A29F52',
+  },
+  KILOWATT_HOURS: {
+    name: 'KilowattHours',
+    uuid: 'E863F10C-079E-48FF-8F27-9C2605A29F52',
+  },
+};
 
 export interface CustomCharacteristics {
   Volts: WithUUID<new () => Characteristic>;
@@ -19,10 +31,10 @@ export function createCustomCharacteristics(api: API): CustomCharacteristics {
 
   // Custom characteristic for Volts
   const Volts = class extends Characteristic {
-    static readonly UUID: string = 'E863F10A-079E-48FF-8F27-9C2605A29F52';
+    static readonly UUID: string = EnergyCharacteristics.VOLTS.uuid;
 
     constructor() {
-      super(EnergyCharacteristics.VOLTS, Volts.UUID, {
+      super(EnergyCharacteristics.VOLTS.name, Volts.UUID, {
         format: Formats.FLOAT,
         unit: undefined, // Volts
         minValue: 0,
@@ -36,10 +48,10 @@ export function createCustomCharacteristics(api: API): CustomCharacteristics {
 
   // Custom characteristic for Amperes
   const Amperes = class extends Characteristic {
-    static readonly UUID: string = 'E863F126-079E-48FF-8F27-9C2605A29F52';
+    static readonly UUID: string = EnergyCharacteristics.AMPERES.uuid;
 
     constructor() {
-      super(EnergyCharacteristics.AMPERES, Amperes.UUID, {
+      super(EnergyCharacteristics.AMPERES.name, Amperes.UUID, {
         format: Formats.FLOAT,
         unit: undefined, // Amperes
         minValue: 0,
@@ -53,10 +65,10 @@ export function createCustomCharacteristics(api: API): CustomCharacteristics {
 
   // Custom characteristic for Watts
   const Watts = class extends Characteristic {
-    static readonly UUID: string = 'E863F10D-079E-48FF-8F27-9C2605A29F52';
+    static readonly UUID: string = EnergyCharacteristics.WATTS.uuid;
 
     constructor() {
-      super(EnergyCharacteristics.WATTS, Watts.UUID, {
+      super(EnergyCharacteristics.WATTS.name, Watts.UUID, {
         format: Formats.FLOAT,
         unit: undefined, // Watts
         minValue: 0,
@@ -70,10 +82,10 @@ export function createCustomCharacteristics(api: API): CustomCharacteristics {
 
   // Custom characteristic for KilowattHours
   const KilowattHours = class extends Characteristic {
-    static readonly UUID: string = 'E863F10C-079E-48FF-8F27-9C2605A29F52';
+    static readonly UUID: string = EnergyCharacteristics.KILOWATT_HOURS.uuid;
 
     constructor() {
-      super(EnergyCharacteristics.KILOWATT_HOURS, KilowattHours.UUID, {
+      super(EnergyCharacteristics.KILOWATT_HOURS.name, KilowattHours.UUID, {
         format: Formats.FLOAT,
         unit: undefined, // kWh
         minValue: 0,

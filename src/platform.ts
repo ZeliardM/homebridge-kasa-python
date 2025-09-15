@@ -22,7 +22,7 @@ import { parseConfig } from './config.js';
 import { TaskQueue } from './taskQueue.js';
 import { deferAndCombine, runCommand } from './utils.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
-import { createCustomCharacteristics, type CustomCharacteristics } from './customCharacteristics.js';
+import { createCustomCharacteristics } from './customCharacteristics.js';
 import {
   checkForUpgrade,
   getAvailablePort,
@@ -33,6 +33,7 @@ import {
   satisfiesVersion,
   waitForServer,
 } from './utils.js';
+import type { CustomCharacteristics } from './customCharacteristics.js';
 import type { KasaPythonConfig } from './config.js';
 import type { KasaDevice } from './devices/kasaDevices.js';
 

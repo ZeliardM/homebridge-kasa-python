@@ -129,19 +129,19 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
     characteristics.push(
       {
         type: this.platform.CustomCharacteristics.Volts,
-        name: EnergyCharacteristics.VOLTS,
+        name: EnergyCharacteristics.VOLTS.name,
       },
       {
         type: this.platform.CustomCharacteristics.Amperes,
-        name: EnergyCharacteristics.AMPERES,
+        name: EnergyCharacteristics.AMPERES.name,
       },
       {
         type: this.platform.CustomCharacteristics.Watts,
-        name: EnergyCharacteristics.WATTS,
+        name: EnergyCharacteristics.WATTS.name,
       },
       {
         type: this.platform.CustomCharacteristics.KilowattHours,
-        name: EnergyCharacteristics.KILOWATT_HOURS,
+        name: EnergyCharacteristics.KILOWATT_HOURS.name,
       },
     );
     return characteristics;
@@ -422,7 +422,7 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
       const totalConsumption = this.kasaDevice.sys_info.energy.total ?? 0;
       this.updateValue(service, service.getCharacteristic(this.platform.CustomCharacteristics.KilowattHours), this.name, totalConsumption);
 
-      this.log.debug(`Updated energy characteristics for device: ${this.name} - Volts: ${voltage}V, Amperes: ${current}A, Watts: ${power}W, kWh: ${totalConsumption}`);
+      this.log.debug(`Updated energy: ${this.name} - Volts: ${voltage}V, Amperes: ${current}A, Watts: ${power}W, kWh: ${totalConsumption}`);
     }
   }
 
