@@ -1,35 +1,31 @@
 # Changelog
-## [v2.8.2-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.2-beta.0) (2025-09-13)
-
-### Other Changes
-- Update CHANGELOG.md for beta release v2.8.2-beta.0 @github-actions [beta-release]
-
-- Fix CHANGELOG.md workflow not syncing properly with GitHub releases, add automated changelog maintenance, consolidate release workflows, implement comprehensive beta management system, optimize workflow code quality, and resolve Unreleased section handling @Copilot [#76]
+## [v2.8.2-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.2-beta.0)
 
 ### Bug Fixes
-- Fix npm-publish permissions @ZeliardM [#89]
 
+- Fix npm-publish permissions @ZeliardM [#89]
 - Fix release permissions @ZeliardM [#88]
 - Issue/fix dependabot @ZeliardM [#87]
-
 - Issue/fix npm publish failures @ZeliardM [#86]
 - Fix publish version matching package version @ZeliardM [#84]
-
 - Complete release workflow consolidation - replace complex inline Python with unified release manager @Copilot [#81]
-
 - Fix workflow issues: stale management, changelog updates, dependabot integration, labeler configuration, draft release section handling, and comprehensive testing validation @Copilot [#80]
+
+### Other Changes
+
+- Fix CHANGELOG.md workflow not syncing properly with GitHub releases, add automated changelog maintenance, consolidate release workflows, implement comprehensive beta management system, optimize workflow code quality, and resolve Unreleased section handling @Copilot [#76]
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.8.1...v2.8.2-beta.0
 
 ## [v2.8.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.1) (2025-09-05)
 
-### Other Changes
-
-- Fix release-drafter.yml @ZeliardM [#74]
-
 ### Featured Changes
 
 - Prepare for scoped plugin @ZeliardM [#73]
+
+### Other Changes
+
+- Fix release-drafter.yml @ZeliardM [#74]
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.8.0...v2.8.1
 
