@@ -1,5 +1,9 @@
 # Changelog
-## [v2.8.2-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.2-beta.1)
+## [v2.9.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.0)
+
+### Featured Changes
+
+- Fix child device sorting and calling @ZeliardM [#93]
 
 ### Bug Fixes
 
@@ -9,7 +13,7 @@
 
 - Truncate Discord release notes @ZeliardM [#91]
 
-**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.8.2-beta.0...v2.8.2-beta.1
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.8.2-beta.0...v2.9.0-beta.0
 
 ## [v2.8.2-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.2-beta.0) (2025-09-15)
 
