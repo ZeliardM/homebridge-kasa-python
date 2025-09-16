@@ -4,6 +4,8 @@ Consolidated publisher + rollback manager.
 
 Responsibilities:
 - Determine tag and expected version from event context.
+- Finalize the draft release (beta or stable): add date to header, add housekeeping entry, retag to include the commit.
+- Ensure local checkout is refreshed to the updated tag.
 - Optionally set package.json version from tag and/or verify match.
 - Run install/build.
 - Publish to npm with optional dist-tag and extra args.
@@ -36,20 +38,26 @@ Outputs:
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import urllib.error
 import urllib.request
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union, Sequence
 
 def _bool(val: str, default: bool = False) -> bool:
     if val is None:
         return default
     return str(val).strip().lower() in ("1", "true", "yes", "on")
 
-def run(cmd: str, env: Optional[Dict[str,str]] = None, check: bool = True) -> subprocess.CompletedProcess:
-    print(f"$ {cmd}")
-    return subprocess.run(cmd, shell=True, check=check, text=True)
+def run(cmd: Union[str, Sequence[str]], env: Optional[Dict[str,str]] = None, check: bool = True) -> subprocess.CompletedProcess:
+    if isinstance(cmd, (list, tuple)):
+        printable = " ".join(shlex.quote(str(part)) for part in cmd)
+        print(f"$ {printable}")
+        return subprocess.run(cmd, check=check, text=True, env=env)
+    else:
+        print(f"$ {cmd}")
+        return subprocess.run(cmd, shell=True, check=check, text=True, env=env)
 
 def read_event() -> Dict[str, Any]:
     path = os.environ.get("GITHUB_EVENT_PATH") or ""
@@ -70,7 +78,7 @@ def pkg_version() -> str:
     return v
 
 def npm_set_version(new_ver: str):
-    run(f'npm version "{new_ver}" --no-git-tag-version')
+    run(["npm", "version", new_ver, "--no-git-tag-version"])
 
 def gh_api(url: str, method: str = "GET", token: str = "", data: Optional[dict] = None) -> Tuple[int, Any]:
     headers = {
@@ -117,8 +125,8 @@ def gh_release_set_draft(repo: str, token: str, release_id: int, prerelease: boo
 
 def git_delete_tag(tag: str):
     try:
-        run("git fetch --tags --force origin", check=False)
-        run(f'git push origin ":refs/tags/{tag}"', check=False)
+        run(["git", "fetch", "--tags", "--force", "origin"], check=False)
+        run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
     except subprocess.CalledProcessError:
         print(f"::warning::Failed to delete tag {tag} (it may not exist remotely)")
 
@@ -175,16 +183,18 @@ def rollback_changelog_finalize_metadata(tag: str, target_branch: Optional[str])
         print(f"[rollback] CHANGELOG.md updated for {tag}")
         if target_branch:
             try:
-                run(f'git fetch origin "{target_branch}" --depth=0', check=False)
-                run(f'git checkout -B "{target_branch}" "origin/{target_branch}" || git checkout "{target_branch}"', check=False)
-                run('git config user.email "action@github.com"', check=False)
-                run('git config user.name "GitHub Action"', check=False)
-                run("git add CHANGELOG.md", check=False)
-                # Only commit if there is a change staged
-                diff_rc = subprocess.run(["git", "diff", "--cached", "--quiet"]).returncode
+                run(["git", "fetch", "origin", target_branch, "--depth=0"], check=False)
+                try:
+                    run(["git", "checkout", "-B", target_branch, f"origin/{target_branch}"], check=True)
+                except subprocess.CalledProcessError:
+                    run(["git", "checkout", target_branch], check=False)
+                run(['git', 'config', 'user.email', 'action@github.com'], check=False)
+                run(['git', 'config', 'user.name', 'GitHub Action'], check=False)
+                run(["git", "add", "CHANGELOG.md"], check=False)
+                diff_rc = run(["git", "diff", "--cached", "--quiet"], check=False).returncode
                 if diff_rc != 0:
-                    run(f'git commit -m "chore: rollback finalize metadata for {tag} due to npm publish failure"', check=False)
-                    run(f'git push origin "{target_branch}"', check=False)
+                    run(['git', 'commit', '-m', f'chore: rollback finalize metadata for {tag} due to npm publish failure'], check=False)
+                    run(["git", "push", "origin", target_branch], check=False)
                     print(f"[rollback] Pushed CHANGELOG rollback to {target_branch}.")
             except Exception as e:
                 print(f"::warning::Failed to push CHANGELOG rollback: {e}")
@@ -194,9 +204,9 @@ def rollback_changelog_finalize_metadata(tag: str, target_branch: Optional[str])
 
 def resolve_tag_and_expected_version(evt: Dict[str, Any]) -> Tuple[str, str]:
     tag = ""
-    rel = evt.get("release") or {}
-    if isinstance(rel, dict):
-        tag = rel.get("tag_name") or ""
+    release_info = evt.get("release") or {}
+    if isinstance(release_info, dict):
+        tag = release_info.get("tag_name") or ""
     if not tag:
         tag = os.environ.get("GITHUB_REF_NAME", "") or ""
     if not tag:
@@ -215,6 +225,9 @@ def main():
         sys.exit(1)
     evt = read_event()
     tag, expected_version = resolve_tag_and_expected_version(evt)
+    release_info = evt.get("release") or {}
+    is_prerelease = bool(release_info.get("prerelease"))
+    target_branch = release_info.get("target_commitish") or ""
     dist_tag = os.environ.get("INPUT_DIST_TAG", "")
     set_version_from_tag = _bool(os.environ.get("INPUT_SET_VERSION_FROM_TAG", "true"), True) or _bool(os.environ.get("INPUT_SET_VERSION_FROM_RELEASE_TAG", "true"), True)
     fail_if_mismatch = _bool(os.environ.get("INPUT_FAIL_IF_MISMATCH", "true"), True)
@@ -226,34 +239,44 @@ def main():
 
     def do_rollback():
         print("::warning::npm publish failed; beginning rollback sequence...")
-        rel = gh_release_by_tag(repo, token, tag)
-        target_branch = None
-        if rel and isinstance(rel, dict):
-            target_branch = rel.get("target_commitish") or None
-            is_draft = bool(rel.get("draft"))
-            is_prerelease = bool(rel.get("prerelease"))
-            rel_id = rel.get("id")
+        rel_obj = gh_release_by_tag(repo, token, tag)
+        target = None
+        if rel_obj and isinstance(rel_obj, dict):
+            target = rel_obj.get("target_commitish") or None
+            is_draft = bool(rel_obj.get("draft"))
+            is_prerelease_r = bool(rel_obj.get("prerelease"))
+            rel_id = rel_obj.get("id")
             if rel_id:
                 if not is_draft and rollback_delete_release:
                     ok = gh_release_delete(repo, token, int(rel_id))
                     print(f"[rollback] Deleted published release (id={rel_id}): {ok}")
                 else:
-                    ok = gh_release_set_draft(repo, token, int(rel_id), is_prerelease)
+                    ok = gh_release_set_draft(repo, token, int(rel_id), is_prerelease_r)
                     print(f"[rollback] Converted release to draft (id={rel_id}): {ok}")
         else:
             print("[rollback] No release found by tag; continuing with tag deletion/CHANGELOG rollback.")
         if rollback_delete_tag and tag:
             git_delete_tag(tag)
-        rollback_changelog_finalize_metadata(tag, target_branch)
+        rollback_changelog_finalize_metadata(tag, target)
 
     try:
         print(f"Resolved tag: {tag}")
         print(f"Expected version from tag: {expected_version}")
-        try:
-            run("git fetch --tags --force origin", check=False)
-            run(f'git -c advice.detachedHead=false checkout -f "tags/{tag}" || git checkout -f "refs/tags/{tag}"', check=False)
-        except subprocess.CalledProcessError:
-            pass
+        if target_branch:
+            run(["git", "fetch", "origin", target_branch, "--depth=0"], check=False)
+            try:
+                run(["git", "checkout", "-B", target_branch, f"origin/{target_branch}"], check=True)
+            except subprocess.CalledProcessError:
+                run(["git", "checkout", target_branch], check=False)
+        action = "publish-beta" if (is_prerelease and "beta" in tag) else "publish-stable"
+        run(
+            ["python3", ".github/scripts/release_manager.py", action, "--github-token", token, "--repo", repo, "--version", tag],
+            check=True
+        )
+        run(["git", "fetch", "--tags", "--force", "origin"], check=False)
+        cp = run(["git", "-c", "advice.detachedHead=false", "checkout", "-f", f"tags/{tag}"], check=False)
+        if cp.returncode != 0:
+            run(["git", "checkout", "-f", f"refs/tags/{tag}"], check=False)
         current_ver = pkg_version()
         print(f"package.json version: {current_ver}")
         print(f"expected version:     {expected_version}")
@@ -267,14 +290,12 @@ def main():
             run(install_cmd)
         if build_cmd:
             run(build_cmd)
-        base = "npm publish --access public --provenance"
-        if dist_tag:
-            pub_cmd = f'{base} --tag="{dist_tag}"'
-        else:
-            pub_cmd = base
+        base = ["npm", "publish", "--access", "public", "--provenance"]
+        pub_cmd = base + (["--tag", dist_tag] if dist_tag else [])
         if extra_publish_args:
-            pub_cmd = f"{pub_cmd} {extra_publish_args}"
-        run(pub_cmd)
+            run(" ".join(shlex.quote(p) for p in pub_cmd) + " " + extra_publish_args)
+        else:
+            run(pub_cmd)
         version_out = pkg_version()
         gh_out = os.environ.get("GITHUB_OUTPUT")
         if gh_out:
