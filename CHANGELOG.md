@@ -1,4 +1,12 @@
 # Changelog
+## [v2.8.2-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.2-beta.1)
+
+### Other Changes
+
+- Truncate Discord release notes @ZeliardM [#91]
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.8.2-beta.0...v2.8.2-beta.1
+
 ## [v2.8.2-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.2-beta.0)
 
 ### Bug Fixes
