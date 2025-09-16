@@ -1,6 +1,10 @@
 # Changelog
 ## [v2.8.2-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.8.2-beta.1)
 
+### Bug Fixes
+
+- Add publish date to finalized CHANGELOG.md @ZeliardM [#92]
+
 ### Other Changes
 
 - Truncate Discord release notes @ZeliardM [#91]
