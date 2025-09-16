@@ -1,5 +1,5 @@
 # Changelog
-## [v2.9.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.0)
+## [v2.9.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.0) (2025-09-16)
 
 ### Featured Changes
 
@@ -12,6 +12,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v2.9.0-beta.0 @github-actions [beta-release]
 - Truncate Discord release notes @ZeliardM [#91]
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.8.2-beta.0...v2.9.0-beta.0
