@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import sys
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -61,7 +62,6 @@ def log(message: str, level: str = "INFO", host: Optional[str] = None, alias: Op
 
 def _extract_child_suffix_index(device_id: str) -> int:
     base = device_id.split('_', 1)[1] if '_' in device_id else device_id
-    import re
     m = re.search(r'(\d{1,2})$', base)
     return int(m.group(1)) if m else 0
 

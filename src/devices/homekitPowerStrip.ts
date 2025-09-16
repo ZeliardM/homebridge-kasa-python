@@ -28,8 +28,8 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
     );
     this.log.debug(`Initializing HomeKitDevicePowerStrip for device: ${kasaDevice.sys_info.alias}`);
     this.kasaDevice.sys_info.children?.forEach((child: ChildDevice) => {
-      const childIndex = this.extractChildIndex(child);
-      this.checkService(child, childIndex);
+      const index = this.extractChildIndex(child);
+      this.checkService(child, index);
     });
     this.getSysInfo = deferAndCombine(async () => {
       if (!this.deviceManager) {
@@ -64,12 +64,6 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
     });
   }
 
-  private extractChildIndex(child: ChildDevice): number {
-    const id = String(child.id ?? '');
-    const match = id.match(/(\d{1,2})$/);
-    return match ? parseInt(match[1], 10) : 0;
-  }
-
   public async initialize(): Promise<void> {
     this.log.debug(`Initializing polling for device: ${this.kasaDevice.sys_info.alias}`);
     await this.startPolling();
@@ -95,10 +89,9 @@ export default class HomeKitDevicePowerStrip extends HomeKitDevice {
 
   private checkService(child: ChildDevice, index: number) {
     const serviceType = this.getServiceType();
-    const subType = `child-${index + 1}`;
     const service: Service =
-      this.homebridgeAccessory.getServiceById(serviceType, subType) ??
-      this.addService(serviceType, child.alias, subType);
+      this.homebridgeAccessory.getServiceById(serviceType, `child-${index + 1}`) ??
+      this.addService(serviceType, child.alias, `child-${index + 1}`);
     const oldService: Service | undefined = this.homebridgeAccessory.getServiceById(serviceType, `outlet-${index + 1}`);
     if (oldService) {
       this.homebridgeAccessory.removeService(oldService);
