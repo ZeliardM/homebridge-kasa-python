@@ -4,6 +4,8 @@ Consolidated publisher + rollback manager.
 
 Responsibilities:
 - Determine tag and expected version from event context.
+- Finalize the draft release (beta or stable): add date to header, add housekeeping entry, retag to include the commit.
+- Ensure local checkout is refreshed to the updated tag.
 - Optionally set package.json version from tag and/or verify match.
 - Run install/build.
 - Publish to npm with optional dist-tag and extra args.
@@ -180,7 +182,6 @@ def rollback_changelog_finalize_metadata(tag: str, target_branch: Optional[str])
                 run('git config user.email "action@github.com"', check=False)
                 run('git config user.name "GitHub Action"', check=False)
                 run("git add CHANGELOG.md", check=False)
-                # Only commit if there is a change staged
                 diff_rc = subprocess.run(["git", "diff", "--cached", "--quiet"]).returncode
                 if diff_rc != 0:
                     run(f'git commit -m "chore: rollback finalize metadata for {tag} due to npm publish failure"', check=False)
@@ -215,6 +216,9 @@ def main():
         sys.exit(1)
     evt = read_event()
     tag, expected_version = resolve_tag_and_expected_version(evt)
+    rel = evt.get("release") or {}
+    is_prerelease = bool(rel.get("prerelease"))
+    target_branch = rel.get("target_commitish") or ""
     dist_tag = os.environ.get("INPUT_DIST_TAG", "")
     set_version_from_tag = _bool(os.environ.get("INPUT_SET_VERSION_FROM_TAG", "true"), True) or _bool(os.environ.get("INPUT_SET_VERSION_FROM_RELEASE_TAG", "true"), True)
     fail_if_mismatch = _bool(os.environ.get("INPUT_FAIL_IF_MISMATCH", "true"), True)
@@ -226,34 +230,36 @@ def main():
 
     def do_rollback():
         print("::warning::npm publish failed; beginning rollback sequence...")
-        rel = gh_release_by_tag(repo, token, tag)
-        target_branch = None
-        if rel and isinstance(rel, dict):
-            target_branch = rel.get("target_commitish") or None
-            is_draft = bool(rel.get("draft"))
-            is_prerelease = bool(rel.get("prerelease"))
-            rel_id = rel.get("id")
+        rel_obj = gh_release_by_tag(repo, token, tag)
+        target = None
+        if rel_obj and isinstance(rel_obj, dict):
+            target = rel_obj.get("target_commitish") or None
+            is_draft = bool(rel_obj.get("draft"))
+            is_prerelease_r = bool(rel_obj.get("prerelease"))
+            rel_id = rel_obj.get("id")
             if rel_id:
                 if not is_draft and rollback_delete_release:
                     ok = gh_release_delete(repo, token, int(rel_id))
                     print(f"[rollback] Deleted published release (id={rel_id}): {ok}")
                 else:
-                    ok = gh_release_set_draft(repo, token, int(rel_id), is_prerelease)
+                    ok = gh_release_set_draft(repo, token, int(rel_id), is_prerelease_r)
                     print(f"[rollback] Converted release to draft (id={rel_id}): {ok}")
         else:
             print("[rollback] No release found by tag; continuing with tag deletion/CHANGELOG rollback.")
         if rollback_delete_tag and tag:
             git_delete_tag(tag)
-        rollback_changelog_finalize_metadata(tag, target_branch)
+        rollback_changelog_finalize_metadata(tag, target)
 
     try:
         print(f"Resolved tag: {tag}")
         print(f"Expected version from tag: {expected_version}")
-        try:
-            run("git fetch --tags --force origin", check=False)
-            run(f'git -c advice.detachedHead=false checkout -f "tags/{tag}" || git checkout -f "refs/tags/{tag}"', check=False)
-        except subprocess.CalledProcessError:
-            pass
+        if target_branch:
+            run(f'git fetch origin "{target_branch}" --depth=0', check=False)
+            run(f'git checkout -B "{target_branch}" "origin/{target_branch}" || git checkout "{target_branch}"', check=False)
+        action = "publish-beta" if (is_prerelease and "beta" in tag) else "publish-stable"
+        run(f'python3 .github/scripts/release_manager.py {action} --github-token "{token}" --repo "{repo}" --version "{tag}"')
+        run("git fetch --tags --force origin", check=False)
+        run(f'git -c advice.detachedHead=false checkout -f "tags/{tag}" || git checkout -f "refs/tags/{tag}"', check=False)
         current_ver = pkg_version()
         print(f"package.json version: {current_ver}")
         print(f"expected version:     {expected_version}")

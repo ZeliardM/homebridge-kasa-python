@@ -639,6 +639,8 @@ def cmd_finalize_beta(args):
     content=read_changelog()
     entry=f"- Update CHANGELOG.md for beta release {v.tag()} @github-actions [beta-release]"
     content=insert_entry(content, v, "Other Changes", entry, None, add_date=False)
+    date=datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    content=add_publish_date(content, v.tag(), date)
     write_changelog(content)
     git_commit(f"Finalize beta release {v.tag()} in CHANGELOG.md")
     git_tag_force(v.tag())
