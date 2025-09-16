@@ -110,6 +110,14 @@ class GitHub:
         if not r or r.get("message") == "Not Found":
             return None
         return r
+    def release_by_tag_any(self, tag: str) -> Optional[dict]:
+        r = self.release_by_tag(tag)
+        if r:
+            return r
+        for rel in self.releases():
+            if rel.get("tag_name", "") == tag:
+                return rel
+        return None
     def create_release(self, tag: str, name: str, body: str, draft: bool, prerelease: bool, target: str="beta") -> dict:
         return self._request("POST","/releases", {
             "tag_name": tag, "name": name, "body": body,
@@ -426,10 +434,17 @@ def collect_section_categories(block: str) -> Dict[str,List[str]]:
 def build_beta_body(version: Version, changelog: str, latest_stable: Optional[Version]) -> str:
     block=find_section_block(changelog, version.tag())
     cats=collect_section_categories(block)
-    if version.beta == 0:
+    fc_line = None
+    for line in block.splitlines():
+        if line.startswith("**Full Changelog**"):
+            fc_line = line
+            break
+    if version.beta == 0 and not fc_line:
         compare_from = latest_stable.tag() if latest_stable else "v0.0.0"
-    else:
+    elif not fc_line:
         compare_from = f"v{version.major}.{version.minor}.{version.patch}-beta.{version.beta-1}"
+    else:
+        compare_from = None
     ordered=[c for c in CATEGORY_ORDER if c in cats]+[c for c in cats if c not in CATEGORY_ORDER]
     if not ordered:
         body_sections="### Other Changes\n\n_No changes in this beta release._"
@@ -440,7 +455,11 @@ def build_beta_body(version: Version, changelog: str, latest_stable: Optional[Ve
             parts.extend(cats[c]); parts.append("")
         body_sections="\n".join(parts).strip()
     repo=os.environ.get("GITHUB_REPOSITORY","")
-    return f"{body_sections}\n\n**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{version.tag()}"
+    if fc_line:
+        full_changelog_line = fc_line
+    else:
+        full_changelog_line = f"**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{version.tag()}"
+    return f"{body_sections}\n\n{full_changelog_line}"
 
 def build_stable_body(version: Version, changelog: str, prev_stable: Version) -> str:
     block=find_section_block(changelog, version.tag())
@@ -574,7 +593,7 @@ def cmd_pr_merged(args):
         if existing_unpublished and existing_unpublished.tag() != target_version.tag():
             if f"## [{existing_unpublished.tag()}]" in content:
                 content = rename_version_section(content, existing_unpublished.tag(), target_version.tag())
-            old_rel = gh.release_by_tag(existing_unpublished.tag())
+            old_rel = gh.release_by_tag_any(existing_unpublished.tag())
             if old_rel and old_rel.get("id"):
                 gh.update_release(old_rel["id"], tag_name=target_version.tag(), name=target_version.tag(), prerelease=True, draft=True)
             print(f"[release-manager] Rebased existing beta draft to {target_version.tag()}")
@@ -583,7 +602,7 @@ def cmd_pr_merged(args):
         write_changelog(content)
         git_commit(f"Convert draft stable {base_version.tag()} to {target_version.tag()} and update CHANGELOG.md for PR #{args.pr_number}")
         ensure_repo_node_version(target_version, context=f"convert stable draft {base_version.tag()} -> {target_version.tag()} (PR #{args.pr_number})")
-        rel = gh.release_by_tag(target_version.tag())
+        rel = gh.release_by_tag_any(target_version.tag())
         body = build_beta_body(target_version, content, latest_stable)
         if rel and rel.get("id"):
             gh.update_release(rel["id"], body=body, name=target_version.tag(), prerelease=True, draft=True)
@@ -602,7 +621,7 @@ def cmd_pr_merged(args):
     if replace and existing_unpublished and existing_unpublished.tag() != target_version.tag():
         content=rename_version_section(content, existing_unpublished.tag(), target_version.tag())
         old_tag = existing_unpublished.tag()
-        old_rel=gh.release_by_tag(old_tag)
+        old_rel=gh.release_by_tag_any(old_tag)
         if old_rel and old_rel.get("id"):
             gh.update_release(old_rel["id"], tag_name=target_version.tag(), name=target_version.tag())
         if (os.environ.get("DELETE_DRAFT_BETA_TAG","").lower() == "true"):
@@ -625,7 +644,7 @@ def cmd_pr_merged(args):
     write_changelog(content)
     git_commit(f"Update CHANGELOG.md for beta PR #{args.pr_number}")
     ensure_repo_node_version(target_version, context=f"beta PR #{args.pr_number}")
-    rel=gh.release_by_tag(target_version.tag())
+    rel=gh.release_by_tag_any(target_version.tag())
     body=build_beta_body(target_version, content, latest_stable)
     if rel and rel.get("id"):
         gh.update_release(rel["id"], body=body, name=target_version.tag())
@@ -646,7 +665,7 @@ def cmd_finalize_beta(args):
     git_tag_force(v.tag())
     latest_stable,_=latest_versions(content)
     body=build_beta_body(v, content, latest_stable)
-    rel=gh.release_by_tag(v.tag())
+    rel=gh.release_by_tag_any(v.tag())
     if rel and rel.get("id"):
         gh.update_release(rel["id"], body=body)
     print(f"[release-manager] Beta release finalized {v.tag()}")
@@ -740,7 +759,7 @@ def cmd_finalize_stable(args):
     if len(versions_sorted)>1 and versions_sorted[-1]==v:
         prev=versions_sorted[-2]
     body=build_stable_body(v, content, prev)
-    rel=gh.release_by_tag(v.tag())
+    rel=gh.release_by_tag_any(v.tag())
     if rel and rel.get("id"):
         gh.update_release(rel["id"], body=body)
     print(f"[release-manager] Stable release finalized {v.tag()}")
