@@ -7,6 +7,7 @@
 
 ### Bug Fixes
 
+- Issue/fix beta draft pre release @ZeliardM [#94]
 - Add publish date to finalized CHANGELOG.md @ZeliardM [#92]
 
 ### Other Changes
