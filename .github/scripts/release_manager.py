@@ -432,15 +432,15 @@ def build_beta_body(version: Version, changelog: str, latest_stable: Optional[Ve
         compare_from = f"v{version.major}.{version.minor}.{version.patch}-beta.{version.beta-1}"
     ordered=[c for c in CATEGORY_ORDER if c in cats]+[c for c in cats if c not in CATEGORY_ORDER]
     if not ordered:
-        body_sections="## Other Changes\n\n_No changes in this beta release._"
+        body_sections="### Other Changes\n\n_No changes in this beta release._"
     else:
         parts=[]
         for c in ordered:
-            parts.append(f"## {c}\n")
+            parts.append(f"### {c}\n")
             parts.extend(cats[c]); parts.append("")
         body_sections="\n".join(parts).strip()
     repo=os.environ.get("GITHUB_REPOSITORY","")
-    return f"Beta Release - {version.tag()}\n\n{body_sections}\n\n**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{version.tag()}"
+    return f"{body_sections}\n\n**Full Changelog**: https://github.com/{repo}/compare/{compare_from}...{version.tag()}"
 
 def build_stable_body(version: Version, changelog: str, prev_stable: Version) -> str:
     block=find_section_block(changelog, version.tag())
@@ -449,10 +449,10 @@ def build_stable_body(version: Version, changelog: str, prev_stable: Version) ->
     parts=[]
     if ordered:
         for c in ordered:
-            parts.append(f"## {c}\n")
+            parts.append(f"### {c}\n")
             parts.extend(cats[c]); parts.append("")
     else:
-        parts=["## Other Changes","","_No changes in this release._",""]
+        parts=["### Other Changes","","_No changes in this release._",""]
     repo=os.environ.get("GITHUB_REPOSITORY","")
     parts.append(f"**Full Changelog**: https://github.com/{repo}/compare/{prev_stable.tag()}...{version.tag()}")
     return "\n".join(parts).strip()

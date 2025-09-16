@@ -3,33 +3,18 @@
 Generate trimmed release notes for Discord embeds with balanced category representation.
 
 - Reads the GitHub event JSON (GITHUB_EVENT_PATH) and extracts the release body and tag.
-- Keeps category headers and bullet items in order and ensures each category present
-  gets representation (at least 1 bullet) when possible.
-- Trims content to a strict maximum length for Discord BEFORE adding the Full Changelog
-  (default --content-max=900 chars), then appends the "**Full Changelog**: ..." line
-  if present.
-- Ensures the final message does not exceed a hard maximum (--hard-max, default 1024).
-  If needed, it shrinks the content area (not the Full Changelog line) and adds an ellipsis.
+- Expects the body to contain only "### {Category}" headers with "-" bullets,
+  followed by a "**Full Changelog**: ..." line.
+- Ensures each present category is represented (at least one bullet) when space allows.
+- Trims content to a strict maximum BEFORE adding the Full Changelog line
+  (default --content-max=900 chars), then appends the Full Changelog.
+- Guarantees the final message does not exceed --hard-max (default 1024).
 - Emits multi-line GitHub Actions output "body<<EOF ... EOF" to GITHUB_OUTPUT.
-
-Usage in GitHub Actions:
-  - Set sarisia/actions-status-discord with "nodetail: true"
-  - Use this script to compute a trimmed description and pass it as "description"
-  - Example:
-      - run: python3 .github/scripts/discord_release_notes.py --content-max 900 --hard-max 1024
-      - uses: sarisia/actions-status-discord@v1
-        with:
-          nodetail: true
-          description: ${{ steps.trim_notes.outputs.body }}
-
-Notes:
-- Category order follows the project's standard. Unknown categories appear after the known ones.
 """
 
 import argparse
 import json
 import os
-import re
 from typing import Dict, List, Tuple
 
 DEFAULT_CONTENT_MAX = 900
@@ -41,8 +26,6 @@ CATEGORY_ORDER = [
     "Bug Fixes",
     "Other Changes",
 ]
-
-HEADER_RE = re.compile(r"^\s*#{2,3}\s+(.*)\s*$")
 
 def _read_event_body() -> Tuple[str, str]:
     event_path = os.environ.get("GITHUB_EVENT_PATH") or ""
@@ -75,11 +58,9 @@ def _parse_sections(raw_body: str) -> Dict[str, List[str]]:
     current: str = ""
     for ln in raw_body.splitlines():
         ln = ln.replace("\r", "")
-        m = HEADER_RE.match(ln)
-        if m and not ln.strip().startswith("## ["):
-            cat = (m.group(1) or "").strip()
-            if cat:
-                current = cat
+        if ln.startswith("### "):
+            current = ln[4:].strip()
+            if current:
                 sections.setdefault(current, [])
             continue
         if current and ln.startswith("- "):
@@ -96,8 +77,6 @@ def _ordered_categories(sections: Dict[str, List[str]]) -> List[str]:
 
 def _flatten_content_lines(tag: str, chunks: Dict[str, List[str]], order: List[str]) -> List[str]:
     lines: List[str] = []
-    lines.append(f"Version `{tag}`" if tag else "Version")
-    lines.append("")
     first_cat_added = False
     for cat in order:
         block = chunks.get(cat, [])
@@ -111,7 +90,6 @@ def _flatten_content_lines(tag: str, chunks: Dict[str, List[str]], order: List[s
     return lines
 
 def _text_len(lines: List[str]) -> int:
-    """Length when joined with '\n'."""
     return len("\n".join(lines))
 
 def build_balanced_description(tag: str, body: str, content_max: int = DEFAULT_CONTENT_MAX,
@@ -123,22 +101,26 @@ def build_balanced_description(tag: str, body: str, content_max: int = DEFAULT_C
     chunks: Dict[str, List[str]] = {}
     included_counts: Dict[str, int] = {}
     for cat in order:
-        chunks[cat] = [f"## {cat}", ""]
+        chunks[cat] = [f"### {cat}", ""]
         included_counts[cat] = 0
+    content_lines_cache = _flatten_content_lines(tag, chunks, order)
 
     def try_apply(cat: str, bullet: str) -> bool:
+        nonlocal content_lines_cache
         chunks[cat].append(bullet)
-        proposed = _flatten_content_lines(tag, chunks, order)
-        if _text_len(proposed) <= content_max:
+        proposed_lines = _flatten_content_lines(tag, chunks, order)
+        proposed_len = _text_len(proposed_lines)
+        if proposed_len <= content_max:
             included_counts[cat] += 1
+            content_lines_cache = proposed_lines
             return True
         chunks[cat].pop()
         return False
 
     for cat in order:
         bullets = sections.get(cat, [])
-        if bullets and not try_apply(cat, bullets[0]):
-            continue
+        if bullets:
+            try_apply(cat, bullets[0])
     while True:
         progressed = False
         for cat in order:
@@ -155,11 +137,12 @@ def build_balanced_description(tag: str, body: str, content_max: int = DEFAULT_C
         for cat in reversed(order):
             if included_counts.get(cat, 0) > 0:
                 chunks[cat].append("- …")
-                proposed = _flatten_content_lines(tag, chunks, order)
-                if _text_len(proposed) <= content_max:
+                proposed_lines = _flatten_content_lines(tag, chunks, order)
+                if _text_len(proposed_lines) <= content_max:
+                    content_lines_cache = proposed_lines
                     break
                 chunks[cat].pop()
-    content_lines = _flatten_content_lines(tag, chunks, order)
+    content_lines = content_lines_cache
     content_text = "\n".join(content_lines)
     final_lines = content_lines[:]
     if fc_line:
