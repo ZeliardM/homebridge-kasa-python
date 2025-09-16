@@ -27,8 +27,9 @@ export default class HomeKitDeviceSwitchWithChildren extends HomeKitDevice {
       'SWITCH',
     );
     this.log.debug(`Initializing HomeKitDeviceSwitchWithChildren for device: ${kasaDevice.sys_info.alias}`);
-    this.kasaDevice.sys_info.children?.forEach((child: ChildDevice, index: number) => {
-      this.checkService(child, index);
+    this.kasaDevice.sys_info.children?.forEach((child: ChildDevice) => {
+      const childIndex = this.extractChildIndex(child);
+      this.checkService(child, childIndex);
     });
     this.getSysInfo = deferAndCombine(async () => {
       if (!this.deviceManager) {
@@ -63,6 +64,12 @@ export default class HomeKitDeviceSwitchWithChildren extends HomeKitDevice {
     });
   }
 
+  private extractChildIndex(child: ChildDevice): number {
+    const id = String(child.id ?? '');
+    const match = id.match(/(\d{1,2})$/);
+    return match ? parseInt(match[1], 10) : 0;
+  }
+
   public async initialize(): Promise<void> {
     this.log.debug(`Initializing polling for device: ${this.kasaDevice.sys_info.alias}`);
     await this.startPolling();
@@ -88,9 +95,10 @@ export default class HomeKitDeviceSwitchWithChildren extends HomeKitDevice {
 
   private checkService(child: ChildDevice, index: number) {
     const serviceType = this.getServiceType(child);
+    const subType = `child-${index + 1}`;
     const service: Service =
-      this.homebridgeAccessory.getServiceById(serviceType, `child-${index + 1}`) ??
-      this.addService(serviceType, child.alias, `child-${index + 1}`);
+      this.homebridgeAccessory.getServiceById(serviceType, subType) ??
+      this.addService(serviceType, child.alias, subType);
     this.checkCharacteristics(service, child);
   }
 
@@ -225,7 +233,7 @@ export default class HomeKitDeviceSwitchWithChildren extends HomeKitDevice {
             if (!characteristicKey) {
               throw new Error(`Characteristic key not found for ${characteristicName}`);
             }
-            const childNumber = parseInt(child.id.slice(-1), 10);
+            const childNumber = this.extractChildIndex(child);
             const controlValue = this.getControlValue(characteristicName, value);
             await this.deviceManager.controlDevice(this.kasaDevice.sys_info.host, characteristicKey, controlValue, childNumber);
             (child as Record<string, CharacteristicValue>)[characteristicKey] = controlValue;
@@ -302,7 +310,7 @@ export default class HomeKitDeviceSwitchWithChildren extends HomeKitDevice {
         try {
           await this.getSysInfo();
           this.kasaDevice.sys_info.children?.forEach((child: ChildDevice) => {
-            const childNumber = parseInt(child.id.slice(-1), 10);
+            const childNumber = this.extractChildIndex(child);
             const service = this.getService(child, childNumber);
             if (service && this.previousKasaDevice) {
               this.updateChildState(service, child);
@@ -372,8 +380,9 @@ export default class HomeKitDeviceSwitchWithChildren extends HomeKitDevice {
   }
 
   public updateAfterPeriodicDiscovery() {
-    this.kasaDevice.sys_info.children?.forEach((child: ChildDevice, index: number) => {
+    this.kasaDevice.sys_info.children?.forEach((child: ChildDevice) => {
       const serviceType = this.getServiceType(child);
+      const index = this.extractChildIndex(child);
       const service: Service | undefined =
         this.homebridgeAccessory.getServiceById(serviceType, `child-${index + 1}`);
       if (service) {
