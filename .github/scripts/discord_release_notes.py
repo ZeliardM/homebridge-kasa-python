@@ -11,11 +11,15 @@ Generate trimmed release notes for Discord embeds with balanced category represe
 - Guarantees the final message does not exceed --hard-max (default 1024).
 - Emits multi-line GitHub Actions output "body<<EOF ... EOF" to GITHUB_OUTPUT.
 """
-
 import argparse
-import json
 import os
+import sys
 from typing import Dict, List, Tuple
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+import common
 
 DEFAULT_CONTENT_MAX = 900
 DEFAULT_HARD_MAX = 1024
@@ -27,21 +31,13 @@ CATEGORY_ORDER = [
     "Other Changes",
 ]
 
-def _read_event_body() -> Tuple[str, str]:
-    event_path = os.environ.get("GITHUB_EVENT_PATH") or ""
-    tag = ""
+def _read_event_body() -> str:
+    evt = common.read_event()
     body = ""
-    if event_path and os.path.exists(event_path):
-        try:
-            with open(event_path, "r", encoding="utf-8") as f:
-                evt = json.load(f)
-            rel = evt.get("release") or {}
-            if isinstance(rel, dict):
-                tag = rel.get("tag_name") or ""
-                body = rel.get("body") or ""
-        except Exception:
-            pass
-    return tag, body
+    rel = evt.get("release") or {}
+    if isinstance(rel, dict):
+        body = rel.get("body") or ""
+    return body
 
 def _extract_full_changelog_line(lines: List[str]) -> Tuple[str, List[str]]:
     fc_line = ""
@@ -75,7 +71,7 @@ def _ordered_categories(sections: Dict[str, List[str]]) -> List[str]:
             ordered.append(c)
     return ordered
 
-def _flatten_content_lines(tag: str, chunks: Dict[str, List[str]], order: List[str]) -> List[str]:
+def _flatten_content_lines(chunks: Dict[str, List[str]], order: List[str]) -> List[str]:
     lines: List[str] = []
     first_cat_added = False
     for cat in order:
@@ -92,7 +88,7 @@ def _flatten_content_lines(tag: str, chunks: Dict[str, List[str]], order: List[s
 def _text_len(lines: List[str]) -> int:
     return len("\n".join(lines))
 
-def build_balanced_description(tag: str, body: str, content_max: int = DEFAULT_CONTENT_MAX,
+def build_balanced_description(body: str, content_max: int = DEFAULT_CONTENT_MAX,
                                hard_max: int = DEFAULT_HARD_MAX) -> str:
     lines_all = body.splitlines()
     fc_line, keep_lines = _extract_full_changelog_line(lines_all)
@@ -103,12 +99,12 @@ def build_balanced_description(tag: str, body: str, content_max: int = DEFAULT_C
     for cat in order:
         chunks[cat] = [f"### {cat}", ""]
         included_counts[cat] = 0
-    content_lines_cache = _flatten_content_lines(tag, chunks, order)
+    content_lines_cache = _flatten_content_lines(chunks, order)
 
     def try_apply(cat: str, bullet: str) -> bool:
         nonlocal content_lines_cache
         chunks[cat].append(bullet)
-        proposed_lines = _flatten_content_lines(tag, chunks, order)
+        proposed_lines = _flatten_content_lines(chunks, order)
         proposed_len = _text_len(proposed_lines)
         if proposed_len <= content_max:
             included_counts[cat] += 1
@@ -137,7 +133,7 @@ def build_balanced_description(tag: str, body: str, content_max: int = DEFAULT_C
         for cat in reversed(order):
             if included_counts.get(cat, 0) > 0:
                 chunks[cat].append("- …")
-                proposed_lines = _flatten_content_lines(tag, chunks, order)
+                proposed_lines = _flatten_content_lines(chunks, order)
                 if _text_len(proposed_lines) <= content_max:
                     content_lines_cache = proposed_lines
                     break
@@ -174,8 +170,8 @@ def main():
     ap.add_argument("--hard-max", type=int, default=DEFAULT_HARD_MAX,
                     help="Absolute maximum characters for the final description (including Full Changelog)")
     args = ap.parse_args()
-    tag, body = _read_event_body()
-    desc = build_balanced_description(tag, body, content_max=args.content_max, hard_max=args.hard_max)
+    body = _read_event_body()
+    desc = build_balanced_description(body, content_max=args.content_max, hard_max=args.hard_max)
     out_path = os.environ.get("GITHUB_OUTPUT")
     if out_path:
         with open(out_path, "a", encoding="utf-8") as f:

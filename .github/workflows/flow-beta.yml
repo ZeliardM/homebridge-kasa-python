@@ -6,7 +6,6 @@ on:
     branches: [beta]
   release:
     types: [published]
-  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -29,10 +28,11 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
 
-      - name: Write PR labels to file (safe serialization)
-        run: |
-          mkdir -p .github
-          printf '%s\n' '${{ toJson(github.event.pull_request.labels.*.name) }}' > .github/pr-labels.json
+      - name: Serialize PR labels to file
+        id: labels
+        uses: ./.github/actions/serialize-pr-labels
+        with:
+          labels_json: ${{ toJson(github.event.pull_request.labels.*.name) }}
 
       - name: Update changelog, beta draft, and align package versions
         env:
@@ -53,7 +53,7 @@ jobs:
             --pr-title "${PR_TITLE}" \
             --pr-author "${PR_AUTHOR}" \
             --pr-number "${PR_NUMBER}" \
-            --pr-labels-file ".github/pr-labels.json" \
+            --pr-labels-file "${{ steps.labels.outputs.path }}" \
             --base-branch "${BASE_BRANCH}"
 
   finalize-beta:

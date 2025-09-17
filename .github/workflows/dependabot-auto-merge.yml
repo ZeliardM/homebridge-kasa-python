@@ -58,6 +58,34 @@ jobs:
             gh pr edit "$PR_URL" --add-label breaking-change
           fi
 
+      - name: Build blocked sticky comment body
+        if: steps.safety.outputs.block == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "⚠️ Dependabot update requires manual review."
+            echo
+            echo "Type: \`${{ steps.metadata.outputs.update-type }}\`"
+            echo "Breaking label: ${{ steps.safety.outputs.has_breaking }}"
+            echo
+            echo "Auto-merge skipped."
+            echo
+            echo "<!-- COPILOT-STICKY:DEPENDABOT-STATUS -->"
+          } > body.txt
+
+      - name: Upsert blocked sticky
+        if: steps.safety.outputs.block == 'true'
+        uses: ./.github/actions/sticky-comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          number: ${{ github.event.pull_request.number }}
+          marker: "<!-- COPILOT-STICKY:DEPENDABOT-STATUS -->"
+          mode: upsert
+          body_file: body.txt
+
       - name: Auto-merge safe updates
         if: >
           (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
@@ -73,51 +101,47 @@ jobs:
           gh pr edit "$PR_URL" --add-label auto-merged
           gh pr merge --auto --squash "$PR_URL"
 
-      - name: Post or update sticky review-required comment
-        if: steps.safety.outputs.block == 'true'
+      - name: Build success sticky comment body
+        if: >
+          (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-patch') &&
+          steps.safety.outputs.block == 'false'
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          PR_NUM="${{ github.event.pull_request.number }}"
-          REPO="${{ github.repository }}"
-          MARK="<!-- COPILOT-STICKY:DEPENDABOT-BLOCKED -->"
-
           {
-            echo "⚠️ Dependabot update requires manual review."
+            echo "✅ Dependabot update is safe and will be auto-merged."
             echo
             echo "Type: \`${{ steps.metadata.outputs.update-type }}\`"
             echo "Breaking label: ${{ steps.safety.outputs.has_breaking }}"
             echo
-            echo "Auto-merge skipped."
+            echo "_GitHub will merge this PR automatically once required checks pass._"
             echo
-            echo "$MARK"
-          } > body.txt
+            echo "<!-- COPILOT-STICKY:DEPENDABOT-STATUS -->"
+          } > ok.txt
 
-          CID="$(gh api repos/$REPO/issues/$PR_NUM/comments --paginate \
-            --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
-          if [ -n "$CID" ]; then
-            BODY="$(cat body.txt)"
-            gh api repos/$REPO/issues/comments/$CID -X PATCH -f body="$BODY"
-          else
-            gh pr comment "$PR_NUM" --body-file body.txt
-          fi
-
-      - name: Remove sticky comment when no longer blocked
-        if: steps.safety.outputs.block != 'true'
-        shell: bash
+      - name: Upsert success sticky
+        if: >
+          (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-patch') &&
+          steps.safety.outputs.block == 'false'
+        uses: ./.github/actions/sticky-comment
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          PR_NUM="${{ github.event.pull_request.number }}"
-          REPO="${{ github.repository }}"
-          MARK="<!-- COPILOT-STICKY:DEPENDABOT-BLOCKED -->"
-          CID="$(gh api repos/$REPO/issues/$PR_NUM/comments --paginate \
-            --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
-          if [ -n "$CID" ]; then
-            gh api repos/$REPO/issues/comments/$CID -X DELETE || true
-          fi
+        with:
+          number: ${{ github.event.pull_request.number }}
+          marker: "<!-- COPILOT-STICKY:DEPENDABOT-STATUS -->"
+          mode: upsert
+          body_file: ok.txt
+
+      - name: Remove legacy blocked sticky marker
+        uses: ./.github/actions/sticky-comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          number: ${{ github.event.pull_request.number }}
+          marker: "<!-- COPILOT-STICKY:DEPENDABOT-BLOCKED -->"
+          mode: delete

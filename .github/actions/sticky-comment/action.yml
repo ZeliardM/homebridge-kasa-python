@@ -1,0 +1,49 @@
+name: Sticky Comment
+description: Upsert or delete a sticky comment identified by a marker on issues/PRs
+inputs:
+  number:
+    description: Issue or PR number
+    required: true
+  marker:
+    description: Marker string present in the sticky comment body
+    required: true
+  mode:
+    description: upsert or delete
+    required: false
+    default: upsert
+  body_file:
+    description: Path to a file containing the comment body (required for upsert)
+    required: false
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        NUM: ${{ inputs.number }}
+        MARK: ${{ inputs.marker }}
+      run: |
+        set -euo pipefail
+        # Find existing sticky comment id if present
+        CID="$(gh api repos/"$REPO"/issues/"$NUM"/comments --paginate \
+          --jq '.[] | select(.body | contains(env.MARK)) | .id' | head -n1 || true)"
+
+        if [ "${{ inputs.mode }}" = "delete" ]; then
+          if [ -n "$CID" ]; then
+            gh api repos/"$REPO"/issues/comments/"$CID" -X DELETE || true
+          fi
+          exit 0
+        fi
+
+        # Upsert mode
+        if [ -z "${{ inputs.body_file }}" ]; then
+          echo "::error::body_file is required for upsert mode"
+          exit 1
+        fi
+
+        BODY="$(cat "${{ inputs.body_file }}")"
+        if [ -n "$CID" ]; then
+          gh api repos/"$REPO"/issues/comments/"$CID" -X PATCH -f body="$BODY"
+        else
+          gh issue comment "$NUM" --body-file "${{ inputs.body_file }}"
+        fi

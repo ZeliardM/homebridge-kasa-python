@@ -38,27 +38,10 @@ jobs:
       github.event.release.prerelease == false &&
       github.event.release.target_commitish == 'latest' &&
       github.repository == 'ZeliardM/homebridge-kasa-python'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-
-      - name: Prepare trimmed release notes for Discord
-        id: trim_notes
-        run: |
-          python3 .github/scripts/discord_release_notes.py --content-max 900 --hard-max 1024
-
-      - name: Send Discord notification (trimmed details)
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          status: Success
-          title: Kasa Python Release
-          description: ${{ steps.trim_notes.outputs.body }}
-          url: https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/${{ github.event.release.tag_name }}
-          username: Homebridge
-          avatar_url: https://raw.githubusercontent.com/homebridge/branding/latest/logos/homebridge-color-round-stylized.png
-          nodetail: true
-          nocontext: false
-          notimestamp: false
-          nofail: true
+    uses: ./.github/workflows/discord-notify.yml
+    with:
+      title: Kasa Python Release
+      username: Homebridge
+      avatar_url: https://raw.githubusercontent.com/homebridge/branding/latest/logos/homebridge-color-round-stylized.png
+    secrets:
+      webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}

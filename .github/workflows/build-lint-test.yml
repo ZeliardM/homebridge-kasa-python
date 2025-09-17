@@ -5,7 +5,6 @@ on:
     branches: [latest, beta]
   pull_request:
     branches: [latest, beta]
-  workflow_dispatch:
   workflow_call:
     inputs:
       node_versions:

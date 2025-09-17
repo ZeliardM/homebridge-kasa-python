@@ -1,18 +1,11 @@
 name: Stable Release Flow
 
 on:
+  pull_request:
+    types: [closed]
+    branches: [latest]
   release:
     types: [published]
-  workflow_dispatch:
-    inputs:
-      convert_beta_version:
-        description: 'Base stable version to convert (e.g. v2.9.0)'
-        required: false
-        type: string
-      confirm_conversion:
-        description: 'Type CONFIRM to proceed'
-        required: false
-        type: string
 
 permissions:
   contents: write
@@ -23,8 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  convert-betas:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.convert_beta_version != '' && github.event.inputs.confirm_conversion == 'CONFIRM'
+  pr-merged:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'latest' && contains(github.event.pull_request.labels.*.name, 'stable-conversion')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,16 +27,32 @@ jobs:
           node-version: 22
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
-      - name: Convert betas to stable draft (and align package versions)
+
+      - name: Serialize PR labels to file
+        id: labels
+        uses: ./.github/actions/serialize-pr-labels
+        with:
+          labels_json: ${{ toJson(github.event.pull_request.labels.*.name) }}
+
+      - name: Update changelog, release draft, and align package versions
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          REPO: ${{ github.repository }}
           NPM_VERIFY_PUBLISHED_BETA: 'true'
         run: |
           set -euo pipefail
-          python .github/scripts/release_manager.py convert-to-stable \
+          python .github/scripts/release_manager.py pr-merged \
             --github-token "${GITHUB_TOKEN}" \
-            --repo "${{ github.repository }}" \
-            --version "${{ github.event.inputs.convert_beta_version }}"
+            --repo "${REPO}" \
+            --pr-title "${PR_TITLE}" \
+            --pr-author "${PR_AUTHOR}" \
+            --pr-number "${PR_NUMBER}" \
+            --pr-labels-file "${{ steps.labels.outputs.path }}" \
+            --base-branch "${BASE_BRANCH}"
 
   finalize-stable:
     if: github.event_name == 'release' && github.event.release.prerelease == false && !contains(github.event.release.tag_name, 'beta') && github.event.release.target_commitish == 'latest'
@@ -61,9 +70,11 @@ jobs:
       - name: Finalize stable
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
           python .github/scripts/release_manager.py publish-stable \
             --github-token "${GITHUB_TOKEN}" \
-            --repo "${{ github.repository }}" \
-            --version "${{ github.event.release.tag_name }}"
+            --repo "${REPO}" \
+            --version "${TAG}"
