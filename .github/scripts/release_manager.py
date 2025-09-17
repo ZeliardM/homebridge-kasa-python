@@ -485,13 +485,16 @@ def _read_package_name() -> Optional[str]:
     except Exception:
         return None
 
-def _npm_registry_versions(pkg_name: str, timeout: int = 30) -> Optional[Set[str]]:
+def _npm_registry_versions(pkg_name: str, timeout: int = 30, *, force_refresh: bool = False) -> Optional[Set[str]]:
     global _NPM_VERSIONS_CACHE
-    if _NPM_VERSIONS_CACHE is not None:
+    if not force_refresh and _NPM_VERSIONS_CACHE is not None:
         return _NPM_VERSIONS_CACHE
     try:
         url = f"https://registry.npmjs.org/{urllib.parse.quote(pkg_name)}"
-        req = urllib.request.Request(url, headers={"Accept": "application/vnd.npm.install-v1+json", "User-Agent": "release-manager/1.0"})
+        req = urllib.request.Request(
+            url,
+            headers={"Accept": "application/vnd.npm.install-v1+json", "User-Agent": "release-manager/1.0"},
+        )
         with urllib.request.urlopen(req, timeout=timeout) as r:
             raw = r.read().decode()
             data = json.loads(raw)
@@ -503,15 +506,16 @@ def _npm_registry_versions(pkg_name: str, timeout: int = 30) -> Optional[Set[str
         print(f"[release-manager] npm registry lookup failed for {pkg_name}: {e}", file=sys.stderr)
     return None
 
-def _collect_betas_in_range(gh: GitHub, prev_stable: Optional[Version], target_stable: Version,
-                            verify_npm: bool) -> List[Version]:
-    npm_versions: Optional[Set[str]] = None
-    if verify_npm:
-        pkg = _read_package_name()
-        if pkg:
-            npm_versions = _npm_registry_versions(pkg)
+def _collect_betas_in_range(
+    gh: GitHub,
+    prev_stable: Optional[Version],
+    target_stable: Version,
+    npm_versions: Optional[Set[str]],
+    *,
+    max_pages: int = 20,
+) -> List[Version]:
     betas: List[Version] = []
-    for r in gh.releases():
+    for r in gh.releases(max_pages=max_pages):
         if not r.get("prerelease") or r.get("draft"):
             continue
         tn = (r.get("tag_name") or "")
@@ -658,7 +662,13 @@ def cmd_pr_merged(args):
         content = _read_changelog()
         prev_stable, _ = _latest_versions(content)
         verify_betas = os.environ.get("NPM_VERIFY_PUBLISHED_BETA", "").lower() == "true"
-        betas = _collect_betas_in_range(gh, prev_stable, target_stable, verify_betas)
+        npm_versions: Optional[Set[str]] = None
+        if verify_betas:
+            pkg = _read_package_name()
+            if pkg:
+                force_refresh = os.environ.get("NPM_REGISTRY_FORCE_REFRESH", "").lower() in ("1", "true", "yes")
+                npm_versions = _npm_registry_versions(pkg, force_refresh=force_refresh)
+        betas = _collect_betas_in_range(gh, prev_stable, target_stable, npm_versions)
         if not betas:
             print("[release-manager] No published betas found to convert in range; aborting.")
             return
@@ -680,7 +690,8 @@ def cmd_pr_merged(args):
     if verify_betas:
         pkg = _read_package_name()
         if pkg:
-            npm_versions = _npm_registry_versions(pkg)
+            force_refresh = os.environ.get("NPM_REGISTRY_FORCE_REFRESH", "").lower() in ("1", "true", "yes")
+            npm_versions = _npm_registry_versions(pkg, force_refresh=force_refresh)
         else:
             print("[release-manager] NPM_VERIFY_PUBLISHED_BETA is true but no package.json/package name found; skipping npm verification.", file=sys.stderr)
     published_beta_versions: List[Version] = []
