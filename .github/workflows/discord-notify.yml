@@ -64,6 +64,14 @@ jobs:
         run: |
           set -euo pipefail
 
+          if [ ! -f ".github/scripts/discord_notify.py" ]; then
+            echo "::error::.github/scripts/discord_notify.py not found in repository."
+            echo "::group::Directory listing for .github/scripts"
+            ls -la .github/scripts || true
+            echo "::endgroup::"
+            exit 1
+          fi
+
           args=( \
             --webhook '${{ secrets.webhook }}' \
             --status '${{ inputs.status }}' \
