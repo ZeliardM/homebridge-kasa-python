@@ -22,6 +22,12 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      - name: Checkout base branch (needed for local actions)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+
       - name: Retarget PR base if needed
         uses: ./.github/actions/retarget-base
         env:
@@ -36,6 +42,12 @@ jobs:
     needs: retarget-base
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout base branch (needed for local actions)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+
       - name: Clear all labels from PR
         uses: ./.github/actions/clear-labels
         env:
@@ -61,11 +73,10 @@ jobs:
     needs: apply-labels
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout validator
+      - name: Checkout base branch (scripts + actions)
         uses: actions/checkout@v4
         with:
-          sparse-checkout: |
-            .github/scripts/pr_manager.py
+          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
 
       - name: Ensure jq
