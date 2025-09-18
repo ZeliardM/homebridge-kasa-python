@@ -28,8 +28,14 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-          sparse-checkout: |
-            .github/actions
+
+      - name: Debug local actions
+        run: |
+          set -e
+          git rev-parse --short HEAD || true
+          ls -la .github/actions || true
+          ls -la .github/actions/retarget-base || true
+          find .github/actions -maxdepth 2 -type f -name "action.y*" -print || true
 
       - name: Retarget PR base if needed
         uses: ./.github/actions/retarget-base
@@ -51,8 +57,14 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-          sparse-checkout: |
-            .github/actions
+
+      - name: Debug local actions
+        run: |
+          set -e
+          git rev-parse --short HEAD || true
+          ls -la .github/actions || true
+          ls -la .github/actions/clear-labels || true
+          find .github/actions -maxdepth 2 -type f -name "action.y*" -print || true
 
       - name: Clear all labels from PR
         uses: ./.github/actions/clear-labels
@@ -85,9 +97,17 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-          sparse-checkout: |
-            .github/scripts
-            .github/actions
+
+      - name: Debug local actions + scripts
+        run: |
+          set -e
+          git rev-parse --short HEAD || true
+          ls -la .github/actions || true
+          ls -la .github/actions/ensure-jq || true
+          ls -la .github/actions/sticky-comment || true
+          ls -la .github/scripts || true
+          ls -la .github/scripts/pr_manager.py || true
+          find .github -maxdepth 3 -type f -name "action.y*" -print || true
 
       - name: Ensure jq
         uses: ./.github/actions/ensure-jq
