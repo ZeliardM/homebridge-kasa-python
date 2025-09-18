@@ -1,0 +1,102 @@
+name: Discord Notification
+
+on:
+  workflow_call:
+    inputs:
+      title:
+        description: Title for the Discord embed
+        required: true
+        type: string
+      status:
+        description: Status shown by the Discord action (e.g., Success, Failure)
+        required: false
+        type: string
+        default: Success
+      description:
+        description: Optional custom description prefix (if empty, will inject 'Version `<tag>`')
+        required: false
+        type: string
+        default: ""
+      username:
+        description: Username for the Discord bot
+        required: false
+        type: string
+        default: Homebridge
+      avatar_url:
+        description: Avatar URL for the Discord bot
+        required: false
+        type: string
+        default: https://raw.githubusercontent.com/homebridge/branding/latest/logos/homebridge-color-round-stylized.png
+      color:
+        description: Embed color (Homebridge purple default)
+        required: false
+        type: string
+        default: "4726621"
+      nodetail:
+        description: Whether to hide details section
+        required: false
+        type: boolean
+        default: false
+      nocontext:
+        description: Whether to hide context (repo/ref/event)
+        required: false
+        type: boolean
+        default: false
+      notimestamp:
+        description: Whether to hide timestamp
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      webhook:
+        description: Discord webhook URL
+        required: true
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Prepare trimmed release notes for Discord
+        id: trim_notes
+        run: |
+          python3 .github/scripts/discord_release_notes.py --content-max 900 --hard-max 1024
+
+      - name: Compose final description (Version + trimmed body)
+        id: compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name }}"
+          PREFIX="${{ inputs.description }}"
+          BODY="${{ steps.trim_notes.outputs.body }}"
+
+          if [ -n "$PREFIX" ]; then
+            DESC="$PREFIX"$'\n\n'"$BODY"
+          else
+            DESC="Version \`$TAG\`"$'\n\n'"$BODY"
+          fi
+
+          # Escape for GitHub output
+          DESC="${DESC//'%'/'%25'}"
+          DESC="${DESC//$'\n'/'%0A'}"
+          DESC="${DESC//$'\r'/'%0D'}"
+          echo "desc=$DESC" >> "$GITHUB_OUTPUT"
+
+      - name: Send Discord notification (rich details)
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.webhook }}
+          status: ${{ inputs.status }}
+          title: ${{ inputs.title }}
+          description: ${{ steps.compose.outputs.desc }}
+          url: https://github.com/${{ github.repository }}/releases/tag/${{ github.event.release.tag_name }}
+          username: ${{ inputs.username }}
+          avatar_url: ${{ inputs.avatar_url }}
+          color: ${{ inputs.color }}
+          nodetail: ${{ inputs.nodetail }}
+          nocontext: ${{ inputs.nocontext }}
+          notimestamp: ${{ inputs.notimestamp }}
+          nofail: true

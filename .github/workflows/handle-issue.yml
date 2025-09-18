@@ -31,12 +31,7 @@ jobs:
           fetch-depth: 0
 
       - name: Ensure jq
-        shell: bash
-        run: |
-          if ! command -v jq >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y jq
-          fi
+        uses: ./.github/actions/ensure-jq
 
       - name: Classify
         id: classify
@@ -70,16 +65,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clear all labels (full reset)
-        shell: bash
+        uses: ./.github/actions/clear-labels
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          REPO="${{ github.repository }}"
-          NUM="${{ github.event.issue.number }}"
-          printf '{"labels":[]}\n' > payload.json
-          gh api --method PUT -H "Accept: application/vnd.github+json" repos/$REPO/issues/$NUM/labels --input payload.json
+        with:
+          number: ${{ github.event.issue.number }}
 
       - name: Apply canonical label (if any)
         shell: bash
@@ -104,17 +95,11 @@ jobs:
             gh issue edit ${{ github.event.issue.number }} --add-label needs-info || true
           fi
 
-      - name: Post or update sticky classification comment
+      - name: Build sticky classification comment body
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          REPO="${{ github.repository }}"
-          NUM="${{ github.event.issue.number }}"
           MARK="<!-- COPILOT-STICKY:ISSUE-CLASSIFIER -->"
-
           LABEL="${{ needs.classify.outputs.applied_label }}"
           NEEDS="${{ needs.classify.outputs.needs_info }}"
           MSGS_JSON="${{ needs.classify.outputs.messages }}"
@@ -142,12 +127,16 @@ jobs:
             echo "$MARK"
           } > body.txt
 
-          CID="$(gh api repos/$REPO/issues/$NUM/comments --paginate --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
-          if [ -n "$CID" ]; then
-            gh api repos/$REPO/issues/comments/$CID -X PATCH -f body="$(cat body.txt)"
-          else
-            gh issue comment "$NUM" --body-file body.txt
-          fi
+      - name: Upsert sticky classification comment
+        uses: ./.github/actions/sticky-comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          number: ${{ github.event.issue.number }}
+          marker: "<!-- COPILOT-STICKY:ISSUE-CLASSIFIER -->"
+          mode: upsert
+          body_file: body.txt
 
   validate:
     if: github.actor != 'github-actions[bot]'
@@ -184,17 +173,9 @@ jobs:
       - name: Update sticky with validation failure
         if: steps.validate.outputs.ok != 'true'
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          REPO="${{ github.repository }}"
-          NUM="${{ github.event.issue.number }}"
           MARK="<!-- COPILOT-STICKY:ISSUE-CLASSIFIER -->"
-
-          CID="$(gh api repos/$REPO/issues/$NUM/comments --paginate --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
-
           VJ='${{ steps.validate.outputs.messages }}'
           if [ -n "$VJ" ] && [ "$VJ" != "null" ]; then
             VALMSGS="$(printf '%s' "$VJ" | jq -r '.[]?')"
@@ -217,11 +198,17 @@ jobs:
             echo "$MARK"
           } > new.txt
 
-          if [ -n "$CID" ]; then
-            gh api repos/$REPO/issues/comments/$CID -X PATCH -f body="$(cat new.txt)"
-          else
-            gh issue comment "$NUM" --body-file new.txt
-          fi
+      - name: Upsert validation failure sticky
+        if: steps.validate.outputs.ok != 'true'
+        uses: ./.github/actions/sticky-comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          number: ${{ github.event.issue.number }}
+          marker: "<!-- COPILOT-STICKY:ISSUE-CLASSIFIER -->"
+          mode: upsert
+          body_file: new.txt
 
       - name: Final sticky success update (show classification and labels)
         if: steps.validate.outputs.ok == 'true'
@@ -234,13 +221,8 @@ jobs:
           REPO="${{ github.repository }}"
           NUM="${{ github.event.issue.number }}"
           MARK="<!-- COPILOT-STICKY:ISSUE-CLASSIFIER -->"
-
-          # Get label names as newline-separated values (handles pagination safely)
           LABELS_RAW="$(gh api repos/$REPO/issues/$NUM/labels --paginate --jq '.[].name' || true)"
-
-          # Build a single, comma+space separated line in sorted order (unique, case-insensitive)
           LABELS_LINE="$(printf '%s\n' "$LABELS_RAW" | awk 'NF' | sort -fu | paste -sd ', ' -)"
-
           CLASS="${{ needs.classify.outputs.applied_label }}"
 
           {
@@ -254,12 +236,17 @@ jobs:
             echo "$MARK"
           } > success.txt
 
-          CID="$(gh api repos/$REPO/issues/$NUM/comments --paginate --jq '.[] | select(.body | contains("'"$MARK"'")) | .id' | head -n1 || true)"
-          if [ -n "$CID" ]; then
-            gh api repos/$REPO/issues/comments/$CID -X PATCH -f body="$(cat success.txt)"
-          else
-            gh issue comment "$NUM" --body-file success.txt
-          fi
+      - name: Upsert success sticky
+        if: steps.validate.outputs.ok == 'true'
+        uses: ./.github/actions/sticky-comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          number: ${{ github.event.issue.number }}
+          marker: "<!-- COPILOT-STICKY:ISSUE-CLASSIFIER -->"
+          mode: upsert
+          body_file: success.txt
 
       - name: Fail job when invalid
         if: steps.validate.outputs.ok != 'true'
