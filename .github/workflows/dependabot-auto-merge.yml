@@ -14,12 +14,10 @@ jobs:
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout actions
+      - name: Checkout actions (needed for local action)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          sparse-checkout: |
-            .github/actions
 
       - name: Fetch metadata
         id: metadata

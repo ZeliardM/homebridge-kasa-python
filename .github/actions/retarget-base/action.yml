@@ -21,13 +21,14 @@ runs:
       shell: bash
       env:
         PR: ${{ inputs.number }}
+        REPO: ${{ github.repository }}
       run: |
         set -euo pipefail
 
-        BASE="$(gh pr view "$PR" --json baseRefName --jq .baseRefName || echo '')"
-        HEAD="$(gh pr view "$PR" --json headRefName --jq .headRefName || echo '')"
-        AUTHOR="$(gh pr view "$PR" --json author --jq .author.login || echo '')"
-        LABELS="$(gh pr view "$PR" --json labels --jq '.labels[].name' || true)"
+        BASE="$(gh -R "$REPO" pr view "$PR" --json baseRefName --jq .baseRefName || echo '')"
+        HEAD="$(gh -R "$REPO" pr view "$PR" --json headRefName --jq .headRefName || echo '')"
+        AUTHOR="$(gh -R "$REPO" pr view "$PR" --json author --jq .author.login || echo '')"
+        LABELS="$(gh -R "$REPO" pr view "$PR" --json labels --jq '.labels[].name' || true)"
 
         is_stable_conversion=false
         if [ "$BASE" = "latest" ] && [ "$HEAD" = "beta" ]; then
@@ -54,7 +55,7 @@ runs:
           exit 0
         fi
 
-        if gh pr edit "$PR" --base beta; then
+        if gh -R "$REPO" pr edit "$PR" --base beta; then
           echo "retargeted=true" >> "$GITHUB_OUTPUT"
           echo "final_base=beta" >> "$GITHUB_OUTPUT"
           echo "reason=retargeted" >> "$GITHUB_OUTPUT"

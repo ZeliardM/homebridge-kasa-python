@@ -27,9 +27,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          sparse-checkout: |
-            .github/scripts
-            .github/actions
 
       - name: Ensure jq
         uses: ./.github/actions/ensure-jq
@@ -69,8 +66,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          sparse-checkout: |
-            .github/actions
 
       - name: Clear all labels (full reset)
         uses: ./.github/actions/clear-labels
@@ -156,9 +151,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          sparse-checkout: |
-            .github/scripts
-            .github/actions
 
       - name: Validate and capture outputs
         id: validate
