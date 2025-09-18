@@ -23,12 +23,13 @@ jobs:
       messages: ${{ steps.classify.outputs.messages }}
       classification_json: ${{ steps.classify.outputs.classification_json }}
     steps:
-      - name: Checkout script
+      - name: Checkout scripts + actions
         uses: actions/checkout@v4
         with:
-          sparse-checkout: |
-            .github/scripts/issue_manager.py
           fetch-depth: 0
+          sparse-checkout: |
+            .github/scripts
+            .github/actions
 
       - name: Ensure jq
         uses: ./.github/actions/ensure-jq
@@ -64,6 +65,13 @@ jobs:
     needs: classify
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout actions
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          sparse-checkout: |
+            .github/actions
+
       - name: Clear all labels (full reset)
         uses: ./.github/actions/clear-labels
         env:
@@ -144,12 +152,13 @@ jobs:
     needs: [classify, label_and_comment]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout script
+      - name: Checkout scripts + actions
         uses: actions/checkout@v4
         with:
-          sparse-checkout: |
-            .github/scripts/issue_manager.py
           fetch-depth: 0
+          sparse-checkout: |
+            .github/scripts
+            .github/actions
 
       - name: Validate and capture outputs
         id: validate

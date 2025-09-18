@@ -22,6 +22,15 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      - name: Checkout PR head (local actions)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          sparse-checkout: |
+            .github/actions
+
       - name: Retarget PR base if needed
         uses: ./.github/actions/retarget-base
         env:
@@ -36,6 +45,15 @@ jobs:
     needs: retarget-base
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout PR head (local actions)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          sparse-checkout: |
+            .github/actions
+
       - name: Clear all labels from PR
         uses: ./.github/actions/clear-labels
         env:
@@ -61,12 +79,15 @@ jobs:
     needs: apply-labels
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout validator
+      - name: Checkout PR head (scripts + actions)
         uses: actions/checkout@v4
         with:
-          sparse-checkout: |
-            .github/scripts/pr_manager.py
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          sparse-checkout: |
+            .github/scripts
+            .github/actions
 
       - name: Ensure jq
         uses: ./.github/actions/ensure-jq
