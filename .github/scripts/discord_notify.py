@@ -9,6 +9,7 @@ Features:
 - Composes a Discord embed with details (Repository, Ref, Event, Triggered by, Workflow).
 - Enforces Discord limits (title<=256, description<=4096, field name<=256, field value<=1024).
 - Sends payload directly to Discord webhook(s).
+- Supports multiple webhook endpoints by providing newline-separated URLs to --webhook or DISCORD_WEBHOOK.
 
 Usage example:
   python3 .github/scripts/discord_notify.py \\
@@ -133,7 +134,7 @@ def _flatten_content_lines(chunks: Dict[str, List[str]], order: List[str]) -> Li
         if not has_bullets:
             continue
         if first_cat_added:
-            lines.append("")
+          lines.append("")
         lines.extend(block)
         first_cat_added = True
     return lines
@@ -238,8 +239,12 @@ def post_discord(webhook: str, payload: dict) -> Tuple[int, str]:
         with urllib.request.urlopen(req, timeout=45) as r:
             return r.getcode(), r.read().decode("utf-8", "replace")
     except Exception as e:
+        body = ""
         try:
-            body = e.read().decode("utf-8", "replace")
+            if hasattr(e, "read"):
+                body = e.read().decode("utf-8", "replace")
+            else:
+                body = str(e)
         except Exception:
             body = str(e)
         return 0, body
