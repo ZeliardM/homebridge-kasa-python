@@ -180,7 +180,7 @@ def write_actions_output(key: str, value: str) -> None:
         f.write(value)
         f.write("\nEOF\n")
 
-def cmd_trim() -> int:
+def cmd_trim(args: argparse.Namespace) -> int:
     evt = common.read_event()
     body = _read_release_body(evt)
     name_or_tag = _read_release_name_or_tag(evt)
