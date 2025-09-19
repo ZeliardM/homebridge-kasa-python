@@ -48,4 +48,4 @@ jobs:
       username: Homebridge
       avatar_url: https://raw.githubusercontent.com/homebridge/branding/latest/logos/homebridge-color-round-stylized.png
     secrets:
-      webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      discord_webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
