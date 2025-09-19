@@ -1,4 +1,12 @@
 # Changelog
+## [v2.9.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.4)
+
+### Other Changes
+
+- Update cmd_trim function to accept arguments @ZeliardM [#99]
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.0-beta.3...v2.9.0-beta.4
+
 ## [v2.9.0-beta.3](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.3) (2025-09-19)
 
 ### Other Changes
