@@ -1,4 +1,12 @@
 # Changelog
+## [v2.9.0-beta.3](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.3)
+
+### Other Changes
+
+- Correct handling of discord webhook body @ZeliardM [#98]
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.0-beta.2...v2.9.0-beta.3
+
 ## [v2.9.0-beta.2](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.2) (2025-09-18)
 
 ### Other Changes
