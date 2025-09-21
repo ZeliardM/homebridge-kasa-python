@@ -89,10 +89,7 @@ jobs:
         run: |
           python3 .github/scripts/discord_tools.py edit-payload
 
-      - name: Install axios
-        run: npm install axios
-
-      - name: Post to Discord via axios
+      - name: Post to Discord
         env:
           WEBHOOK_URL: ${{ secrets.discord_webhook }}
           WEBHOOK_PAYLOAD: ${{ steps.edit_payload.outputs.payload }}

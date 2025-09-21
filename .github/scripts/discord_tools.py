@@ -23,19 +23,16 @@ Discord workflow helpers with three subcommands:
      and also prints the final JSON to stdout
 
 3) post
-   - Posts the payload to the Discord webhook using axios (Node.js)
+   - Posts the payload to the Discord webhook
    - Requires:
        * env WEBHOOK_URL (Discord webhook)
        * env WEBHOOK_PAYLOAD (stringified JSON payload)
-       * Node.js + "axios" installed (npm i axios)
 """
 import argparse
 import json
 import os
+import requests
 import sys
-import tempfile
-import textwrap
-import subprocess
 from typing import Any, Dict, List, Tuple
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -47,7 +44,6 @@ MAX_EMBED_TITLE_LENGTH = 256
 MAX_EMBED_DESCRIPTION_LENGTH = 4096
 MAX_EMBED_FIELD_NAME_LENGTH = 256
 MAX_EMBED_FIELD_VALUE_LENGTH = 1024
-DEFAULT_HARD_MAX = 1024
 CATEGORY_ORDER = [
     "Breaking Changes",
     "Featured Changes",
@@ -280,55 +276,20 @@ def cmd_post(args: argparse.Namespace) -> int:
         print("::error::WEBHOOK_PAYLOAD not provided (env or stdin)", file=sys.stderr)
         return 1
     try:
-        _ = json.loads(payload_str)
+        payload = json.loads(payload_str)
     except Exception as e:
         print(f"::error::Invalid JSON payload: {e}", file=sys.stderr)
         return 1
-    js = textwrap.dedent(
-        """
-        const axios = require("axios");
-        (async () => {
-          try {
-            const url = process.env.WEBHOOK_URL;
-            const raw = process.env.WEBHOOK_PAYLOAD;
-            if (!url) throw new Error("WEBHOOK_URL missing");
-            if (!raw) throw new Error("WEBHOOK_PAYLOAD missing");
-            const payload = JSON.parse(raw);
-            const res = await axios.post(url, payload, { timeout: 45000 });
-            console.log(`POST -> ${res.status} ${res.statusText}`);
-            process.exit(0);
-          } catch (e) {
-            const status = e?.response?.status;
-            const data = e?.response?.data;
-            if (status) {
-              console.error(`[axios] ERROR ${status}`);
-            }
-            if (data) {
-              try {
-                console.error(typeof data === "string" ? data : JSON.stringify(data));
-              } catch (_) {
-                console.error(String(data));
-              }
-            }
-            console.error(e?.message || String(e));
-            process.exit(1);
-          }
-        })();
-        """
-    )
-    with tempfile.TemporaryDirectory() as td:
-        js_path = os.path.join(td, "post.js")
-        with open(js_path, "w", encoding="utf-8") as f:
-            f.write(js)
-        env = os.environ.copy()
-        env["WEBHOOK_URL"] = webhook
-        env["WEBHOOK_PAYLOAD"] = payload_str
-        try:
-            proc = subprocess.run(["node", js_path], env=env, check=False)
-            return proc.returncode
-        except FileNotFoundError:
-            print("::error::Node.js not found. Please ensure Node is available in PATH.", file=sys.stderr)
-            return 1
+    try:
+        resp = requests.post(webhook, json=payload, timeout=45)
+        if resp.ok:
+            print(f"POST -> {resp.status_code} {resp.reason}")
+            return 0
+        print(f"::error::Discord webhook failed {resp.status_code}: {resp.text}", file=sys.stderr)
+        return 1
+    except requests.RequestException as e:
+        print(f"::error::Request failed: {e}", file=sys.stderr)
+        return 1
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Discord tools for GH Actions")
@@ -338,7 +299,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_edit = sub.add_parser("edit-payload", help="Inject trimmed Event value into webhook payload JSON")
     p_edit.add_argument("--event-value", default="", help="Trimmed Event field value (or set env EVENT_VALUE)")
     p_edit.set_defaults(func=cmd_edit_payload)
-    p_post = sub.add_parser("post", help="Post payload to Discord using axios (Node.js required)")
+    p_post = sub.add_parser("post", help="Post payload to Discord")
     p_post.add_argument("--webhook", default="", help="Discord webhook URL (or set env WEBHOOK_URL / DISCORD_WEBHOOK)")
     p_post.set_defaults(func=cmd_post)
     return p
