@@ -1,4 +1,12 @@
 # Changelog
+## [v2.9.0-beta.5](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.5)
+
+### Other Changes
+
+- Issue/fix discord notify @ZeliardM [#100]
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.0-beta.4...v2.9.0-beta.5
+
 ## [v2.9.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.4) (2025-09-19)
 
 ### Other Changes
