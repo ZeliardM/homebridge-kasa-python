@@ -1,8 +1,9 @@
 # Changelog
-## [v2.9.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.7)
+## [v2.9.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.7) (2025-09-22)
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v2.9.0-beta.7 @github-actions [beta-release]
 - Fix bullets for Update CHANGELOG.md line @ZeliardM [#102]
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.0-beta.6...v2.9.0-beta.7
