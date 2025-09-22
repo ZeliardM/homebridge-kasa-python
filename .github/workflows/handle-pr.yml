@@ -148,7 +148,7 @@ jobs:
           REPO="${{ github.repository }}"
           PR_NUM="${{ github.event.pull_request.number }}"
           LABELS_RAW="$(gh api repos/$REPO/issues/$PR_NUM/labels --paginate --jq '.[].name' || true)"
-          LABELS_LINE="$(printf '%s\n' $LABELS_RAW | awk 'NF' | sort -fu | paste -sd ', ' -)"
+          LABELS_LINE="$(echo "$LABELS_RAW" | awk 'NF' | sort -fu | awk '{printf "%s%s", sep, $0; sep=", "} END {print ""}')"
           BASE="$(gh pr view "$PR_NUM" --json baseRefName --jq .baseRefName || echo '')"
           CLASS_SET="breaking-change bug dependency docs enhancement feature fix internal workflow"
           CLASS=""
