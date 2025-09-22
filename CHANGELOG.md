@@ -1,4 +1,12 @@
 # Changelog
+## [v2.9.0-beta.8](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.8)
+
+### Other Changes
+
+- ci(deps): bump actions/checkout from 4 to 5 @dependabot[bot] [#107]
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.0-beta.7...v2.9.0-beta.8
+
 ## [v2.9.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.7) (2025-09-22)
 
 ### Other Changes
