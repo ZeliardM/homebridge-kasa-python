@@ -24,7 +24,7 @@ jobs:
       classification_json: ${{ steps.classify.outputs.classification_json }}
     steps:
       - name: Checkout scripts + actions
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout actions
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -148,7 +148,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout scripts + actions
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
