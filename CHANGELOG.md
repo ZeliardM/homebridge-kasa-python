@@ -1,4 +1,39 @@
 # Changelog
+
+## [v2.9.0](https://github.com//releases/tag/v2.9.0)
+
+### Featured Changes
+
+- Fix child device sorting and calling @ZeliardM [#93]
+
+### Bug Fixes
+
+- Update section ordering in release_manager.py @ZeliardM [#90]
+- Fix npm-publish permissions @ZeliardM [#89]
+- Fix release permissions @ZeliardM [#88]
+- Issue/fix dependabot @ZeliardM [#87]
+- Issue/fix npm publish failures @ZeliardM [#86]
+- Fix publish version matching package version @ZeliardM [#84]
+- Complete release workflow consolidation - replace complex inline Python with unified release manager @Copilot [#81]
+- Fix workflow issues: stale management, changelog updates, dependabot integration, labeler configuration, draft release section handling, and comprehensive testing validation @Copilot [#80]
+- Issue/fix beta draft pre release @ZeliardM [#94]
+- Add publish date to finalized CHANGELOG.md @ZeliardM [#92]
+
+### Other Changes
+
+- Fix CHANGELOG.md workflow not syncing properly with GitHub releases, add automated changelog maintenance, consolidate release workflows, implement comprehensive beta management system, optimize workflow code quality, and resolve Unreleased section handling @Copilot [#76]
+- Truncate Discord release notes @ZeliardM [#91]
+- Refactor of all workflows and scripts @ZeliardM [#95]
+- Issue/fix discord notify @ZeliardM [#97]
+- Correct handling of discord webhook body @ZeliardM [#98]
+- Update cmd_trim function to accept arguments @ZeliardM [#99]
+- Issue/fix discord notify @ZeliardM [#100]
+- Issue/cleanup discord notify @ZeliardM [#101]
+- Fix bullets for Update CHANGELOG.md line @ZeliardM [#102]
+- Convert beta releases (v2.8.2-beta.0, v2.9.0-beta.0, v2.9.0-beta.1, v2.9.0-beta.2, v2.9.0-beta.3, v2.9.0-beta.4, v2.9.0-beta.5, v2.9.0-beta.6, v2.9.0-beta.7) to regular release v2.9.0 @github-actions [beta-to-release]
+
+**Full Changelog**: https://github.com//compare/v2.8.1...v2.9.0
+
 ## [v2.9.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.7) (2025-09-22)
 
 ### Other Changes
