@@ -138,6 +138,7 @@ export const PowerStrips = [
   'P306',
   'P400M',
   'TP25',
+  'TP30',
 ];
 
 export const Switches = [
