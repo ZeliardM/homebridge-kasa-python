@@ -113,15 +113,15 @@ def _ensure_changelog_update_bullet(sections: Dict[str, List[str]], version: str
         sections["Other Changes"] = []
         other_changes = sections["Other Changes"]
     already_present = any(
-        b.startswith("Update CHANGELOG.md for beta release") or
-        b.startswith("Update CHANGELOG.md for release")
+        b.startswith("- Update CHANGELOG.md for beta release") or
+        b.startswith("- Update CHANGELOG.md for release")
         for b in other_changes
     )
     if not already_present and version:
         if "beta" in version:
-            bullet = f"Update CHANGELOG.md for beta release {version} @github-actions [beta-release]"
+            bullet = f"- Update CHANGELOG.md for beta release {version} @github-actions [beta-release]"
         else:
-            bullet = f"Update CHANGELOG.md for release {version} @github-actions [release]"
+            bullet = f"- Update CHANGELOG.md for release {version} @github-actions [release]"
         other_changes.insert(0, bullet)
 
 def build_event_value_from_body(body: str, name_or_tag: str, field_hard_max: int) -> str:
