@@ -151,7 +151,7 @@ def do_validate(token: str, repo: str, num: str) -> dict:
     messages: List[str] = []
     if not any(l in CLASSIFICATION for l in labels):
         ok = False
-        messages.append(f"Missing classification label. Need one of: {', '.join(sorted(CLASSIFICATION))}. Current: {labels}")
+        messages.append(f"Missing classification label. Need one of: {', '.join(sorted(CLASSIFICATION))}. Current: {', '.join(labels)}")
     if "breaking-change" in labels:
         migration = _section(body, "Migration Strategy")
         details = _section(body, "Details")

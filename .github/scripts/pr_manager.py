@@ -68,8 +68,9 @@ def main():
     if not any(l in CLASSIFICATION for l in labels):
         need = ", ".join(sorted(CLASSIFICATION))
         curr = labels or []
+        curr_str = ", ".join(curr)
         _give({"ok": False, "code": "missing_label",
-               "message": f"No classification label found. Need one of: {need}. Current: {curr}"}, 1)
+               "message": f"No classification label found. Need one of: {need}. Current: {curr_str}"}, 1)
     if "breaking-change" in labels:
         s = body.find(START)
         e = body.find(END)
