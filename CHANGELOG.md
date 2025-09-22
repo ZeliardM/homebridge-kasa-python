@@ -1,6 +1,6 @@
 # Changelog
 
-## [v2.9.0](https://github.com//releases/tag/v2.9.0)
+## [v2.9.0](https://github.com//releases/tag/v2.9.0) (2025-09-22)
 
 ### Featured Changes
 
@@ -21,6 +21,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for release v2.9.0 @github-actions [release]
 - Fix CHANGELOG.md workflow not syncing properly with GitHub releases, add automated changelog maintenance, consolidate release workflows, implement comprehensive beta management system, optimize workflow code quality, and resolve Unreleased section handling @Copilot [#76]
 - Truncate Discord release notes @ZeliardM [#91]
 - Refactor of all workflows and scripts @ZeliardM [#95]
