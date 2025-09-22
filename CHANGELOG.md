@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- ci(deps): bump actions/setup-node from 4 to 5 @dependabot[bot] [#108]
 - ci(deps): bump actions/checkout from 4 to 5 @dependabot[bot] [#107]
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.0-beta.7...v2.9.0-beta.8
