@@ -11,6 +11,7 @@ Discord workflow helpers with three subcommands:
        * Appends "**Full Changelog**: ..." line at the bottom (if present)
        * Round-robins remaining bullets under correct categories until the Discord field limit (1024 chars) is reached
        * If not all bullets fit, appends "- …" to the last non-empty category (if space allows)
+       * Inserts 'Update CHANGELOG.md for release <version>' or 'Update CHANGELOG.md for beta release <version>' as the first bullet in Other Changes if missing
    - Writes Actions output key "body" (multiline <<EOF block)
 
 2) edit-payload
@@ -106,63 +107,87 @@ def _ordered_categories(sections: Dict[str, List[str]]) -> List[str]:
             ordered.append(c)
     return ordered
 
+def _ensure_changelog_update_bullet(sections: Dict[str, List[str]], version: str):
+    other_changes = sections.get("Other Changes")
+    if other_changes is None:
+        sections["Other Changes"] = []
+        other_changes = sections["Other Changes"]
+    already_present = any(
+        b.startswith("Update CHANGELOG.md for beta release") or
+        b.startswith("Update CHANGELOG.md for release")
+        for b in other_changes
+    )
+    if not already_present and version:
+        if "beta" in version:
+            bullet = f"Update CHANGELOG.md for beta release {version} @github-actions [beta-release]"
+        else:
+            bullet = f"Update CHANGELOG.md for release {version} @github-actions [release]"
+        other_changes.insert(0, bullet)
+
 def build_event_value_from_body(body: str, name_or_tag: str, field_hard_max: int) -> str:
     lines_all = body.splitlines()
     fc_line, keep_lines = _extract_full_changelog_line(lines_all)
     sections = _parse_sections("\n".join(keep_lines))
     order = _ordered_categories(sections)
-    all_lines: List[str] = []
-    if name_or_tag:
-        all_lines.append(f"**{name_or_tag}**")
-    for idx, cat in enumerate(order):
-        if idx > 0 and all_lines:
-            all_lines.append("")
-        all_lines.append(f"### {cat}")
+    _ensure_changelog_update_bullet(sections, name_or_tag)
+    section_lines = {}
     included_counts = {cat: 0 for cat in order}
     for cat in order:
+        lines = [f"### {cat}", ""]
         bullets = sections.get(cat, [])
         if bullets:
-            all_lines.append(bullets[0])
+            lines.append(bullets[0])
             included_counts[cat] = 1
-    event_val_base = "\n".join(all_lines)
-    if fc_line:
-        event_val_base += "\n" + fc_line
-    if len(event_val_base) > field_hard_max:
-        return trunc_with_ellipsis(event_val_base, field_hard_max)
-    lines_before_fc = all_lines[:]
-    while True:
+        section_lines[cat] = lines
+    progressed = True
+    while progressed:
         progressed = False
         for cat in order:
             bullets = sections.get(cat, [])
             idx = included_counts[cat]
             if idx < len(bullets):
-                candidate_lines = lines_before_fc + [bullets[idx]]
-                candidate = "\n".join(candidate_lines)
+                candidate_sections = {k: v[:] for k, v in section_lines.items()}
+                candidate_sections[cat].append(bullets[idx])
+                candidate_lines = []
+                if name_or_tag:
+                    candidate_lines.append(f"**{name_or_tag}**")
+                    candidate_lines.append("")
+                for c in order:
+                    candidate_lines += candidate_sections[c] + [""]
                 if fc_line:
-                    candidate += "\n" + fc_line
+                    candidate_lines.append(fc_line)
+                candidate = "\n".join(candidate_lines).strip()
                 if len(candidate) <= field_hard_max:
-                    lines_before_fc.append(bullets[idx])
+                    section_lines[cat].append(bullets[idx])
                     included_counts[cat] += 1
                     progressed = True
                 else:
                     break
-        if not progressed:
-            break
-    remaining = any(included_counts[cat] < len(sections.get(cat, [])) for cat in order)
-    final_lines = lines_before_fc[:]
-    if remaining and order:
-        for cat in reversed(order):
-            if included_counts[cat] > 0:
-                candidate_lines = final_lines + ["- …"]
-                candidate = "\n".join(candidate_lines)
-                if fc_line:
-                    candidate += "\n" + fc_line
-                if len(candidate) <= field_hard_max:
-                    final_lines.append("- …")
-                break
-    event_val = "\n".join(final_lines)
+    final_sections = {k: v[:] for k, v in section_lines.items()}
+    for cat in order:
+        bullets = sections.get(cat, [])
+        if included_counts[cat] < len(bullets):
+            candidate_lines = []
+            if name_or_tag:
+                candidate_lines.append(f"**{name_or_tag}**")
+                candidate_lines.append("")
+            for c in order:
+                candidate_lines += final_sections[c] + [""]
+            candidate_lines += ["- …", ""]
+            if fc_line:
+                candidate_lines.append(fc_line)
+            candidate = "\n".join(candidate_lines).strip()
+            if len(candidate) <= field_hard_max:
+                final_sections[cat].append("- …")
+    final_lines = []
+    if name_or_tag:
+        final_lines.append(f"**{name_or_tag}**")
+        final_lines.append("")
+    for cat in order:
+        final_lines += final_sections[cat] + [""]
     if fc_line:
-        event_val += "\n" + fc_line
+        final_lines.append(fc_line)
+    event_val = "\n".join(final_lines).strip()
     if len(event_val) > field_hard_max:
         event_val = trunc_with_ellipsis(event_val, field_hard_max)
     return event_val
