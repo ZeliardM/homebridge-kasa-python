@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- Bump axios from 1.11.0 to 1.12.0 in the npm_and_yarn group across 1 directory @dependabot[bot] [#85]
 - ci(deps): bump actions/setup-node from 4 to 5 @dependabot[bot] [#108]
 - ci(deps): bump actions/checkout from 4 to 5 @dependabot[bot] [#107]
 
