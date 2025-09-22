@@ -223,7 +223,7 @@ jobs:
           NUM="${{ github.event.issue.number }}"
           MARK="<!-- COPILOT-STICKY:ISSUE-CLASSIFIER -->"
           LABELS_RAW="$(gh api repos/$REPO/issues/$NUM/labels --paginate --jq '.[].name' || true)"
-          LABELS_LINE="$(printf '%s\n' $LABELS_RAW | awk 'NF' | sort -fu | paste -sd ', ' -)"
+          LABELS_LINE="$(echo "$LABELS_RAW" | awk 'NF' | sort -fu | awk '{printf "%s%s", sep, $0; sep=", "} END {print ""}')"
           CLASS="${{ needs.classify.outputs.applied_label }}"
 
           {
