@@ -1,4 +1,15 @@
 # Changelog
+## [v2.9.0-beta.8](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.8)
+
+### Other Changes
+
+- npm(deps-dev): bump @types/node from 24.3.0 to 24.5.2 @dependabot[bot] [#113]
+- Bump axios from 1.11.0 to 1.12.0 in the npm_and_yarn group across 1 directory @dependabot[bot] [#85]
+- ci(deps): bump actions/setup-node from 4 to 5 @dependabot[bot] [#108]
+- ci(deps): bump actions/checkout from 4 to 5 @dependabot[bot] [#107]
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.0-beta.7...v2.9.0-beta.8
+
 ## [v2.9.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.0-beta.7) (2025-09-22)
 
 ### Other Changes
@@ -75,6 +86,8 @@
 
 ### Other Changes
 
+- ci(deps): bump actions/stale from 9 to 10 @dependabot[bot] [#106]
+- ci(deps): bump actions/setup-python from 5 to 6 @dependabot[bot] [#105]
 - Update CHANGELOG.md for beta release v2.9.0-beta.0 @github-actions [beta-release]
 - Truncate Discord release notes @ZeliardM [#91]
 
