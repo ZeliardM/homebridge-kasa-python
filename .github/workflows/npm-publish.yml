@@ -1,0 +1,103 @@
+name: NPM Publish
+
+on:
+  workflow_call:
+    inputs:
+      node_version:
+        description: Node version to run the publish job
+        default: 22
+        required: false
+        type: number
+      tag:
+        description: Optional npm dist-tag to publish under (e.g. "beta")
+        required: false
+        type: string
+      set_version_from_release_tag:
+        description: Set package.json version from the GitHub release tag (strips leading "v")
+        default: true
+        required: false
+        type: boolean
+      fail_if_mismatch:
+        description: Fail if package.json version does not match the computed version
+        default: true
+        required: false
+        type: boolean
+      install_cmd:
+        description: Install command to run before publish
+        default: npm ci
+        required: false
+        type: string
+      build_cmd:
+        description: Optional build command to run before publish (leave empty to skip)
+        default: npm run build
+        required: false
+        type: string
+      extra_publish_args:
+        description: Extra arguments to pass to npm publish
+        default: ""
+        required: false
+        type: string
+      rollback_delete_tag:
+        description: If npm publish fails, also delete the release tag
+        default: true
+        required: false
+        type: boolean
+      rollback_delete_release:
+        description: If npm publish fails and a published release exists, delete it (instead of converting to draft)
+        default: true
+        required: false
+        type: boolean
+    secrets:
+      npm_auth_token:
+        description: The npm access token used to publish the package
+        required: true
+    outputs:
+      NPM_VERSION:
+        value: ${{ jobs.publish_package.outputs.NPM_VERSION }}
+
+jobs:
+  publish_package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    outputs:
+      NPM_VERSION: ${{ steps.publish.outputs.NPM_VERSION }}
+
+    steps:
+      - name: Checkout source at tag (or ref)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.release.tag_name || github.ref_name }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Publish package and handle rollback
+        id: publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.npm_auth_token }}
+          INPUT_NODE_VERSION: ${{ inputs.node_version }}
+          INPUT_DIST_TAG: ${{ inputs.tag }}
+          INPUT_SET_VERSION_FROM_TAG: ${{ inputs.set_version_from_release_tag }}
+          INPUT_FAIL_IF_MISMATCH: ${{ inputs.fail_if_mismatch }}
+          INPUT_INSTALL_CMD: ${{ inputs.install_cmd }}
+          INPUT_BUILD_CMD: ${{ inputs.build_cmd }}
+          INPUT_EXTRA_PUBLISH_ARGS: ${{ inputs.extra_publish_args }}
+          INPUT_ROLLBACK_DELETE_TAG: ${{ inputs.rollback_delete_tag }}
+          INPUT_ROLLBACK_DELETE_RELEASE: ${{ inputs.rollback_delete_release }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/release_publish.py
+
+      - name: Notice
+        run: echo "::notice::Published on npm - ${{ steps.publish.outputs.NPM_VERSION }}"

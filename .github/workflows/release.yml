@@ -1,13 +1,7 @@
----
 name: Release
 
-# This workflow handles npm publishing for regular releases (not beta releases).
-# It is triggered when releases are published and only runs for:
-# - Non-prerelease releases (prerelease=false)
-# - Releases from the latest branch
-# - The official repository only
-#
-# Beta releases are handled by the beta-release.yml workflow instead.
+# Handles npm publishing and Discord for releases.
+# Changelog management and tag finalize happen in flow-stable.yml.
 
 on:
   release:
@@ -15,12 +9,11 @@ on:
 
 jobs:
   build_lint_test:
-    # Only run for non-beta releases on the latest branch
     if: >
       github.event.release.prerelease == false &&
       github.event.release.target_commitish == 'latest' &&
       github.repository == 'ZeliardM/homebridge-kasa-python'
-    uses: ./.github/workflows/build.yml
+    uses: ./.github/workflows/build-lint-test.yml
 
   publish:
     needs: build_lint_test
@@ -29,26 +22,26 @@ jobs:
       github.event.release.target_commitish == 'latest' &&
       github.repository == 'ZeliardM/homebridge-kasa-python'
     permissions:
+      contents: write
       id-token: write
-    uses: homebridge/.github/.github/workflows/npm-publish-esm.yml@latest
+    uses: ./.github/workflows/npm-publish.yml
+    with:
+      set_version_from_release_tag: true
+      build_cmd: npm run build
     secrets:
-      npm_auth_token: ${{ secrets.npm_token }}
+      npm_auth_token: ${{ secrets.NPM_TOKEN }}
 
-    # Optional Discord notification (commented out)
-    # github-releases-to-discord:
-  #   name: Discord Webhooks
-  #   needs: [build_lint_test, publish]
-  #   if: >
-  #     github.event.release.prerelease == false &&
-  #     github.event.release.target_commitish == 'latest' &&
-  #     github.repository == 'ZeliardM/homebridge-kasa-python'
-  #   uses: homebridge/.github/.github/workflows/discord-webhooks.yml@latest
-  #   with:
-  #     title: "Kasa Python Release"
-  #     description: |
-  #       Version `${{ github.event.release.tag_name }}`
-  #     url: >
-  #       https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/${{
-  #       github.event.release.tag_name }}
-  #   secrets:
-  #     DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL_LATEST }}
+  release_to_discord:
+    name: Discord Webhooks
+    needs: [build_lint_test, publish]
+    if: >
+      github.event.release.prerelease == false &&
+      github.event.release.target_commitish == 'latest' &&
+      github.repository == 'ZeliardM/homebridge-kasa-python'
+    uses: ./.github/workflows/discord-notify.yml
+    with:
+      title: Kasa Python Release
+      username: Homebridge
+      avatar_url: https://raw.githubusercontent.com/homebridge/branding/latest/logos/homebridge-color-round-stylized.png
+    secrets:
+      discord_webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}

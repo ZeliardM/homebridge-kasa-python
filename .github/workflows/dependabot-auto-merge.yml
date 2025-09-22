@@ -1,103 +1,152 @@
----
 name: Dependabot Auto-Merge
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, labeled]
 
 permissions:
   pull-requests: write
   contents: write
+  issues: write
 
 jobs:
   auto-merge:
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
-      - name: Dependabot metadata
+      - name: Checkout actions (needed for local action)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch metadata
         id: metadata
         uses: dependabot/fetch-metadata@v2
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Determine target branch type
-        id: branch-type
+      - name: Safety check
+        id: safety
+        shell: bash
         run: |
-          BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
-          echo "base_branch=$BASE_BRANCH" >> $GITHUB_OUTPUT
-          
-          if [[ "$BASE_BRANCH" == beta* ]]; then
-            echo "branch_type=beta" >> $GITHUB_OUTPUT
-            echo "Target is beta branch: $BASE_BRANCH"
-          elif [[ "$BASE_BRANCH" == "latest" ]]; then
-            echo "branch_type=main" >> $GITHUB_OUTPUT
-            echo "Target is main branch: $BASE_BRANCH"
-          else
-            echo "branch_type=other" >> $GITHUB_OUTPUT
-            echo "Target is other branch: $BASE_BRANCH"
-          fi
+          set -euo pipefail
+          LABELS='${{ toJson(github.event.pull_request.labels.*.name) }}'
+          UPDATE='${{ steps.metadata.outputs.update-type }}'
+          has_break=false
+          echo "$LABELS" | grep -q '"breaking-change"' && has_break=true
+          is_major=false
+          [ "$UPDATE" = "version-update:semver-major" ] && is_major=true
+          block=false
+          $has_break && block=true
+          $is_major && block=true
+          {
+            echo "block=$block"
+            echo "update_type=$UPDATE"
+            echo "has_breaking=$has_break"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Label PR based on update type and target
+      - name: Label PR
+        shell: bash
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          UPDATE_TYPE="${{ steps.metadata.outputs.update-type }}"
-          BRANCH_TYPE="${{ steps.branch-type.outputs.branch_type }}"
-          
-          # Always add dependency label
-          gh pr edit "$PR_URL" --add-label "dependency"
-          
-          # Add update type label
-          case "$UPDATE_TYPE" in
-            "version-update:semver-major")
-              gh pr edit "$PR_URL" --add-label "dependency-major"
-              ;;
-            "version-update:semver-minor")
-              gh pr edit "$PR_URL" --add-label "dependency-minor"
-              ;;
-            "version-update:semver-patch")
-              gh pr edit "$PR_URL" --add-label "dependency-patch"
-              ;;
+          set -euo pipefail
+          gh pr edit "$PR_URL" --add-label dependency
+          case "${{ steps.metadata.outputs.update-type }}" in
+            version-update:semver-major) gh pr edit "$PR_URL" --add-label dependency-major ;;
+            version-update:semver-minor) gh pr edit "$PR_URL" --add-label dependency-minor ;;
+            version-update:semver-patch) gh pr edit "$PR_URL" --add-label dependency-patch ;;
           esac
-          
-          # Add target branch label
-          if [ "$BRANCH_TYPE" = "beta" ]; then
-            gh pr edit "$PR_URL" --add-label "beta"
+          if [ "${{ steps.safety.outputs.has_breaking }}" = "true" ]; then
+            gh pr edit "$PR_URL" --add-label breaking-change
           fi
+
+      - name: Build blocked sticky comment body
+        if: steps.safety.outputs.block == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "⚠️ Dependabot update requires manual review."
+            echo
+            echo "Type: \`${{ steps.metadata.outputs.update-type }}\`"
+            echo "Breaking label: ${{ steps.safety.outputs.has_breaking }}"
+            echo
+            echo "Auto-merge skipped."
+            echo
+            echo "<!-- COPILOT-STICKY:DEPENDABOT-STATUS -->"
+          } > body.txt
+
+      - name: Upsert blocked sticky
+        if: steps.safety.outputs.block == 'true'
+        uses: ./.github/actions/sticky-comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          number: ${{ github.event.pull_request.number }}
+          marker: "<!-- COPILOT-STICKY:DEPENDABOT-STATUS -->"
+          mode: upsert
+          body_file: body.txt
+
+      - name: Auto-merge safe updates
+        if: >
+          (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-patch') &&
+          steps.safety.outputs.block == 'false'
+        shell: bash
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Auto-merge patch and minor updates
-        if: |
-          steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-patch'
         run: |
-          UPDATE_TYPE="${{ steps.metadata.outputs.update-type }}"
-          BRANCH_TYPE="${{ steps.branch-type.outputs.branch_type }}"
-          
-          echo "Auto-merging $UPDATE_TYPE update targeting $BRANCH_TYPE branch"
-          
-          # Add auto-merged label
-          gh pr edit "$PR_URL" --add-label "auto-merged"
-          
-          # Enable auto-merge with squash
+          set -euo pipefail
+          gh pr edit "$PR_URL" --add-label auto-merged
           gh pr merge --auto --squash "$PR_URL"
-          
-          echo "Auto-merge enabled for PR targeting ${{ steps.branch-type.outputs.base_branch }}"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Comment on major updates requiring manual review
-        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+      - name: Build success sticky comment body
+        if: >
+          (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-patch') &&
+          steps.safety.outputs.block == 'false'
+        shell: bash
         run: |
-          gh pr comment "$PR_URL" --body "🚨 **Major version update detected**
+          set -euo pipefail
+          {
+            echo "✅ Dependabot update is safe and will be auto-merged."
+            echo
+            echo "Type: \`${{ steps.metadata.outputs.update-type }}\`"
+            echo "Breaking label: ${{ steps.safety.outputs.has_breaking }}"
+            echo
+            echo "_GitHub will merge this PR automatically once required checks pass._"
+            echo
+            echo "<!-- COPILOT-STICKY:DEPENDABOT-STATUS -->"
+          } > ok.txt
 
-          This PR contains a major version update that requires manual review before merging.
-
-          **Update Type:** \`${{ steps.metadata.outputs.update-type }}\`
-          **Target Branch:** \`${{ steps.branch-type.outputs.base_branch }}\`
-
-          Please review the breaking changes and test thoroughly before merging."
+      - name: Upsert success sticky
+        if: >
+          (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-patch') &&
+          steps.safety.outputs.block == 'false'
+        uses: ./.github/actions/sticky-comment
         env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          number: ${{ github.event.pull_request.number }}
+          marker: "<!-- COPILOT-STICKY:DEPENDABOT-STATUS -->"
+          mode: upsert
+          body_file: ok.txt
+
+      - name: Remove legacy blocked sticky marker
+        uses: ./.github/actions/sticky-comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          number: ${{ github.event.pull_request.number }}
+          marker: "<!-- COPILOT-STICKY:DEPENDABOT-BLOCKED -->"
+          mode: delete

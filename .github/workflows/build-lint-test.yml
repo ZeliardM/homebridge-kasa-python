@@ -1,25 +1,24 @@
----
 name: Build, Lint, and Test
 
 on:
   push:
-    branches: [latest]
+    branches: [latest, beta]
   pull_request:
-  workflow_dispatch:
+    branches: [latest, beta]
   workflow_call:
     inputs:
       node_versions:
-        description: >
-          Optional list of Node.js versions to test against
-          (json array string)
+        description: JSON array of Node versions
         required: false
         type: string
       python_versions:
-        description: >
-          Optional list of Python versions to test against
-          (json array string)
+        description: JSON array of Python versions
         required: false
         type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build_lint_test:
@@ -27,73 +26,74 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ${{ fromJson(inputs.node_versions ||
-          '["20","22","24"]') }}
-        python-version: ${{ fromJson(inputs.python_versions ||
-          '["3.11","3.12","3.13"]') }}
-
+        node-version: ${{ fromJson(inputs.node_versions || '["20","22","24"]') }}
+        python-version: ${{ fromJson(inputs.python_versions || '["3.11","3.12","3.13"]') }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js ${{ matrix.node-version }}
+      - name: Setup Node ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install Python dependencies
+      - name: Install Python deps
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Install Node.js dependencies
+      - name: Install Node deps
         run: npm ci
 
-      - name: Lint Project
+      - name: Lint
         run: npm run lint
 
-      - name: Build Project
+      - name: Build
         run: npm run build
 
-      - name: Test Node Plugin
+      - name: Node Import Test
         run: |
           node <<'NODE'
           (async () => {
             try {
               await import('./dist/index.js');
               console.log('Node Import OK');
-            } catch (err) {
-              console.error(err);
+            } catch (e) {
+              console.error(e);
               process.exit(1);
             }
           })();
           NODE
 
-      - name: Test Python Dependencies
+      - name: Python Imports Test
         run: |
           if [ -f requirements.txt ]; then
             set -e
-            while IFS= read -r line || [ -n "$line" ]; do
-              pkg=$(echo "$line" | sed 's/#.*//' | xargs)
-              [ -z "$pkg" ] && continue
-              mod=$(echo "$pkg" | cut -d'=' -f1 | tr '-' '_')
+            while IFS= read -r pkg || [ -n "$pkg" ]; do
+              # strip whitespace
+              line="$(printf '%s' "$pkg" | sed 's/[[:space:]]//g')"
+              # skip blank or comment lines
+              [ -z "$line" ] && continue
+              case "$line" in \#*) continue ;; esac
+              # Extract top-level package name, drop extras, normalize dashes
+              mod="$(printf '%s' "$line" | cut -d'=' -f1 | sed 's/\[.*\]//' | tr '-' '_' )"
               case "$mod" in
                 python_kasa) mod="kasa" ;;
-                # add more mappings here if needed
               esac
-              echo "Checking import: $mod"
+              echo "Import check: $mod"
               python -c "import ${mod}"
             done < requirements.txt
             echo "Python Imports OK"
           fi
 
-      - name: Check outdated and audit
+      - name: Outdated / Audit (non-blocking)
         run: |
           npm list --outdated || true
           npm audit || true
