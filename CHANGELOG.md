@@ -15,6 +15,7 @@
 - ci(deps): bump actions/stale from 9 to 10 @dependabot[bot] [#106]
 - ci(deps): bump actions/setup-python from 5 to 6 @dependabot[bot] [#105]
 - Bump axios from 1.11.0 to 1.12.0 in the npm_and_yarn group across 1 directory @dependabot[bot] [#85]
+- Release: v2.9.0 @ZeliardM [#104]
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.0...v2.9.1-beta.0
 
