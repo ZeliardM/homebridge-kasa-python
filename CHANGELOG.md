@@ -1,6 +1,24 @@
 # Changelog
 
-## [v2.9.0](https://github.com//releases/tag/v2.9.0)
+## [v2.9.1-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.1-beta.0)
+
+### Other Changes
+
+- npm(deps-dev): bump globals from 16.3.0 to 16.4.0 @dependabot[bot] [#114]
+- npm(deps-dev): bump @types/node from 24.3.0 to 24.5.2 @dependabot[bot] [#113]
+- npm(deps-dev): bump @stylistic/eslint-plugin from 5.2.3 to 5.4.0 in the stylistic group @dependabot[bot] [#112]
+- npm(deps-dev): bump the eslint group with 2 updates @dependabot[bot] [#111]
+- npm(deps-dev): bump @typescript-eslint/parser from 8.41.0 to 8.44.0 in the typescript-eslint group @dependabot[bot] [#110]
+- pip(deps): bump uvicorn from 0.35.0 to 0.36.0 @dependabot[bot] [#109]
+- ci(deps): bump actions/setup-node from 4 to 5 @dependabot[bot] [#108]
+- ci(deps): bump actions/checkout from 4 to 5 @dependabot[bot] [#107]
+- ci(deps): bump actions/stale from 9 to 10 @dependabot[bot] [#106]
+- ci(deps): bump actions/setup-python from 5 to 6 @dependabot[bot] [#105]
+- Bump axios from 1.11.0 to 1.12.0 in the npm_and_yarn group across 1 directory @dependabot[bot] [#85]
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.0...v2.9.1-beta.0
+
+## [v2.9.0](https://github.com//releases/tag/v2.9.0) (2025-09-22)
 
 ### Featured Changes
 
@@ -21,6 +39,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for release v2.9.0 @github-actions [release]
 - Fix CHANGELOG.md workflow not syncing properly with GitHub releases, add automated changelog maintenance, consolidate release workflows, implement comprehensive beta management system, optimize workflow code quality, and resolve Unreleased section handling @Copilot [#76]
 - Truncate Discord release notes @ZeliardM [#91]
 - Refactor of all workflows and scripts @ZeliardM [#95]
