@@ -131,8 +131,6 @@
 
 ### Other Changes
 
-- ci(deps): bump actions/stale from 9 to 10 @dependabot[bot] [#106]
-- ci(deps): bump actions/setup-python from 5 to 6 @dependabot[bot] [#105]
 - Update CHANGELOG.md for beta release v2.9.0-beta.0 @github-actions [beta-release]
 - Truncate Discord release notes @ZeliardM [#91]
 
