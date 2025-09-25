@@ -1,8 +1,9 @@
 # Changelog
-## [v2.9.1-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.1-beta.1)
+## [v2.9.1-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.1-beta.1) (2025-09-25)
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v2.9.1-beta.1 @github-actions [beta-release]
 - Issue/cleanup @ZeliardM [#116]
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.1-beta.0...v2.9.1-beta.1
