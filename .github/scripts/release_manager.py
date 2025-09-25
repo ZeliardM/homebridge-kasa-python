@@ -615,17 +615,26 @@ def _upsert_release(gh: GitHub, tag: str, body: str, *, draft: bool, prerelease:
         gh.create_release(tag, tag, body, draft=draft, prerelease=prerelease, target=(target_commitish or "beta"))
 
 def _load_labels_arg(args) -> List[str]:
+    labels = []
     if getattr(args, "pr_labels_file", None) and args.pr_labels_file and os.path.exists(args.pr_labels_file):
         try:
-            with open(args.pr_labels_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
+            with open(args.pr_labels_file, "r", encoding="utf-8-sig") as f:
+                loaded = json.load(f)
+                labels = [str(l).strip().lower() for l in loaded if l]
+                return labels
+        except Exception as e:
+            print(f"[release-manager] ERROR reading labels file: {e}")
             return []
-    try:
-        raw = getattr(args, "pr_labels", "[]")
-        return json.loads(raw or "[]")
-    except Exception:
-        return []
+    else:
+        try:
+            raw = getattr(args, "pr_labels", "[]")
+            loaded = json.loads(raw or "[]")
+            labels = [str(l).strip().lower() for l in loaded if l]
+        except Exception as e:
+            print(f"[release-manager] ERROR parsing pr_labels: {e}")
+            return []
+    print(f"[release-manager] Loaded labels: {labels}")
+    return labels
 
 def _finalize_common(gh: GitHub, v: Version, *, is_beta: bool):
     content = _read_changelog()
@@ -653,7 +662,7 @@ def _finalize_common(gh: GitHub, v: Version, *, is_beta: bool):
 def cmd_pr_merged(args):
     gh = GitHub(args.github_token, args.repo)
     labels = _load_labels_arg(args)
-    if args.base_branch == "latest" and any((str(l).lower() == "stable-conversion") for l in labels):
+    if args.base_branch == "latest" and "stable-conversion" in labels:
         m = re.search(r"v\d+\.\d+\.\d+", args.pr_title or "")
         if not m:
             print("[release-manager] Stable conversion PR title must include version like vX.Y.Z")

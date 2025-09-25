@@ -29,16 +29,16 @@ jobs:
         node-version: ${{ fromJson(inputs.node_versions || '["20","22","24"]') }}
         python-version: ${{ fromJson(inputs.python_versions || '["3.11","3.12","3.13"]') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
       - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip

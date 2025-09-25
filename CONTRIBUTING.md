@@ -33,19 +33,18 @@ Thank you for contributing to homebridge-kasa-python!
 - Publishing stable adds finalization entry.
 
 ## Changelog & Bodies
-- Beta body mirrors only its version’s section:
+- vX.Y.Z-beta.N
   ```
-  Beta Release - vX.Y.Z-beta.N
 
   ## Category
   - entry
 
   **Full Changelog**: compare/<from>...<to>
   ```
-- Stable body omits “Beta Release -” line.
+- Stable body omits “-beta.N”.
 
 ## Labels
-- breaking-change (single canonical form)
+- breaking-change
 - enhancement / feature
 - fix / bug
 - docs / dependency

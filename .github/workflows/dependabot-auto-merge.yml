@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout actions (needed for local action)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -54,11 +54,22 @@ jobs:
         run: |
           set -euo pipefail
           gh pr edit "$PR_URL" --add-label dependency
-          case "${{ steps.metadata.outputs.update-type }}" in
-            version-update:semver-major) gh pr edit "$PR_URL" --add-label dependency-major ;;
-            version-update:semver-minor) gh pr edit "$PR_URL" --add-label dependency-minor ;;
-            version-update:semver-patch) gh pr edit "$PR_URL" --add-label dependency-patch ;;
-          esac
+          UPDATE_TYPE="${{ steps.metadata.outputs.update-type }}"
+          if [ -z "$UPDATE_TYPE" ] || [ "$UPDATE_TYPE" = "null" ]; then
+            gh pr edit "$PR_URL" --add-label dependency-lockfile
+          else
+            case "$UPDATE_TYPE" in
+              version-update:semver-major)
+                gh pr edit "$PR_URL" --add-label dependency-major
+                ;;
+              version-update:semver-minor)
+                gh pr edit "$PR_URL" --add-label dependency-minor
+                ;;
+              version-update:semver-patch)
+                gh pr edit "$PR_URL" --add-label dependency-patch
+                ;;
+            esac
+          fi
           if [ "${{ steps.safety.outputs.has_breaking }}" = "true" ]; then
             gh pr edit "$PR_URL" --add-label breaking-change
           fi
@@ -93,8 +104,12 @@ jobs:
 
       - name: Auto-merge safe updates
         if: >
-          (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
-           steps.metadata.outputs.update-type == 'version-update:semver-patch') &&
+          (
+            steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+            steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+            steps.metadata.outputs.update-type == '' ||
+            steps.metadata.outputs.update-type == 'null'
+          ) &&
           steps.safety.outputs.block == 'false'
         shell: bash
         env:
@@ -108,8 +123,12 @@ jobs:
 
       - name: Build success sticky comment body
         if: >
-          (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
-           steps.metadata.outputs.update-type == 'version-update:semver-patch') &&
+          (
+            steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+            steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+            steps.metadata.outputs.update-type == '' ||
+            steps.metadata.outputs.update-type == 'null'
+          ) &&
           steps.safety.outputs.block == 'false'
         shell: bash
         run: |
@@ -127,8 +146,12 @@ jobs:
 
       - name: Upsert success sticky
         if: >
-          (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
-           steps.metadata.outputs.update-type == 'version-update:semver-patch') &&
+          (
+            steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+            steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+            steps.metadata.outputs.update-type == '' ||
+            steps.metadata.outputs.update-type == 'null'
+          ) &&
           steps.safety.outputs.block == 'false'
         uses: ./.github/actions/sticky-comment
         env:
