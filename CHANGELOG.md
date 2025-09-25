@@ -1,9 +1,10 @@
 # Changelog
 
-## [v2.9.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.1)
+## [v2.9.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.1) (2025-09-25)
 
 ### Other Changes
 
+- Update CHANGELOG.md for release v2.9.1 @github-actions [release]
 - npm(deps-dev): bump globals from 16.3.0 to 16.4.0 @dependabot[bot] [#114]
 - npm(deps-dev): bump @types/node from 24.3.0 to 24.5.2 @dependabot[bot] [#113]
 - npm(deps-dev): bump @stylistic/eslint-plugin from 5.2.3 to 5.4.0 in the stylistic group @dependabot[bot] [#112]
