@@ -1,0 +1,68 @@
+name: Retarget PR Base
+description: Retarget PR base to beta unless this is a stable-conversion PR (beta -> latest)
+inputs:
+  number:
+    description: Pull request number
+    required: true
+outputs:
+  retargeted:
+    description: Whether the base was changed to beta
+    value: ${{ steps.retarget.outputs.retargeted }}
+  final_base:
+    description: The resulting base branch
+    value: ${{ steps.retarget.outputs.final_base }}
+  reason:
+    description: Reason for action/decision (already-beta|stable-conversion|retargeted|error)
+    value: ${{ steps.retarget.outputs.reason }}
+runs:
+  using: composite
+  steps:
+    - id: retarget
+      shell: bash
+      env:
+        PR: ${{ inputs.number }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+
+        BASE="$(gh -R "$REPO" pr view "$PR" --json baseRefName --jq .baseRefName || echo '')"
+        HEAD="$(gh -R "$REPO" pr view "$PR" --json headRefName --jq .headRefName || echo '')"
+        AUTHOR="$(gh -R "$REPO" pr view "$PR" --json author --jq .author.login || echo '')"
+        LABELS="$(gh -R "$REPO" pr view "$PR" --json labels --jq '.labels[].name' || true)"
+
+        is_stable_conversion=false
+        if [ "$BASE" = "latest" ] && [ "$HEAD" = "beta" ]; then
+          if printf '%s\n' "$LABELS" | grep -qi '^stable-conversion$'; then
+            is_stable_conversion=true
+          fi
+          if [ "$AUTHOR" = "github-actions[bot]" ]; then
+            is_stable_conversion=true
+          fi
+        fi
+
+        if [ "$BASE" = "beta" ]; then
+          echo "retargeted=false" >> "$GITHUB_OUTPUT"
+          echo "final_base=beta" >> "$GITHUB_OUTPUT"
+          echo "reason=already-beta" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if [ "$is_stable_conversion" = "true" ]; then
+          echo "retargeted=false" >> "$GITHUB_OUTPUT"
+          echo "final_base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "reason=stable-conversion" >> "$GITHUB_OUTPUT"
+          echo "Stable conversion PR detected; keeping base '$BASE'."
+          exit 0
+        fi
+
+        if gh -R "$REPO" pr edit "$PR" --base beta; then
+          echo "retargeted=true" >> "$GITHUB_OUTPUT"
+          echo "final_base=beta" >> "$GITHUB_OUTPUT"
+          echo "reason=retargeted" >> "$GITHUB_OUTPUT"
+          echo "Retargeted PR #$PR base to 'beta'."
+        else
+          echo "::warning::Failed to retarget base to beta."
+          echo "retargeted=false" >> "$GITHUB_OUTPUT"
+          echo "final_base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "reason=error" >> "$GITHUB_OUTPUT"
+        fi

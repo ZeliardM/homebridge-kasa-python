@@ -1,0 +1,99 @@
+name: Build, Lint, and Test
+
+on:
+  push:
+    branches: [latest, beta]
+  pull_request:
+    branches: [latest, beta]
+  workflow_call:
+    inputs:
+      node_versions:
+        description: JSON array of Node versions
+        required: false
+        type: string
+      python_versions:
+        description: JSON array of Python versions
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_lint_test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ${{ fromJson(inputs.node_versions || '["20","22","24"]') }}
+        python-version: ${{ fromJson(inputs.python_versions || '["3.11","3.12","3.13"]') }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install Python deps
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Install Node deps
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Node Import Test
+        run: |
+          node <<'NODE'
+          (async () => {
+            try {
+              await import('./dist/index.js');
+              console.log('Node Import OK');
+            } catch (e) {
+              console.error(e);
+              process.exit(1);
+            }
+          })();
+          NODE
+
+      - name: Python Imports Test
+        run: |
+          if [ -f requirements.txt ]; then
+            set -e
+            while IFS= read -r pkg || [ -n "$pkg" ]; do
+              # strip whitespace
+              line="$(printf '%s' "$pkg" | sed 's/[[:space:]]//g')"
+              # skip blank or comment lines
+              [ -z "$line" ] && continue
+              case "$line" in \#*) continue ;; esac
+              # Extract top-level package name, drop extras, normalize dashes
+              mod="$(printf '%s' "$line" | cut -d'=' -f1 | sed 's/\[.*\]//' | tr '-' '_' )"
+              case "$mod" in
+                python_kasa) mod="kasa" ;;
+              esac
+              echo "Import check: $mod"
+              python -c "import ${mod}"
+            done < requirements.txt
+            echo "Python Imports OK"
+          fi
+
+      - name: Outdated / Audit (non-blocking)
+        run: |
+          npm list --outdated || true
+          npm audit || true

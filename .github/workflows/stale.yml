@@ -1,10 +1,8 @@
----
 name: Stale
 
 on:
-  workflow_dispatch: {}
   schedule:
-    - cron: '30 1 * * *'  # Run daily at 1:30 AM UTC
+    - cron: '30 1 * * *'
 
 jobs:
   stale:
@@ -12,45 +10,26 @@ jobs:
     permissions:
       issues: write
       pull-requests: write
-      discussions: write
-
     steps:
-      - name: Stale Issues and PRs
-        uses: actions/stale@v9
+      - uses: actions/stale@v10
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          
-          # Issues
-          stale-issue-message: |
-            This issue has been automatically marked as stale because it has not had 
-            recent activity. It will be closed if no further activity occurs. Thank you 
-            for your contributions.
-          close-issue-message: |
-            This issue has been automatically closed because it has not had recent activity. 
-            If you believe this issue is still valid, please reopen it.
           days-before-issue-stale: 60
           days-before-issue-close: 7
-          stale-issue-label: 'stale'
-          
-          # Pull Requests  
-          stale-pr-message: |
-            This pull request has been automatically marked as stale because it has not had 
-            recent activity. It will be closed if no further activity occurs. Thank you 
-            for your contributions.
-          close-pr-message: |
-            This pull request has been automatically closed because it has not had recent activity. 
-            If you believe this pull request is still valid, please reopen it.
           days-before-pr-stale: 30
           days-before-pr-close: 7
-          stale-pr-label: 'stale'
-          
-          # Exempt labels
-          exempt-issue-labels: 'pinned,security,enhancement,bug'
-          exempt-pr-labels: 'pinned,security,work-in-progress'
-          
-          # Don't mark issues/PRs stale if they have these labels
+          stale-issue-label: stale
+          stale-pr-label: stale
+          exempt-issue-labels: 'pinned,security,enhancement,bug,breaking-change,needs-info'
+          exempt-pr-labels: 'pinned,security,work-in-progress,breaking-change'
           exempt-all-pr-assignees: true
           exempt-all-issue-assignees: true
-          
-          # Operations per run (to avoid rate limiting)
           operations-per-run: 50
+          stale-issue-message: |
+            This issue is stale after 60 days of inactivity. It will close in 7 days unless updated.
+          close-issue-message: |
+            Closing due to inactivity. Reopen if still valid.
+          stale-pr-message: |
+            This PR is stale after 30 days of inactivity. It will close in 7 days unless updated.
+          close-pr-message: |
+            Closing stale PR. Reopen if you plan to continue.

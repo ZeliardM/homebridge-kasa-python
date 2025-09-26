@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import sys
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -58,6 +59,11 @@ def log(message: str, level: str = "INFO", host: Optional[str] = None, alias: Op
         context.append(f"alias={alias}")
     context_str = f" ({', '.join(context)})" if context else ""
     print(f"[Kasa API] {level}: {message}{context_str}", file=sys.stdout if level != "ERROR" else sys.stderr)
+
+def _extract_child_suffix_index(device_id: str) -> int:
+    base = device_id.split('_', 1)[1] if '_' in device_id else device_id
+    m = re.search(r'(\d{1,2})$', base)
+    return int(m.group(1)) if m else 0
 
 def serialize_child(child: Device) -> Dict[str, Any]:
     log("Serializing child device", alias=child.alias)
@@ -127,7 +133,8 @@ def custom_serializer(device: Device) -> Dict[str, Any]:
     fan_module = device.modules.get(Module.Fan)
     energy_module = device.modules.get(Module.Energy)
     if child_num > 0:
-        sys_info["children"] = [serialize_child(child) for child in device.children]
+        sorted_children = sorted(device.children, key=lambda c: _extract_child_suffix_index(c.device_id))
+        sys_info["children"] = [serialize_child(child) for child in sorted_children]
     else:
         sys_info.update({"state": device.features["state"].value})
         if light_module:
@@ -298,7 +305,10 @@ async def get_or_connect_device(host: str, device_config: DeviceConfig) -> Devic
         return device
     except Exception as e:
         log(f"Connect to device: {e}", level="ERROR", host=host)
-        await safe_disconnect(device)
+        try:
+            await safe_disconnect(device)
+        except Exception:
+            pass
         raise
 
 async def control_device(
@@ -333,13 +343,13 @@ async def perform_device_action(
         fan = target.modules.get(Module.Fan)
         if feature == "state":
             await getattr(target, action)()
-        elif feature == "brightness" and light.has_feature("brightness"):
+        elif feature == "brightness" and light and light.has_feature("brightness"):
             await handle_brightness(target, action, value)
-        elif feature == "color_temp" and light.has_feature("color_temp"):
+        elif feature == "color_temp" and light and light.has_feature("color_temp"):
             await handle_color_temp(target, action, value)
-        elif feature == "fan_speed_level" and fan:
+        elif feature == "fan_speed_level" and fan and fan.has_feature("fan_speed_level"):
             await handle_fan_speed_level(target, action, value)
-        elif feature == 'hsv' and light.has_feature("hsv"):
+        elif feature == 'hsv' and light and light.has_feature("hsv"):
             await handle_hsv(target, action, feature, value)
         else:
             raise ValueError("Invalid feature or action")

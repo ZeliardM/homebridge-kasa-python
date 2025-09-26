@@ -15,7 +15,7 @@ import AccessoryInformation from '../accessoryInformation.js';
 import DeviceManager from './deviceManager.js';
 import { prefixLogger } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { KasaDevice } from './kasaDevices.js';
+import type { KasaDevice, ChildDevice } from './kasaDevices.js';
 import type { KasaPythonAccessoryContext } from '../platform.js';
 import { EnergyCharacteristics } from '../customCharacteristics.js';
 
@@ -106,6 +106,12 @@ export default abstract class HomeKitDevice {
 
   get firmwareRevision(): string {
     return this.kasaDevice.sys_info.sw_ver;
+  }
+
+  protected extractChildIndex(child: ChildDevice): number {
+    const id = String(child.id ?? '');
+    const match = id.match(/(\d{1,2})$/);
+    return match ? parseInt(match[1], 10) : 0;
   }
 
   abstract identify(): void;

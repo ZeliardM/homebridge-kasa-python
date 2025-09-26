@@ -1,0 +1,189 @@
+name: Label, Enforce, & Validate PR
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-validate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  retarget-base:
+    if: github.actor != 'github-actions[bot]'
+    name: Ensure base branch is beta (except stable-conversion)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout base branch (needed for local actions)
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+
+      - name: Retarget PR base if needed
+        uses: ./.github/actions/retarget-base
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          number: ${{ github.event.pull_request.number }}
+
+  clear-labels:
+    if: github.actor != 'github-actions[bot]' && !contains(github.event.pull_request.labels.*.name, 'stable-conversion')
+    name: Clear PR labels (full reset)
+    needs: retarget-base
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout base branch (needed for local actions)
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+
+      - name: Clear all labels from PR
+        uses: ./.github/actions/clear-labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          number: ${{ github.event.pull_request.number }}
+
+  apply-labels:
+    if: github.actor != 'github-actions[bot]'
+    name: Apply labels via labeler
+    needs: clear-labels
+    uses: homebridge/.github/.github/workflows/labeler.yml@latest
+    permissions:
+      contents: read
+      pull-requests: write
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN }}
+
+  validate:
+    if: github.actor != 'github-actions[bot]' || contains(github.event.pull_request.labels.*.name, 'stable-conversion')
+    name: Validate PR
+    needs: apply-labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout base branch (scripts + actions)
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+
+      - name: Ensure jq
+        uses: ./.github/actions/ensure-jq
+
+      - name: Validate and capture outputs
+        id: validate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          RESULT="$(python3 .github/scripts/pr_manager.py)"
+          echo "Raw validator output: $RESULT"
+
+          OK="$(echo "$RESULT" | jq -r '.ok // false')"
+          MSG="$(echo "$RESULT" | jq -r '.message // ""')"
+          CODE="$(echo "$RESULT" | jq -r '.code // ""')"
+
+          echo "ok=$OK" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          printf "%s" "$MSG" | base64 | tr -d '\n' > msg.b64
+          echo "error_b64=$(cat msg.b64)" >> "$GITHUB_OUTPUT"
+
+      - name: Post or update sticky failure comment
+        if: steps.validate.outputs.ok != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ERR="$(printf "%s" "${{ steps.validate.outputs.error_b64 }}" | base64 -d 2>/dev/null || true)"
+          [ -z "$ERR" ] && ERR="Validation failed (no details provided)."
+
+          {
+            echo "❌ PR validation failed:"
+            echo
+            echo '```'
+            echo "$ERR"
+            echo '```'
+            echo
+            echo "Please correct and push updates."
+            echo
+            echo "<!-- COPILOT-STICKY:PR-VALIDATION -->"
+          } > body.txt
+
+      - name: Upsert sticky failure comment
+        if: steps.validate.outputs.ok != 'true'
+        uses: ./.github/actions/sticky-comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          number: ${{ github.event.pull_request.number }}
+          marker: "<!-- COPILOT-STICKY:PR-VALIDATION -->"
+          mode: upsert
+          body_file: body.txt
+
+      - name: Update sticky success summary
+        if: steps.validate.outputs.ok == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          PR_NUM="${{ github.event.pull_request.number }}"
+          LABELS_RAW="$(gh api repos/$REPO/issues/$PR_NUM/labels --paginate --jq '.[].name' || true)"
+          LABELS_LINE="$(echo "$LABELS_RAW" | awk 'NF' | sort -fu | awk '{printf "%s%s", sep, $0; sep=", "} END {print ""}')"
+          BASE="$(gh pr view "$PR_NUM" --json baseRefName --jq .baseRefName || echo '')"
+          CLASS_SET="breaking-change bug dependency docs enhancement feature fix internal workflow"
+          CLASS=""
+          for L in $(printf '%s\n' "$LABELS_RAW" | tr '[:upper:]' '[:lower:]'); do
+            for C in $CLASS_SET; do
+              if [ "$L" = "$C" ]; then CLASS="$L"; break; fi
+            done
+            [ -n "$CLASS" ] && break
+          done
+
+          {
+            echo "✅ PR validated successfully!"
+            echo
+            echo "- Base branch: ${BASE:-<unknown>}"
+            echo "- Classification: ${CLASS:-<none>}"
+            echo "- Current labels: ${LABELS_LINE:-<none>}"
+            echo
+            echo "Thank you. This PR has the required labels and satisfies validation."
+            echo
+            echo "<!-- COPILOT-STICKY:PR-VALIDATION -->"
+          } > success.txt
+
+      - name: Upsert sticky success summary
+        if: steps.validate.outputs.ok == 'true'
+        uses: ./.github/actions/sticky-comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          number: ${{ github.event.pull_request.number }}
+          marker: "<!-- COPILOT-STICKY:PR-VALIDATION -->"
+          mode: upsert
+          body_file: success.txt
+
+      - name: Fail job if invalid
+        if: steps.validate.outputs.ok != 'true'
+        shell: bash
+        run: exit 1
