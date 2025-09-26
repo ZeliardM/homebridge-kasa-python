@@ -1,4 +1,4 @@
-anyio==4.10.0
+anyio==4.11.0
 python-kasa==0.10.2
 quart==0.20.0
 tzdata==2025.2
