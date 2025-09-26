@@ -14,3 +14,4 @@ runs:
           echo "is_fork=true" >> "$GITHUB_OUTPUT"
         else
           echo "is_fork=false" >> "$GITHUB_OUTPUT"
+        fi
