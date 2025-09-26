@@ -13,8 +13,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  detect-fork:
+    runs-on: ubuntu-latest
+    outputs:
+      is_fork: ${{ steps.detect-fork.outputs.is_fork }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Detect fork context
+        id: detect-fork
+        uses: ./.github/actions/detect-fork
+
   classify:
-    if: github.actor != 'github-actions[bot]'
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'false' && github.actor != 'github-actions[bot]'
     name: Classify Issue
     runs-on: ubuntu-latest
     outputs:
@@ -44,22 +57,19 @@ jobs:
           set -euo pipefail
           RESULT="$(python3 .github/scripts/issue_manager.py)"
           echo "Raw classification: $RESULT"
-
           RESULT_B64="$(printf '%s' "$RESULT" | base64 -w 0)"
           echo "classification_json=$RESULT_B64" >> "$GITHUB_OUTPUT"
-
           APPLIED="$(echo "$RESULT" | jq -r '.applied_label // empty')"
           NEEDS="$(echo "$RESULT" | jq -r '.needs_info // false')"
           MSGS="$(echo "$RESULT" | jq -c '.messages // []')"
-
           echo "applied_label=$APPLIED" >> "$GITHUB_OUTPUT"
           echo "needs_info=$NEEDS" >> "$GITHUB_OUTPUT"
           echo "messages=$MSGS" >> "$GITHUB_OUTPUT"
 
   label_and_comment:
-    if: github.actor != 'github-actions[bot]'
+    needs: [detect-fork, classify]
+    if: needs.detect-fork.outputs.is_fork == 'false' && github.actor != 'github-actions[bot]'
     name: Apply Labels and Update Sticky Comment
-    needs: classify
     runs-on: ubuntu-latest
     steps:
       - name: Checkout actions
@@ -111,7 +121,6 @@ jobs:
           else
             MSGS=""
           fi
-
           {
             echo "🧭 Issue classification results"
             echo
@@ -142,9 +151,9 @@ jobs:
           body_file: body.txt
 
   validate:
-    if: github.actor != 'github-actions[bot]'
+    needs: [detect-fork, classify, label_and_comment]
+    if: needs.detect-fork.outputs.is_fork == 'false' && github.actor != 'github-actions[bot]'
     name: Validate Issue
-    needs: [classify, label_and_comment]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout scripts + actions
@@ -165,7 +174,6 @@ jobs:
           set -euo pipefail
           RESULT="$(python3 .github/scripts/issue_manager.py)"
           echo "Raw validation: $RESULT"
-
           OK="$(echo "$RESULT" | jq -r '.ok // false')"
           MSGS="$(echo "$RESULT" | jq -c '.messages // []')"
           echo "ok=$OK" >> "$GITHUB_OUTPUT"
@@ -183,7 +191,6 @@ jobs:
           else
             VALMSGS=""
           fi
-
           {
             echo "❌ Issue validation failed."
             echo
@@ -225,7 +232,6 @@ jobs:
           LABELS_RAW="$(gh api repos/$REPO/issues/$NUM/labels --paginate --jq '.[].name' || true)"
           LABELS_LINE="$(echo "$LABELS_RAW" | awk 'NF' | sort -fu | awk '{printf "%s%s", sep, $0; sep=", "} END {print ""}')"
           CLASS="${{ needs.classify.outputs.applied_label }}"
-
           {
             echo "✅ Issue classified, labeled, and validated successfully!"
             echo
@@ -253,3 +259,10 @@ jobs:
         if: steps.validate.outputs.ok != 'true'
         shell: bash
         run: exit 1
+
+  fork-notice:
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Workflow is running in a fork and will skip all privileged steps. Validation and labeling will run after the Issue is opened against the main repository."

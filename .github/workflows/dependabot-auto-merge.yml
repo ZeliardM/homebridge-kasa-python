@@ -10,8 +10,21 @@ permissions:
   issues: write
 
 jobs:
+  detect-fork:
+    runs-on: ubuntu-latest
+    outputs:
+      is_fork: ${{ steps.detect-fork.outputs.is_fork }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Detect fork context
+        id: detect-fork
+        uses: ./.github/actions/detect-fork
+
   auto-merge:
-    if: github.actor == 'dependabot[bot]'
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'false' && github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout actions (needed for local action)
@@ -173,3 +186,10 @@ jobs:
           number: ${{ github.event.pull_request.number }}
           marker: "<!-- COPILOT-STICKY:DEPENDABOT-BLOCKED -->"
           mode: delete
+
+  fork-notice:
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Workflow is running in a fork and will skip all privileged steps. Auto-merge and labeling will run after the PR is opened against the main repository."

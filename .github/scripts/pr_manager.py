@@ -32,6 +32,11 @@ def _give(payload, code=0):
     sys.exit(code)
 
 def main():
+    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or ""
+    repo_full = os.getenv("GITHUB_REPOSITORY", "")
+    pr_number = os.getenv("PR_NUMBER", "")
+    if not token or not repo_full or not pr_number:
+        _give({"ok": False, "code": "no_token", "message": "Missing GitHub token, repo, or PR number. This script cannot enforce validation on forked runs. Validation will run after PR is opened against the main repository."}, 0)
     actor = os.getenv("GITHUB_ACTOR", "")
     event_path = os.getenv("GITHUB_EVENT_PATH")
     if not event_path or not os.path.isfile(event_path):
