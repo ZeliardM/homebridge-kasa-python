@@ -1,4 +1,12 @@
 # Changelog
+## [v2.9.1-beta.2](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.1-beta.2)
+
+### Other Changes
+
+- ci(deps): bump github/codeql-action from 3 to 4 @dependabot[bot] [#125]
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.1-beta.1...v2.9.1-beta.2
+
 ## [v2.9.1-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.1-beta.1) (2025-09-25)
 
 ### Other Changes
