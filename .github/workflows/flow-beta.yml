@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
       - uses: actions/setup-python@v6
@@ -64,7 +64,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.release.target_commitish }}
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
       - uses: actions/setup-python@v6
