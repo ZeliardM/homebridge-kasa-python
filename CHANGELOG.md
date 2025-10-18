@@ -4,6 +4,7 @@
 
 ### Other Changes
 
+- ci(deps): bump actions/setup-node from 5 to 6 @dependabot[bot] [#133]
 - npm(deps-dev): bump typescript-eslint from 8.45.0 to 8.46.0 @dependabot[bot] [#129]
 - npm(deps-dev): bump @types/node from 24.6.2 to 24.7.1 @dependabot[bot] [#128]
 - npm(deps-dev): bump the eslint group with 2 updates @dependabot[bot] [#127]
