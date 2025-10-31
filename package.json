@@ -59,7 +59,7 @@
     "@typescript-eslint/parser": "^8.46.2",
     "eslint": "^9.38.0",
     "globals": "^16.4.0",
-    "homebridge": "^2.0.0-beta.30",
+    "homebridge": "^2.0.0-beta.39",
     "node-persist": "^4.0.4",
     "nodemon": "^3.1.10",
     "rimraf": "^6.0.1",
