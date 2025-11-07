@@ -53,11 +53,11 @@
   ],
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
-    "@eslint/js": "^9.38.0",
+    "@eslint/js": "^9.39.1",
     "@stylistic/eslint-plugin": "^5.5.0",
     "@types/node": "^24.9.2",
     "@typescript-eslint/parser": "^8.46.3",
-    "eslint": "^9.38.0",
+    "eslint": "^9.39.1",
     "globals": "^16.5.0",
     "homebridge": "^2.0.0-beta.39",
     "node-persist": "^4.0.4",
