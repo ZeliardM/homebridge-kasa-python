@@ -26,7 +26,7 @@ export default async function createDevice(
   platform: KasaPythonPlatform,
   kasaDevice: KasaDevice,
 ): Promise<HomeKitDevice | undefined> {
-  let instance: HomeKitDevice | undefined;
+  let instance: HomeKitDevice;
 
   if (isLightBulb(kasaDevice)) {
     platform.log.debug('Device classified as LightBulb:', kasaDevice.sys_info.model);
@@ -49,13 +49,11 @@ export default async function createDevice(
     return undefined;
   }
 
-  if (instance) {
-    try {
-      await instance.initialize();
-    } catch (error) {
-      platform.log.error(`Error initializing device [${kasaDevice.sys_info.device_id}]:`, error);
-      return undefined;
-    }
+  try {
+    await instance.initialize();
+  } catch (error) {
+    platform.log.error(`Error initializing device [${kasaDevice.sys_info.device_id}]:`, error);
+    return undefined;
   }
   return instance;
 }
