@@ -2,6 +2,14 @@
 
 Thank you for contributing to homebridge-kasa-python!
 
+## Forked PRs and Workflow Limitations
+
+> **Note:** If you open a PR or issue in your own fork, GitHub Actions **will not have access to repository secrets** and privileged automation (labeling, validation, sticky comments) will be **skipped**.  
+> Once you open a PR or issue against the main repository (`ZeliardM/homebridge-kasa-python`), all workflows and automation will run as expected.
+
+- If you see notices about "skipped steps due to fork context" or missing secrets, this is expected.
+- Validation, labeling, and sticky comments will be applied after your PR/issue is opened against the main repository.
+
 ## Branch Model
 - latest: Stable release branch.
 - beta: Active development toward next release.

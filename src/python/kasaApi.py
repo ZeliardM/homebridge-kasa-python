@@ -3,7 +3,7 @@ import json
 import os
 import re
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from kasa import (
     AuthenticationError,
@@ -20,9 +20,9 @@ from quart import Quart, jsonify, request, Response
 app = Quart(__name__)
 
 hide_homekit_matter = os.getenv("HIDE_HOMEKIT_MATTER", "false").lower() == "true"
-device_cache: Dict[str, Device] = {}
-device_lock_cache: Dict[str, asyncio.Lock] = {}
-device_config_cache: Dict[str, dict] = {}
+device_cache: dict[str, Device] = {}
+device_lock_cache: dict[str, asyncio.Lock] = {}
+device_config_cache: dict[str, dict] = {}
 
 device_queue: asyncio.Queue = asyncio.Queue()
 
@@ -38,18 +38,23 @@ UNSUPPORTED_TYPES = {
     DeviceType.Unknown.value,
 }
 
-HOMEKIT_MIRED_RANGE = (140, 500)
-TPLINK_KELVIN_RANGE = (2500, 6500)
-
 def kelvin_to_mired(kelvin: int) -> int:
     if not kelvin or kelvin <= 0:
-        return HOMEKIT_MIRED_RANGE[0]
-    return max(HOMEKIT_MIRED_RANGE[0], min(round(1_000_000 / kelvin), HOMEKIT_MIRED_RANGE[1]))
+        return 140
+    return max(140, min(round(1_000_000 / kelvin), 500))
 
 def mired_to_kelvin(mired: int) -> int:
     if not mired or mired <= 0:
-        return TPLINK_KELVIN_RANGE[0]
-    return max(TPLINK_KELVIN_RANGE[0], min(round(1_000_000 / mired), TPLINK_KELVIN_RANGE[1]))
+        return 2500
+    return max(2500, min(round(1_000_000 / mired), 6500))
+
+def _percent_to_level(percent: int) -> int:
+    mapping = {0: 0, 25: 1, 50: 2, 75: 3, 100: 4}
+    return mapping[percent]
+
+def _level_to_percent(level: int) -> int:
+    mapping = {0: 0, 1: 25, 2: 50, 3: 75, 4: 100}
+    return mapping[level]
 
 def log(message: str, level: str = "INFO", host: Optional[str] = None, alias: Optional[str] = None):
     context = []
@@ -65,7 +70,7 @@ def _extract_child_suffix_index(device_id: str) -> int:
     m = re.search(r'(\d{1,2})$', base)
     return int(m.group(1)) if m else 0
 
-def serialize_child(child: Device) -> Dict[str, Any]:
+def serialize_child(child: Device) -> dict[str, Any]:
     log("Serializing child device", alias=child.alias)
     child_info = {
         "alias": child.alias,
@@ -78,30 +83,31 @@ def serialize_child(child: Device) -> Dict[str, Any]:
     if light_module:
         child_info.update(get_light_info(child))
     if fan_module:
-        child_info.update({"fan_speed_level": fan_module.fan_speed_level})
+        level = getattr(fan_module, "fan_speed_level")
+        percent = _level_to_percent(level)
+        child_info.update({
+            "fan_speed_level": percent,
+        })
     if energy_module:
         child_info.update(get_energy_info(child))
     return child_info
 
-def get_light_info(device: Device) -> Dict[str, Any]:
+def get_light_info(device: Device) -> dict[str, Any]:
     log("Getting light info for device", alias=device.alias)
     light_module = device.modules.get(Module.Light)
-    light_info = {}
+    light_info: dict[str, Any] = {}
     if light_module.has_feature("brightness"):
         light_info["brightness"] = light_module.brightness
     if light_module.has_feature("color_temp"):
         kelvin = light_module.color_temp
-        if kelvin and kelvin > 0:
-            mired = kelvin_to_mired(kelvin)
-        else:
-            mired = HOMEKIT_MIRED_RANGE[0]
+        mired = kelvin_to_mired(kelvin) if kelvin and kelvin > 0 else 140
         light_info["color_temp"] = mired
     if light_module.has_feature("hsv"):
         hue, saturation, _ = light_module.hsv
         light_info["hsv"] = {"hue": hue, "saturation": saturation}
     return light_info
 
-def get_energy_info(device: Device) -> Dict[str, Any]:
+def get_energy_info(device: Device) -> dict[str, Any]:
     log("Getting energy info for device", alias=device.alias)
     energy_module = device.modules.get(Module.Energy)
     energy_fields = (
@@ -115,10 +121,10 @@ def get_energy_info(device: Device) -> Dict[str, Any]:
     energy_dict = {key: getattr(energy_module, attr) for key, attr in energy_fields}
     return {"energy": energy_dict}
 
-def custom_serializer(device: Device) -> Dict[str, Any]:
+def custom_serializer(device: Device) -> dict[str, Any]:
     log("Serializing device", host=device.host, alias=device.alias)
     child_num = len(device.children) if device.children else 0
-    sys_info = {
+    sys_info: dict[str, Any] = {
         "alias": device.alias or f'{device.device_type}_{device.host}',
         "child_num": child_num,
         "device_id": device.device_id if device.mac != device.device_id else device.sys_info.get("deviceId"),
@@ -140,7 +146,11 @@ def custom_serializer(device: Device) -> Dict[str, Any]:
         if light_module:
             sys_info.update(get_light_info(device))
         if fan_module:
-            sys_info.update({"fan_speed_level": fan_module.fan_speed_level})
+            level = getattr(fan_module, "fan_speed_level")
+            percent = _level_to_percent(level)
+            sys_info.update({
+                "fan_speed_level": percent,
+            })
         if energy_module:
             sys_info.update(get_energy_info(device))
     feature_info = {
@@ -165,10 +175,10 @@ def custom_serializer(device: Device) -> Dict[str, Any]:
 async def discover_devices(
     username: Optional[str] = None,
     password: Optional[str] = None,
-    additional_broadcasts: Optional[List[str]] = None,
-    manual_devices: Optional[List[str]] = None,
-    exclude_mac_addresses: Optional[List[str]] = None,
-    include_mac_addresses: Optional[List[str]] = None,
+    additional_broadcasts: Optional[list[str]] = None,
+    manual_devices: Optional[list[str]] = None,
+    exclude_mac_addresses: Optional[list[str]] = None,
+    include_mac_addresses: Optional[list[str]] = None,
 ) -> None:
     broadcasts = ["255.255.255.255"] + (additional_broadcasts or [])
     credentials = Credentials(username, password) if username and password else None
@@ -192,7 +202,7 @@ async def discover_devices(
             log(f"Device discovery: {e}", level="ERROR", host=device.host, alias=device.alias)
             await safe_disconnect(device)
 
-    async def process_device(device: Device) -> Optional[Dict[str, Any]]:
+    async def process_device(device: Device) -> Optional[dict[str, Any]]:
         log("Processing device", host=device.host, alias=device.alias)
         if include_mac_addresses and device.mac not in include_mac_addresses:
             log("Excluding device due to MAC address inclusion", host=device.host, alias=device.alias)
@@ -267,7 +277,7 @@ async def close_all_connections():
         await asyncio.gather(*disconnect_tasks, return_exceptions=True)
         device_cache.clear()
 
-async def create_device_info(device: Device) -> Tuple[str, Dict[str, Any]]:
+async def create_device_info(device: Device) -> dict[str, Any]:
     log("Creating device info", host=device.host, alias=device.alias)
     try:
         device_info = custom_serializer(device)
@@ -281,7 +291,7 @@ async def create_device_info(device: Device) -> Tuple[str, Dict[str, Any]]:
         log(f"Creating device info: {e}", level="ERROR", host=device.host, alias=device.alias)
         return {"error": str(e)}
 
-async def get_sys_info(host: str) -> Dict[str, Any]:
+async def get_sys_info(host: str) -> dict[str, Any]:
     log("Getting sys_info", host=host)
     try:
         device_config_dict = device_config_cache.get(host)
@@ -317,7 +327,7 @@ async def control_device(
     action: str,
     value: Any,
     child_num: Optional[int] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     log("Controlling device", host=host)
     try:
         device_config_dict = device_config_cache.get(host)
@@ -335,7 +345,7 @@ async def perform_device_action(
     action: str,
     value: Any,
     child_num: Optional[int] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         target = device.children[child_num] if child_num is not None else device
         log(f"Performing action={action} on feature={feature}", alias=target.alias)
@@ -363,42 +373,42 @@ async def handle_brightness(target: Device, action: str, value: int):
     light = target.modules.get(Module.Light)
     if value == 0:
         await target.turn_off()
-    else:
-        value = max(1, min(value, 100))
-        await getattr(light, action)(value)
-        if target.is_off:
-            await target.turn_on()
+        return
+    value = max(1, min(value, 100))
+    await getattr(light, action)(value)
+    if target.is_off:
+        await target.turn_on()
 
 async def handle_color_temp(target: Device, action: str, value: int):
     log(f"Handling color temperature: action={action}, value={value}", alias=target.alias)
     light = target.modules.get(Module.Light)
     color_temp = target.modules.get(Module.ColorTemperature)
-    mired = max(HOMEKIT_MIRED_RANGE[0], min(value, HOMEKIT_MIRED_RANGE[1]))
+    mired = max(140, min(value, 500))
     kelvin = mired_to_kelvin(mired)
     if color_temp and hasattr(color_temp, "valid_temperature_range"):
         min_temp, max_temp = color_temp.valid_temperature_range
     else:
-        min_temp, max_temp = TPLINK_KELVIN_RANGE
+        min_temp, max_temp = (2500, 6500)
     kelvin = max(min_temp, min(kelvin, max_temp))
     await getattr(light, action)(kelvin)
 
 async def handle_fan_speed_level(target: Device, action: str, value: int):
     log(f"Handling fan speed level: action={action}, value={value}", alias=target.alias)
     fan = target.modules.get(Module.Fan)
-    if value == 0:
+    level = _percent_to_level(value)
+    if level == 0:
         await target.turn_off()
-    else:
-        value = max(1, min(value, 100))
-        await getattr(fan, action)(value)
-        if target.is_off:
-            await target.turn_on()
+        return
+    await getattr(fan, action)(level)
+    if target.is_off:
+        await target.turn_on()
 
 async def handle_hsv(target: Device, action: str, feature: str, value: dict):
     log(f"Handling HSV: action={action}, feature={feature}, value={value}", alias=target.alias)
     light = target.modules.get(Module.Light)
-    hsv = list(light.hsv)
-    h = int(value.get("hue", hsv[0]))
-    s = int(value.get("saturation", hsv[1]))
+    hsv = light.hsv
+    h = value.get("hue", hsv[0])
+    s = value.get("saturation", hsv[1])
     v = hsv[2]
     hsv[0] = max(0, min(h, 360))
     hsv[1] = max(0, min(s, 100))
@@ -408,10 +418,13 @@ async def handle_hsv(target: Device, action: str, feature: str, value: dict):
 @app.route('/discover', methods=['POST'])
 async def discover_route():
     try:
+        username: str = None
+        password: str = None
         auth = request.authorization
-        username = auth.username if auth else None
-        password = auth.password if auth else None
-        data: Dict[str, Any] = await request.get_json()
+        if auth:
+            username = getattr(auth, "username")
+            password = getattr(auth, "password")
+        data: dict[str, Any] = await request.get_json()
         additional_broadcasts = data.get('additionalBroadcasts', [])
         manual_devices = data.get('manualDevices', [])
         exclude_mac_addresses = data.get('excludeMacAddresses', [])
@@ -450,7 +463,7 @@ async def get_sys_info_route():
 @app.route('/controlDevice', methods=['POST'])
 async def control_device_route():
     try:
-        data: Dict[str, Any] = await request.get_json()
+        data: dict[str, Any] = await request.get_json()
         host = data['host']
         feature = data['feature']
         action = data['action']
@@ -473,7 +486,7 @@ async def safe_disconnect(device: Optional[Device]):
         except Exception as e:
             log(f"Disconnecting device: {e}", level="ERROR", host=device.host, alias=device.alias)
 
-async def handle_device_error(host: str, error: Optional[Exception] = None) -> Dict[str, Any]:
+async def handle_device_error(host: str, error: Optional[Exception] = None) -> dict[str, Any]:
     log(f"Handling device: {error}", level="ERROR", host=host)
     try:
         device_config_dict = device_config_cache.get(host)
@@ -486,8 +499,8 @@ async def handle_device_error(host: str, error: Optional[Exception] = None) -> D
         log(f"Error handling: {e}", level="ERROR", host=host)
     return {"error": str(error)}
 
-async def disconnect_all_devices(devices: Dict[str, Device]):
-    for host, device in devices.items():
+async def disconnect_all_devices(devices: dict[str, Device]):
+    for _, device in devices.items():
         await safe_disconnect(device)
         log("Disconnected device", host=device.host, alias=device.alias)
 

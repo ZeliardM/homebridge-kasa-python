@@ -25,7 +25,7 @@
 <div align="center">
 
 > ## IMPORTANT!!!
->With v2.7.0, Support for anything less than Python v3.11 will be dropped.
+>Python Supported Versions: 3.11, 3.12, and 3.13.
 
 </div>
 

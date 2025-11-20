@@ -1,0 +1,17 @@
+name: Detect Fork Context
+description: Outputs is_fork=true if running in a fork, false if main repo
+outputs:
+  is_fork:
+    description: "true if running in a forked repo context"
+    value: ${{ steps.detect.outputs.is_fork }}
+runs:
+  using: composite
+  steps:
+    - id: detect
+      shell: bash
+      run: |
+        if [ "${GITHUB_REPOSITORY}" != "ZeliardM/homebridge-kasa-python" ]; then
+          echo "is_fork=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "is_fork=false" >> "$GITHUB_OUTPUT"
+        fi
