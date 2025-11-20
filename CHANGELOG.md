@@ -1,5 +1,23 @@
 # Changelog
 
+## [v2.9.2-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.2-beta.0)
+
+### Other Changes
+
+- ci(deps): bump actions/setup-node from 5 to 6 @dependabot[bot] [#133]
+- npm(deps-dev): bump typescript-eslint from 8.45.0 to 8.46.0 @dependabot[bot] [#129]
+- npm(deps-dev): bump @types/node from 24.6.2 to 24.7.1 @dependabot[bot] [#128]
+- npm(deps-dev): bump the eslint group with 2 updates @dependabot[bot] [#127]
+- npm(deps-dev): bump @typescript-eslint/parser from 8.45.0 to 8.46.0 in the typescript-eslint group @dependabot[bot] [#126]
+- ci(deps): bump github/codeql-action from 3 to 4 @dependabot[bot] [#125]
+- npm(deps-dev): bump typescript-eslint from 8.44.1 to 8.45.0 @dependabot[bot] [#123]
+- npm(deps-dev): bump @types/node from 24.5.2 to 24.6.2 @dependabot[bot] [#122]
+- npm(deps): bump the typescript-eslint group with 2 updates @dependabot[bot] [#121]
+- pip(deps): bump anyio from 4.10.0 to 4.11.0 @dependabot[bot] [#120]
+- pip(deps): bump uvicorn from 0.36.0 to 0.37.0 @dependabot[bot] [#119]
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.1...v2.9.2-beta.0
+
 ## [v2.9.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.1) (2025-09-25)
 
 ### Other Changes
