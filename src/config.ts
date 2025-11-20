@@ -1,5 +1,5 @@
 import { isObjectLike } from './utils.js';
-import type { ConfigDevice } from './devices/kasaDevices.js';
+import type { ConfigDevice } from './devices/deviceTypes.js';
 
 export class ConfigParseError extends Error {
   constructor(
@@ -37,6 +37,7 @@ export interface KasaPythonConfigInput {
   enableCredentials?: boolean;
   username?: string;
   password?: string;
+  enableEnergyMonitoring?: boolean;
   hideHomeKitMatter?: boolean;
   pollingInterval?: number;
   discoveryPollingInterval?: number;
@@ -56,6 +57,7 @@ export type KasaPythonConfig = {
   enableCredentials: boolean;
   username: string;
   password: string;
+  enableEnergyMonitoring: boolean;
   homekitOptions: {
     hideHomeKitMatter: boolean;
   };
@@ -81,6 +83,7 @@ export const defaultConfig: KasaPythonConfig = {
   enableCredentials: false,
   username: '',
   password: '',
+  enableEnergyMonitoring: false,
   homekitOptions: {
     hideHomeKitMatter: true,
   },
@@ -125,6 +128,7 @@ function validateConfig(config: Record<string, unknown>): string[] {
   validateType(config, 'enableCredentials', 'boolean', errors);
   validateType(config, 'username', 'string', errors);
   validateType(config, 'password', 'string', errors);
+  validateType(config, 'enableEnergyMonitoring', 'boolean', errors);
   validateType(config, 'hideHomeKitMatter', 'boolean', errors);
   validateType(config, 'pollingInterval', 'number', errors);
   validateType(config, 'discoveryPollingInterval', 'number', errors);
@@ -175,30 +179,34 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     throw new ConfigParseError('Error parsing config');
   }
 
-  const c = { ...defaultConfig, ...config } as KasaPythonConfigInput;
+  const parsedConfig = { ...defaultConfig, ...config } as KasaPythonConfigInput;
 
   return {
-    name: c.name ?? defaultConfig.name,
-    enableCredentials: c.enableCredentials ?? defaultConfig.enableCredentials,
-    username: c.username ?? defaultConfig.username,
-    password: c.password ?? defaultConfig.password,
+    name: parsedConfig.name ?? defaultConfig.name,
+    enableCredentials: parsedConfig.enableCredentials ?? defaultConfig.enableCredentials,
+    username: parsedConfig.username ?? defaultConfig.username,
+    password: parsedConfig.password ?? defaultConfig.password,
+    enableEnergyMonitoring: parsedConfig.enableEnergyMonitoring ?? defaultConfig.enableEnergyMonitoring,
     homekitOptions: {
-      hideHomeKitMatter: c.hideHomeKitMatter ?? defaultConfig.homekitOptions.hideHomeKitMatter,
+      hideHomeKitMatter: parsedConfig.hideHomeKitMatter ?? defaultConfig.homekitOptions.hideHomeKitMatter,
     },
     discoveryOptions: {
-      pollingInterval: (c.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
-      discoveryPollingInterval: (c.discoveryPollingInterval ?? defaultConfig.discoveryOptions.discoveryPollingInterval) * 1000,
-      offlineInterval: (c.offlineInterval ?? defaultConfig.discoveryOptions.offlineInterval) * 24 * 60 * 60 * 1000,
-      additionalBroadcasts: c.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
-      manualDevices: c.manualDevices ? convertManualDevices(c.manualDevices) : defaultConfig.discoveryOptions.manualDevices,
-      excludeMacAddresses: c.excludeMacAddresses ?? defaultConfig.discoveryOptions.excludeMacAddresses,
-      includeMacAddresses: c.includeMacAddresses ?? defaultConfig.discoveryOptions.includeMacAddresses,
+      pollingInterval: (parsedConfig.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
+      discoveryPollingInterval: (parsedConfig.discoveryPollingInterval ?? defaultConfig.discoveryOptions.discoveryPollingInterval) * 1000,
+      offlineInterval: (parsedConfig.offlineInterval ?? defaultConfig.discoveryOptions.offlineInterval) * 24 * 60 * 60 * 1000,
+      additionalBroadcasts: parsedConfig.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
+      manualDevices:
+        parsedConfig.manualDevices
+          ? convertManualDevices(parsedConfig.manualDevices)
+          : defaultConfig.discoveryOptions.manualDevices,
+      excludeMacAddresses: parsedConfig.excludeMacAddresses ?? defaultConfig.discoveryOptions.excludeMacAddresses,
+      includeMacAddresses: parsedConfig.includeMacAddresses ?? defaultConfig.discoveryOptions.includeMacAddresses,
     },
     advancedOptions: {
-      waitTimeUpdate: c.waitTimeUpdate ?? defaultConfig.advancedOptions.waitTimeUpdate,
-      pythonPath: c.pythonPath ?? defaultConfig.advancedOptions.pythonPath,
-      advancedPythonLogging: c.advancedPythonLogging ?? defaultConfig.advancedOptions.advancedPythonLogging,
-      logEnergyMonitoring: c.logEnergyMonitoring ?? defaultConfig.advancedOptions.logEnergyMonitoring,
+      waitTimeUpdate: parsedConfig.waitTimeUpdate ?? defaultConfig.advancedOptions.waitTimeUpdate,
+      pythonPath: parsedConfig.pythonPath ?? defaultConfig.advancedOptions.pythonPath,
+      advancedPythonLogging: parsedConfig.advancedPythonLogging ?? defaultConfig.advancedOptions.advancedPythonLogging,
+      logEnergyMonitoring: parsedConfig.logEnergyMonitoring ?? defaultConfig.advancedOptions.logEnergyMonitoring,
     },
   };
 }

@@ -13,6 +13,7 @@
         "enableCredentials": true,
         "username": "Username",
         "password": "Password",
+        "enableEnergyMonitoring": true,
         "hideHomeKitMatter": true,
         "pollingInterval": 5,
         "discoveryPollingInterval": 300,
@@ -20,6 +21,7 @@
         "waitTimeUpdate": 100,
         "pythonPath": "/usr/bin/python3",
         "advancedPythonLogging": false,
+        "logEnergyMonitoring": false,
         "additionalBroadcasts": [
           "192.168.1.255",
           "192.168.2.255"

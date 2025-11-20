@@ -5,7 +5,7 @@
 This repository is a Homebridge platform plugin that bridges TP-Link Kasa/Tapo smart devices (plugs, switches, bulbs, power strips, light strips) to Apple HomeKit. It uses a hybrid architecture: the main orchestration, accessory management, and Homebridge integration is in TypeScript/Node.js; direct device communication and control is handled by Python scripts using the [python-kasa](https://github.com/python-kasa/python-kasa) library, exposed via a local API.
 
 - **Type**: Homebridge plugin for smart home integration
-- **Languages**: TypeScript/Node.js (ES Modules), Python 3.11+
+- **Languages**: TypeScript/Node.js (ES Modules), Python 3.11/3.12/3.13
 - **Supported Devices**: Plugs, power strips, switches, bulbs, light strips (see README for full list)
 - **Target Runtime**: Node.js 20/22/24, Python 3.11/3.12/3.13
 - **Size**: ~3,000 lines TypeScript, several Python scripts

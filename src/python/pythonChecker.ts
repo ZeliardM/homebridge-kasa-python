@@ -93,8 +93,8 @@ class PythonChecker {
         }
       }
     }
-    this.log.error('No supported Python version found. Install Python 3.11+ and restart Homebridge.');
-    throw new Error('No supported Python version found. Install Python 3.11+ and restart Homebridge.');
+    this.log.error('No supported Python version found. Install Python 3.11, 3.12, or 3.13 and restart Homebridge.');
+    throw new Error('No supported Python version found. Install Python 3.11, 3.12, or 3.13 and restart Homebridge.');
   }
 
   private async getPythonVersion(executablePath: string): Promise<string | null> {

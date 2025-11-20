@@ -41,6 +41,12 @@
           "functionBody": "return model.enableCredentials && model.username && model.username !== '';"
         }
       },
+      "enableEnergyMonitoring": {
+        "title": "Enable Energy Monitoring",
+        "type": "boolean",
+        "description": "Enable to add energy monitoring characteristics (Volts, Amperes, Watts, KiloWattHours) to supported devices.",
+        "default": false
+      },
       "hideHomeKitMatter": {
         "title": "Hide HomeKit or Matter Devices",
         "type": "boolean",
@@ -137,7 +143,7 @@
       "logEnergyMonitoring": {
         "title": "Log Energy Monitoring Events",
         "type": "boolean",
-        "description": "Enable logging of power/energy monitoring characteristic updates (Volts, Amperes, Watts, KilowattHours). Can be noisy if enabled.",
+        "description": "Enable logging of power/energy monitoring characteristic updates (Volts, Amperes, Watts, KiloWattHours).",
         "default": false
       }
     }
@@ -157,6 +163,7 @@
       "type": "help",
       "helpvalue": "Username and Password will be required for specific devices only."
     },
+    "enableEnergyMonitoring",
     {
       "type": "fieldset",
       "title": "HomeKit (Optional)",
