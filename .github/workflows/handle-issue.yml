@@ -18,7 +18,7 @@ jobs:
     outputs:
       is_fork: ${{ steps.detect-fork.outputs.is_fork }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Detect fork context
@@ -37,7 +37,7 @@ jobs:
       classification_json: ${{ steps.classify.outputs.classification_json }}
     steps:
       - name: Checkout scripts + actions
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -73,7 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout actions
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -157,7 +157,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout scripts + actions
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 

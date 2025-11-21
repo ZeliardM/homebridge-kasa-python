@@ -20,7 +20,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'latest' && contains(github.event.pull_request.labels.*.name, 'stable-conversion')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v6
         with:
@@ -58,7 +58,7 @@ jobs:
     if: github.event_name == 'release' && github.event.release.prerelease == false && !contains(github.event.release.tag_name, 'beta') && github.event.release.target_commitish == 'latest'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.release.target_commitish }}
