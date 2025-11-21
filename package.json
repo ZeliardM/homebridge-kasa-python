@@ -79,7 +79,7 @@
   ],
   "dependencies": {
     "axios": "^1.13.2",
-    "eventsource": "^4.0.0",
+    "eventsource": "^4.1.0",
     "ts-essentials": "^10.1.1",
     "typescript": "^5.9.3"
   },
