@@ -3,19 +3,24 @@
 
 ### Breaking Changes
 
+- [breaking] Workflow rewrites for handling dependabot and manual commits [18af1fa](https://github.com/ZeliardM/homebridge-kasa-python/commit/18af1fab19ec75e8699844da0454806d185dc263) (@ZeliardM)
 - Add energy monitoring support [#118](https://github.com/ZeliardM/homebridge-kasa-python/pull/118) (@arjunmehta)
 
 ### Featured Changes
 
-- [enhancement] Update manual commit push to handle multiple commits [f421e6a](https://github.com/ZeliardM/homebridge-kasa-python/commit/f421e6a20673255357b6c547386b5bd32f2a8865) (@ZeliardM)
+- [feature] Update manual commit push to handle multiple commits [f421e6a](https://github.com/ZeliardM/homebridge-kasa-python/commit/f421e6a20673255357b6c547386b5bd32f2a8865) (@ZeliardM)
+- [feature] Update npm publishing [83d6a2a](https://github.com/ZeliardM/homebridge-kasa-python/commit/83d6a2a3c651be86d15da40e63d3cbe056b1712d) (@ZeliardM)
+
+### Bug Fixes
+
+
+- [bug] Skip Merge branch commits when processing manual commits [9357f77](https://github.com/ZeliardM/homebridge-kasa-python/commit/9357f77b872a75248e472f8554304cbc3d1f7c2f) (@ZeliardM)
+- [bug] Prefer package.json version number if newer than computed [d4a4c8d](https://github.com/ZeliardM/homebridge-kasa-python/commit/d4a4c8def6e84a4e12e81187f326da9c2f79c9a3) (@ZeliardM)
+- [bug] Fix manual commit entry format [9d48f9f](https://github.com/ZeliardM/homebridge-kasa-python/commit/9d48f9f6c650c310fa31f186a6781736da4e7f54) (@ZeliardM)
 
 ### Other Changes
 
-- [other] Skip Merge branch commits when processing manual commits [9357f77](https://github.com/ZeliardM/homebridge-kasa-python/commit/9357f77b872a75248e472f8554304cbc3d1f7c2f) (@ZeliardM)
-- [other] Update npm publishing [83d6a2a](https://github.com/ZeliardM/homebridge-kasa-python/commit/83d6a2a3c651be86d15da40e63d3cbe056b1712d) (@ZeliardM)
-- [other] Prefer package.json version number if newer than computed [d4a4c8d](https://github.com/ZeliardM/homebridge-kasa-python/commit/d4a4c8def6e84a4e12e81187f326da9c2f79c9a3) (@ZeliardM)
-- [other] Fix manual commit entry format [9d48f9f](https://github.com/ZeliardM/homebridge-kasa-python/commit/9d48f9f6c650c310fa31f186a6781736da4e7f54) (@ZeliardM)
-- [other] Workflow rewrites for handling dependabot and manual commits [18af1fa](https://github.com/ZeliardM/homebridge-kasa-python/commit/18af1fab19ec75e8699844da0454806d185dc263) (@ZeliardM)
+- [other] Manually add missing manual commit [d6e0f43](https://github.com/ZeliardM/homebridge-kasa-python/commit/d6e0f43206d5a09e684d25abfa041b8ad1636993) (@ZeliardM)
 - npm(deps-dev): bump homebridge from 2.0.0-beta.55 to 2.0.0-beta.56 [#167](https://github.com/ZeliardM/homebridge-kasa-python/pull/167) (@dependabot[bot])
 - npm(deps): bump eventsource from 4.0.0 to 4.1.0 [#166](https://github.com/ZeliardM/homebridge-kasa-python/pull/166) (@dependabot[bot])
 - npm(deps-dev): bump homebridge from 2.0.0-beta.50 to 2.0.0-beta.53 [#161](https://github.com/ZeliardM/homebridge-kasa-python/pull/161) (@dependabot[bot])
