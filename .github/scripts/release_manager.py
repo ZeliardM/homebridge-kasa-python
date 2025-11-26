@@ -535,6 +535,38 @@ def _find_latest_draft_stable(gh: GitHub) -> Optional[Tuple[Version, dict]]:
         return None
     return max(candidates, key=lambda x: _version_sort_key(x[0]))
 
+
+def _reconcile_duplicate_releases(gh: GitHub, tag: str, *, keep_id: Optional[int] = None):
+    try:
+        all_rels = gh.releases()
+        matches = []
+        for r in all_rels:
+            tn = (r.get("tag_name") or "")
+            if not tn:
+                continue
+            if tn == tag or tn.lstrip("v") == tag.lstrip("v"):
+                matches.append(r)
+        if len(matches) <= 1:
+            return
+        preferred_id = None
+        if keep_id is not None and any(r.get("id") == keep_id for r in matches):
+            preferred_id = keep_id
+        else:
+            if any(r.get("created_at") for r in matches):
+                preferred = max(matches, key=lambda x: x.get("created_at") or "")
+            else:
+                preferred = max(matches, key=lambda x: x.get("id") or 0)
+            preferred_id = preferred.get("id")
+        for r in matches:
+            try:
+                if r.get("id") != preferred_id:
+                    print(f"[release-manager] Deleting duplicate release id={r.get('id')} tag={r.get('tag_name')}")
+                    gh.delete_release(r.get("id"))
+            except Exception as e_del:
+                print(f"[release-manager] Warning: failed to delete duplicate release id={r.get('id')}: {e_del}", file=sys.stderr)
+    except Exception as e:
+        print(f"[release-manager] Warning: could not reconcile duplicate releases: {e}", file=sys.stderr)
+
 def _is_published(gh: GitHub, version: Version) -> bool:
     rel = gh.release_by_tag(version.tag())
     return bool(rel) and not rel.get("draft", False)
@@ -724,6 +756,8 @@ def _upsert_release(gh: GitHub, tag: str, body: str, *, draft: bool, prerelease:
             if tn == tag or tn.lstrip("v") == tag.lstrip("v"):
                 rel = r
                 break
+    keep_id: Optional[int] = None
+    updated = False
     if rel and rel.get("id"):
         rel_id = rel["id"]
         print(f"[release-manager] Found existing release id={rel_id} for tag {tag}; updating.")
@@ -732,53 +766,27 @@ def _upsert_release(gh: GitHub, tag: str, body: str, *, draft: bool, prerelease:
         fields["prerelease"] = bool(prerelease)
         try:
             gh.update_release(rel_id, **fields)
-            return
+            keep_id = rel_id
+            updated = True
         except Exception as e:
             print(f"[release-manager] Warning: update_release failed for id={rel_id}: {e}", file=sys.stderr)
-    print(f"[release-manager] Creating release {tag} (draft={draft}, prerelease={prerelease}).")
     created_rel = None
-    try:
-        created_rel = gh.create_release(tag, tag, body, draft=draft, prerelease=prerelease, target=(target_commitish or "beta"))
-    except Exception as e:
-        print(f"[release-manager] ERROR: create_release failed for {tag}: {e}", file=sys.stderr)
-        return
-    try:
-        all_rels = gh.releases()
-        matches = []
-        for r in all_rels:
-            tn = (r.get("tag_name") or "")
-            if not tn:
-                continue
-            if tn == tag or tn.lstrip("v") == tag.lstrip("v"):
-                matches.append(r)
-        if len(matches) > 1:
-            preferred_id = None
-            created_id = None
+    if not updated:
+        print(f"[release-manager] Creating release {tag} (draft={draft}, prerelease={prerelease}).")
+        try:
+            created_rel = gh.create_release(tag, tag, body, draft=draft, prerelease=prerelease, target=(target_commitish or "beta"))
+        except Exception as e:
+            print(f"[release-manager] ERROR: create_release failed for {tag}: {e}", file=sys.stderr)
+            return
+        try:
+            if created_rel is not None:
+                keep_id = created_rel.get("id")
+        except Exception:
             try:
-                if created_rel is not None:
-                    created_id = created_rel.get("id")
+                keep_id = getattr(created_rel, "id", None)
             except Exception:
-                try:
-                    created_id = getattr(created_rel, "id", None)
-                except Exception:
-                    created_id = None
-            if created_id:
-                preferred_id = created_id
-            else:
-                if any(r.get("created_at") for r in matches):
-                    preferred = max(matches, key=lambda x: x.get("created_at") or "")
-                else:
-                    preferred = max(matches, key=lambda x: x.get("id") or 0)
-                preferred_id = preferred.get("id")
-            for r in matches:
-                try:
-                    if r.get("id") != preferred_id:
-                        print(f"[release-manager] Deleting duplicate release id={r.get('id')} tag={r.get('tag_name')}")
-                        gh.delete_release(r.get("id"))
-                except Exception as e:
-                    print(f"[release-manager] Warning: failed to delete duplicate release id={r.get('id')}: {e}", file=sys.stderr)
-    except Exception as e:
-        print(f"[release-manager] Warning: could not reconcile duplicate releases: {e}", file=sys.stderr)
+                keep_id = None
+    _reconcile_duplicate_releases(gh, tag, keep_id=keep_id)
 
 def _load_labels_arg(args) -> List[str]:
     labels = []
