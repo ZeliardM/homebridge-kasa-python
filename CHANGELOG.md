@@ -1,5 +1,5 @@
 # Changelog
-## [v3.0.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.0) (2025-11-26)
+## [v3.0.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.0)
 
 ### Breaking Changes
 
