@@ -781,6 +781,9 @@ def cmd_commit_pushed(args):
     subj_proc = common.run(["git", "show", "-s", "--format=%s", commit_sha], capture=True, check=False)
     subject = subj_proc.stdout.strip() if subj_proc and getattr(subj_proc, "stdout", None) else commit_sha
     display = subject or commit_sha
+    if isinstance(subject, str) and re.match(r"^\s*Merge branch\b", subject, re.IGNORECASE):
+        print(f"[release-manager] Skipping merge-branch commit {commit_sha[:7]}: '{subject}'")
+        return
     category = _categorize_commit_message(subject)
     derived_labels = _labels_from_commit_message(subject)
     content = _read_changelog()
