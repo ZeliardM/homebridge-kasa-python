@@ -125,7 +125,7 @@ class GitHub:
         if r:
             return r
         for rel in self.releases():
-            if rel.get("tag_name", "") == tag:
+            if _release_matches_tag(rel, tag):
                 return rel
         return None
 
@@ -197,6 +197,32 @@ def _squeeze_blank(text: str) -> str:
         out.append(l)
         prev_blank = blank
     return "\n".join(out)
+
+def _release_effective_for_parsing(rel: dict) -> str:
+    if not isinstance(rel, dict):
+        return ""
+    tn = (rel.get("tag_name") or "").strip()
+    name = (rel.get("name") or "").strip()
+    if rel.get("draft"):
+        return name or tn
+    return tn or name
+
+def _release_matches_tag(rel: dict, tag: str) -> bool:
+    if not isinstance(rel, dict):
+        return False
+    tag = (tag or "").strip()
+    if not tag:
+        return False
+    if not rel.get("draft"):
+        tn = (rel.get("tag_name") or "").strip()
+        if not tn:
+            return False
+        return tn == tag or tn.lstrip("v") == tag.lstrip("v")
+    name = (rel.get("name") or "").strip()
+    if not name:
+        tn = (rel.get("tag_name") or "").strip()
+        return tn == tag or tn.lstrip("v") == tag.lstrip("v")
+    return name == tag or name.lstrip("v") == tag.lstrip("v")
 
 def _categorize(labels: List[str]) -> str:
     low = {l.lower() for l in labels}
@@ -514,23 +540,25 @@ def _latest_versions(changelog: str) -> Tuple[Optional[Version], Optional[Versio
 def _find_unpublished_beta_draft(gh: GitHub) -> Optional[Version]:
     drafts: List[Version] = []
     for r in gh.releases():
-        tn = r.get("tag_name", "")
-        if r.get("draft") and r.get("prerelease") and "beta" in tn:
-            try:
-                drafts.append(Version.parse(tn))
-            except Exception:
-                continue
+        if r.get("draft") and r.get("prerelease"):
+            eff = _release_effective_for_parsing(r)
+            if "beta" in (eff or ""):
+                try:
+                    drafts.append(Version.parse(eff))
+                except Exception:
+                    continue
     return max(drafts, key=_version_sort_key) if drafts else None
 
 def _find_latest_draft_stable(gh: GitHub) -> Optional[Tuple[Version, dict]]:
     candidates: List[Tuple[Version, dict]] = []
     for r in gh.releases():
-        tn = r.get("tag_name", "")
-        if r.get("draft") and not r.get("prerelease") and STABLE_TAG_RE.match(tn or ""):
-            try:
-                candidates.append((Version.parse(tn), r))
-            except Exception:
-                continue
+        if r.get("draft") and not r.get("prerelease"):
+            eff = _release_effective_for_parsing(r)
+            if STABLE_TAG_RE.match(eff or ""):
+                try:
+                    candidates.append((Version.parse(eff), r))
+                except Exception:
+                    continue
     if not candidates:
         return None
     return max(candidates, key=lambda x: _version_sort_key(x[0]))
@@ -541,11 +569,7 @@ def _reconcile_duplicate_releases(gh: GitHub, tag: str):
         all_rels = gh.releases()
         matches = []
         for r in all_rels:
-            tn = (r.get("tag_name") or "")
-            name = (r.get("name") or "")
-            if not tn and not name:
-                continue
-            if tn == tag or tn.lstrip("v") == tag.lstrip("v") or name == tag or name.lstrip("v") == tag.lstrip("v"):
+            if _release_matches_tag(r, tag):
                 matches.append(r)
         print(f"[release-manager] reconcile: found {len(matches)} releases matching tag {tag}")
         for r in matches:
@@ -752,10 +776,7 @@ def _upsert_release(gh: GitHub, tag: str, body: str, *, draft: bool, prerelease:
     rel = gh.release_by_tag_any(tag)
     if not rel:
         for r in gh.releases():
-            tn = (r.get("tag_name") or "")
-            if not tn:
-                continue
-            if tn == tag or tn.lstrip("v") == tag.lstrip("v"):
+            if _release_matches_tag(r, tag):
                 rel = r
                 break
     updated = False
@@ -774,10 +795,10 @@ def _upsert_release(gh: GitHub, tag: str, body: str, *, draft: bool, prerelease:
         print(f"[release-manager] Creating release {tag} (draft={draft}, prerelease={prerelease}).")
         try:
             gh.create_release(tag, tag, body, draft=draft, prerelease=prerelease, target=(target_commitish or "beta"))
+            _reconcile_duplicate_releases(gh, tag)
         except Exception as e:
             print(f"[release-manager] ERROR: create_release failed for {tag}: {e}", file=sys.stderr)
             return
-    _reconcile_duplicate_releases(gh, tag)
 
 def _load_labels_arg(args) -> List[str]:
     labels = []
