@@ -411,24 +411,16 @@ def _insert_entry(content: str, version: Version, category: str, entry: str,
             is_housekeeping = ("[beta-release]" in entry) or ("[release]" in entry)
             if is_commit:
                 commits.insert(0, entry)
+            elif not is_housekeeping:
+                prs.insert(0, entry)
+            if is_housekeeping:
+                new_block: List[str] = [cat_header, "", entry, ""]
             else:
-                if is_housekeeping:
-                    new_block: List[str] = [cat_header, "", entry, ""]
-                    new_block.extend(commits)
-                    if commits and prs:
-                        pass
-                    new_block.extend(prs)
-                    new_block.append("")
-                    section = section[:cat_idx] + new_block + section[i:]
-                else:
-                    prs.insert(0, entry)
-                    new_block: List[str] = [cat_header, ""]
-                    new_block.extend(commits)
-                    if commits and prs:
-                        pass
-                    new_block.extend(prs)
-                    new_block.append("")
-                    section = section[:cat_idx] + new_block + section[i:]
+                new_block: List[str] = [cat_header, ""]
+            new_block.extend(commits)
+            new_block.extend(prs)
+            new_block.append("")
+            section = section[:cat_idx] + new_block + section[i:]
     if compare_from and not any("**Full Changelog**" in l for l in section):
         section += [f"**Full Changelog**: https://github.com/{_repo()}/compare/{compare_from}...{tag}", ""]
     section = _normalize_section_spacing(section)
