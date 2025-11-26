@@ -784,6 +784,8 @@ def _upsert_release(gh: GitHub, tag: str, body: str, *, draft: bool, prerelease:
         rel_id = rel["id"]
         print(f"[release-manager] Found existing release id={rel_id} for tag {tag}; updating.")
         fields = {"body": body, "name": tag}
+        if rel.get("draft"):
+            fields["tag_name"] = tag
         fields["draft"] = bool(draft)
         fields["prerelease"] = bool(prerelease)
         try:
