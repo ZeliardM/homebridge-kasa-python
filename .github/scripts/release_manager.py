@@ -788,13 +788,13 @@ def cmd_commit_pushed(args):
         if pulls:
             pr_nums = ", ".join(str(p.get("number")) for p in pulls)
             print(f"[release-manager] Commit {sha7} is part of PR(s) {pr_nums}; skipping manual changelog entry.")
-            return
+            continue
         subj_proc = common.run(["git", "show", "-s", "--format=%s", sha], capture=True, check=False)
         subject = subj_proc.stdout.strip() if subj_proc and getattr(subj_proc, "stdout", None) else sha
         display = subject or sha
         if isinstance(subject, str) and re.match(r"^\s*Merge branch\b", subject, re.IGNORECASE):
             print(f"[release-manager] Skipping merge-branch commit {sha7}: '{subject}'")
-            return
+            continue
         category = _categorize_commit_message(subject)
         derived_labels = _labels_from_commit_message(subject)
         content = _read_changelog()
