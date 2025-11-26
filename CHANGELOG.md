@@ -5,6 +5,10 @@
 
 - Add energy monitoring support [#118](https://github.com/ZeliardM/homebridge-kasa-python/pull/118) (@arjunmehta)
 
+### Featured Changes
+
+- [enhancement] Update manual commit push to handle multiple commits [f421e6a](https://github.com/ZeliardM/homebridge-kasa-python/commit/f421e6a20673255357b6c547386b5bd32f2a8865) (@ZeliardM)
+
 ### Other Changes
 
 - [other] Skip Merge branch commits when processing manual commits [9357f77](https://github.com/ZeliardM/homebridge-kasa-python/commit/9357f77b872a75248e472f8554304cbc3d1f7c2f) (@ZeliardM)
