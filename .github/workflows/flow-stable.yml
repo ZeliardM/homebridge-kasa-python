@@ -20,7 +20,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'latest' && contains(github.event.pull_request.labels.*.name, 'stable-conversion')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v6
         with:
@@ -42,7 +42,6 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
           REPO: ${{ github.repository }}
-          NPM_VERIFY_PUBLISHED_BETA: 'true'
         run: |
           set -euo pipefail
           python .github/scripts/release_manager.py pr-merged \
@@ -58,7 +57,7 @@ jobs:
     if: github.event_name == 'release' && github.event.release.prerelease == false && !contains(github.event.release.tag_name, 'beta') && github.event.release.target_commitish == 'latest'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.release.target_commitish }}
@@ -67,6 +66,7 @@ jobs:
           node-version: 22
       - uses: actions/setup-python@v6
         with: { python-version: '3.12' }
+
       - name: Finalize stable
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

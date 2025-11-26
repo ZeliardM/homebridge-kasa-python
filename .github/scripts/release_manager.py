@@ -2,12 +2,12 @@
 """
 Unified Release Manager (beta + stable)
 Actions:
-  - pr-merged      (beta path; AND stable-conversion path when PR base=latest)
-  - publish-beta   (finalize beta section/date + housekeeping entry; retag to include finalize commit)
-  - publish-stable (finalize stable section/date + housekeeping entry; retag to include finalize commit)
+    - pr-merged      (beta path; AND stable-conversion path when PR base=latest)
+    - publish-beta   (finalize beta section/date + housekeeping entry; retag to include finalize commit)
+    - publish-stable (finalize stable section/date + housekeeping entry; retag to include finalize commit)
+    - commit-pushed  (process manual pushes to `beta` - add non-PR commits to changelog)
 Notes:
 - Uses shared helpers from common.py for GitHub API, git/npm commands, and command execution.
-- No behavior changes intended; only refactoring and standardization.
 """
 import os
 import re
@@ -145,6 +145,23 @@ class GitHub:
     def delete_release(self, release_id: int):
         return self._request("DELETE", f"/releases/{release_id}")
 
+def _commit_pulls_for_sha(repo: str, token: str, sha: str) -> List[dict]:
+    url = f"https://api.github.com/repos/{repo}/commits/{sha}/pulls"
+    headers = {
+        "Accept": "application/vnd.github.groot-preview+json",
+        "Authorization": f"Bearer {token}",
+        "User-Agent": f"release-manager (+https://github.com/{repo})",
+    }
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read().decode()
+            data = json.loads(raw) if raw.strip() else []
+            return data if isinstance(data, list) else []
+    except Exception as exc:
+        print(f"[release-manager] Warning: commits/{sha}/pulls lookup failed: {exc}", file=sys.stderr)
+        return []
+
 def _read_changelog() -> str:
     if not os.path.exists(CHANGELOG_FILE):
         return "# Changelog\n\n"
@@ -192,6 +209,56 @@ def _categorize(labels: List[str]) -> str:
     if low & LABEL_DOCS:
         return "Other Changes"
     return "Other Changes"
+
+def _tag_from_category(category: str) -> str:
+    mapping = {
+        'Breaking Changes': '[breaking]',
+        'Featured Changes': '[feature]',
+        'Bug Fixes': '[bug]',
+        'Other Changes': '[other]',
+    }
+    return mapping.get(category, '[other]')
+
+def _categorize_commit_message(msg: str) -> str:
+    if not msg:
+        return "Other Changes"
+    m = re.match(r"^\s*\[([^\]]+)\]\s*(.*)$", msg)
+    tag_block = m.group(1).strip().lower() if m else ""
+    if tag_block:
+        parts = [p.strip() for p in tag_block.split(",") if p.strip()]
+        if any(p in ("breaking", "breaking-change", "breaking_changes") for p in parts):
+            return "Breaking Changes"
+        if any(p in ("feature", "enhancement") for p in parts):
+            return "Featured Changes"
+        if any(p in ("bug", "fix", "bugfix") for p in parts):
+            return "Bug Fixes"
+    return "Other Changes"
+
+def _labels_from_commit_message(msg: str) -> List[str]:
+    if not msg:
+        return []
+    m = re.match(r"^\s*\[([^\]]+)\]\s*(.*)$", msg)
+    tag_block = m.group(1).strip().lower() if m else ""
+    if not tag_block:
+        return []
+    out: List[str] = []
+    parts = [p.strip() for p in tag_block.split(",") if p.strip()]
+    for token in parts:
+        if token in ("breaking", "breaking-change", "breaking_changes"):
+            out.append("breaking-change")
+        elif token in ("feature", "enhancement"):
+            out.append("feature")
+        elif token in ("bug", "fix", "bugfix"):
+            out.append("fix")
+    return out
+
+def _build_commit_entry(display: str, commit_sha: str, repo: str, author: str, category: Optional[str] = None) -> str:
+    sha7 = commit_sha[:7]
+    author_display = author or "unknown"
+    if author_display and not author_display.startswith("@") and " " not in author_display:
+        author_display = f"@{author_display}"
+    tag = _tag_from_category(category) if category else "[other]"
+    return f"- {tag} {display} [{sha7}](https://github.com/{repo}/commit/{commit_sha}) ({author_display})"
 
 def _bump_type(labels: List[str]) -> str:
     low = {l.lower() for l in labels}
@@ -314,19 +381,45 @@ def _insert_entry(content: str, version: Version, category: str, entry: str,
         to_insert = [cat_header, "", entry, ""]
         section = section[:insertion_local_idx] + to_insert + section[insertion_local_idx:]
     else:
-        new_sec: List[str] = []
-        j = 0
-        inserted = False
-        while j < len(section):
-            line = section[j]
-            new_sec.append(line)
-            if line == cat_header and not inserted:
-                if j + 1 >= len(section) or section[j + 1].strip() != "":
-                    new_sec.append("")
-                new_sec.append(entry)
-                inserted = True
-            j += 1
-        section = new_sec
+        cat_idx = next((i for i, l in enumerate(section) if l == cat_header), None)
+        if cat_idx is None:
+            new_sec: List[str] = []
+            j = 0
+            inserted = False
+            while j < len(section):
+                line = section[j]
+                new_sec.append(line)
+                if line == cat_header and not inserted:
+                    if j + 1 >= len(section) or section[j + 1].strip() != "":
+                        new_sec.append("")
+                    new_sec.append(entry)
+                    inserted = True
+                j += 1
+            section = new_sec
+        else:
+            i = cat_idx + 1
+            items: List[str] = []
+            while i < len(section):
+                cur = section[i]
+                if cur.startswith("### ") or cur.startswith("**Full Changelog**"):
+                    break
+                if cur.startswith("- "):
+                    items.append(cur)
+                i += 1
+            commits = [it for it in items if "/commit/" in it]
+            prs = [it for it in items if "/commit/" not in it]
+            is_commit = "/commit/" in entry
+            if is_commit:
+                commits.insert(0, entry)
+            else:
+                prs.insert(0, entry)
+            new_block: List[str] = [cat_header, ""]
+            new_block.extend(commits)
+            if commits and prs:
+                pass
+            new_block.extend(prs)
+            new_block.append("")
+            section = section[:cat_idx] + new_block + section[i:]
     if compare_from and not any("**Full Changelog**" in l for l in section):
         section += [f"**Full Changelog**: https://github.com/{_repo()}/compare/{compare_from}...{tag}", ""]
     section = _normalize_section_spacing(section)
@@ -546,13 +639,13 @@ def _aggregate_betas_to_stable(content: str, target: Version, betas: List[Versio
             if cat not in aggregated:
                 aggregated[cat] = []
             for e in entries:
-                if e.endswith("[beta-release]"):
+                if e.endswith("[beta-release] (@github-actions)"):
                     continue
                 if e not in seen:
                     aggregated[cat].append(e)
                     seen.add(e)
     if included_tags:
-        note = f"- Convert beta releases ({', '.join(included_tags)}) to regular release {target.tag()} @github-actions [beta-to-release]"
+        note = f"- Convert beta releases ({', '.join(included_tags)}) to regular release {target.tag()} [beta-to-release] (@github-actions)"
         aggregated.setdefault("Other Changes", []).append(note)
     header = _build_section_header(target.tag(), add_date=False)
     prev_stable, _ = _latest_versions(content)
@@ -602,9 +695,6 @@ def _ensure_repo_node_version(version: Version, context: str):
         )
 
 def _upsert_release(gh: GitHub, tag: str, body: str, *, draft: bool, prerelease: bool, target_commitish: Optional[str] = None):
-    """
-    Create or update a release. Only sets target_commitish on create (GitHub ignores it on some updates).
-    """
     rel = gh.release_by_tag_any(tag)
     if rel and rel.get("id"):
         fields = {"body": body, "name": tag}
@@ -639,7 +729,7 @@ def _load_labels_arg(args) -> List[str]:
 def _finalize_common(gh: GitHub, v: Version, *, is_beta: bool):
     content = _read_changelog()
     hk_label = "beta-release" if is_beta else "release"
-    entry = f"- Update CHANGELOG.md for {'beta release' if is_beta else 'release'} {v.tag()} @github-actions [{hk_label}]"
+    entry = f"- Update CHANGELOG.md for {'beta release' if is_beta else 'release'} {v.tag()} [{hk_label}] (@github-actions)"
     content = _insert_entry(content, v, "Other Changes", entry, None, add_date=False)
     content = _add_publish_date(content, v.tag(), _now_date_utc())
     _write_changelog(content)
@@ -659,6 +749,90 @@ def _finalize_common(gh: GitHub, v: Version, *, is_beta: bool):
     if rel and rel.get("id"):
         gh.update_release(rel["id"], body=body)
 
+def cmd_commit_pushed(args):
+    gh = GitHub(args.github_token, args.repo)
+    commit_sha = (getattr(args, "commit", "") or "").strip()
+    if not commit_sha or re.fullmatch(r"0+", commit_sha):
+        print("[release-manager] No actionable commit SHA provided; exiting.")
+        return
+    pulls = _commit_pulls_for_sha(args.repo, args.github_token, commit_sha)
+    if pulls:
+        pr_nums = ", ".join(str(p.get("number")) for p in pulls)
+        print(f"[release-manager] Commit {commit_sha[:7]} is part of PR(s) {pr_nums}; skipping manual changelog entry.")
+        return
+    subj_proc = common.run(["git", "show", "-s", "--format=%s", commit_sha], capture=True, check=False)
+    subject = subj_proc.stdout.strip() if subj_proc and getattr(subj_proc, "stdout", None) else commit_sha
+    display = subject or commit_sha
+    category = _categorize_commit_message(subject)
+    derived_labels = _labels_from_commit_message(subject)
+    content = _read_changelog()
+    latest_stable, _ = _latest_versions(content)
+    npm_versions: Optional[Set[str]] = None
+    pkg = _read_package_name()
+    if pkg:
+        npm_versions = _npm_registry_versions(pkg, force_refresh=True)
+    else:
+        print("[release-manager] NPM verification enabled but no package name found; skipping npm check.", file=sys.stderr)
+    published_beta_versions: List[Version] = []
+    for rel in gh.releases():
+        tag_name = rel.get("tag_name", "")
+        if "beta" not in tag_name or rel.get("draft") or not rel.get("prerelease"):
+            continue
+        try:
+            version = Version.parse(tag_name)
+        except Exception:
+            continue
+        if npm_versions is not None and version.tag().lstrip("v") not in npm_versions:
+            continue
+        published_beta_versions.append(version)
+    latest_published_beta = max(published_beta_versions, key=_version_sort_key) if published_beta_versions else None
+    existing_unpublished = _find_unpublished_beta_draft(gh)
+    target_version, replace = _decide_beta_target(gh, latest_stable, latest_published_beta, existing_unpublished, derived_labels)
+    if replace and existing_unpublished and existing_unpublished.tag() != target_version.tag():
+        if f"## [{existing_unpublished.tag()}]" in content:
+            content = _rename_version_section(content, existing_unpublished.tag(), target_version.tag())
+        old_tag = existing_unpublished.tag()
+        old_rel = gh.release_by_tag_any(old_tag)
+        if old_rel and old_rel.get("id"):
+            gh.update_release(old_rel["id"], tag_name=target_version.tag(), name=target_version.tag())
+        common.git_delete_tag(old_tag)
+        print(f"[release-manager] Escalated draft {old_tag} -> {target_version.tag()} to capture manual commit.")
+    compare_from: Optional[str]
+    if target_version.beta == 0:
+        compare_from = latest_stable.tag() if latest_stable else "v0.0.0"
+    elif target_version.beta and target_version.beta > 0:
+        compare_from = f"v{target_version.major}.{target_version.minor}.{target_version.patch}-beta.{target_version.beta - 1}"
+    else:
+        compare_from = None
+    author_display: Optional[str] = None
+    try:
+        commit_info = gh._request("GET", f"/commits/{commit_sha}")
+        if isinstance(commit_info, dict):
+            author_obj = commit_info.get("author") or {}
+            if isinstance(author_obj, dict) and author_obj.get("login"):
+                author_display = f"@{author_obj['login']}"
+            else:
+                nested = commit_info.get("commit", {}).get("author", {})
+                if isinstance(nested, dict) and nested.get("name"):
+                    author_display = nested.get("name")
+    except Exception:
+        author_display = None
+    if not author_display:
+        try:
+            author_proc = common.run(["git", "show", "-s", "--format=%aN", commit_sha], capture=True, check=False)
+            author_display = author_proc.stdout.strip() if author_proc and getattr(author_proc, "stdout", None) else None
+        except Exception:
+            author_display = None
+    entry = _build_commit_entry(display, commit_sha, args.repo, author_display or "unknown", category)
+    content = _insert_entry(content, target_version, category, entry, compare_from, add_date=False)
+    _write_changelog(content)
+    sha7 = commit_sha[:7]
+    _git_commit_files(["CHANGELOG.md"], f"Update CHANGELOG.md for manual commit {sha7}")
+    _ensure_repo_node_version(target_version, context=f"manual commit {sha7}")
+    body = _build_beta_body(target_version, content, latest_stable)
+    _upsert_release(gh, target_version.tag(), body, draft=True, prerelease=True, target_commitish="beta")
+    print(f"[release-manager] Added manual commit {sha7} to beta draft {target_version.tag()} ({category}).")
+
 def cmd_pr_merged(args):
     gh = GitHub(args.github_token, args.repo)
     labels = _load_labels_arg(args)
@@ -670,13 +844,10 @@ def cmd_pr_merged(args):
         target_stable = Version.parse(m.group(0))
         content = _read_changelog()
         prev_stable, _ = _latest_versions(content)
-        verify_betas = os.environ.get("NPM_VERIFY_PUBLISHED_BETA", "").lower() == "true"
         npm_versions: Optional[Set[str]] = None
-        if verify_betas:
-            pkg = _read_package_name()
-            if pkg:
-                force_refresh = os.environ.get("NPM_REGISTRY_FORCE_REFRESH", "").lower() in ("1", "true", "yes")
-                npm_versions = _npm_registry_versions(pkg, force_refresh=force_refresh)
+        pkg = _read_package_name()
+        if pkg:
+            npm_versions = _npm_registry_versions(pkg, force_refresh=True)
         betas = _collect_betas_in_range(gh, prev_stable, target_stable, npm_versions)
         if not betas:
             print("[release-manager] No published betas found to convert in range; aborting.")
@@ -694,15 +865,12 @@ def cmd_pr_merged(args):
         return
     content = _read_changelog()
     latest_stable, _ = _latest_versions(content)
-    verify_betas = os.environ.get("NPM_VERIFY_PUBLISHED_BETA", "").lower() == "true"
     npm_versions: Optional[Set[str]] = None
-    if verify_betas:
-        pkg = _read_package_name()
-        if pkg:
-            force_refresh = os.environ.get("NPM_REGISTRY_FORCE_REFRESH", "").lower() in ("1", "true", "yes")
-            npm_versions = _npm_registry_versions(pkg, force_refresh=force_refresh)
-        else:
-            print("[release-manager] NPM_VERIFY_PUBLISHED_BETA is true but no package.json/package name found; skipping npm verification.", file=sys.stderr)
+    pkg = _read_package_name()
+    if pkg:
+        npm_versions = _npm_registry_versions(pkg, force_refresh=True)
+    else:
+        print("[release-manager] NPM_VERIFY_PUBLISHED_BETA is true but no package.json/package name found; skipping npm verification.", file=sys.stderr)
     published_beta_versions: List[Version] = []
     for r in gh.releases():
         tn = r.get("tag_name", "")
@@ -718,7 +886,8 @@ def cmd_pr_merged(args):
     existing_unpublished = _find_unpublished_beta_draft(gh)
     draft_stable = _find_latest_draft_stable(gh)
     category = _categorize(labels)
-    entry = f"- {args.pr_title} @{args.pr_author} [#{args.pr_number}]"
+    pr_author_display = args.pr_author if str(args.pr_author).startswith("@") else f"@{args.pr_author}"
+    entry = f"- {args.pr_title} [#{args.pr_number}](https://github.com/{args.repo}/pull/{args.pr_number}) ({pr_author_display})"
     if draft_stable:
         base_version, stable_rel = draft_stable
         target_version = Version(base_version.major, base_version.minor, base_version.patch, 0)
@@ -746,9 +915,7 @@ def cmd_pr_merged(args):
         if stable_rel.get("id"):
             gh.delete_release(stable_rel["id"])
             print(f"[release-manager] Deleted draft stable release {base_version.tag()}")
-        if (os.environ.get("DELETE_DRAFT_STABLE_TAG", "").lower() == "true"):
-            common.git_delete_tag(base_version.tag())
-
+        common.git_delete_tag(base_version.tag())
         print(f"[release-manager] Converted draft stable {base_version.tag()} -> beta draft {target_version.tag()}")
         return
     target_version, replace = _decide_beta_target(gh, latest_stable, latest_published_beta, existing_unpublished, labels)
@@ -758,8 +925,7 @@ def cmd_pr_merged(args):
         old_rel = gh.release_by_tag_any(old_tag)
         if old_rel and old_rel.get("id"):
             gh.update_release(old_rel["id"], tag_name=target_version.tag(), name=target_version.tag())
-        if (os.environ.get("DELETE_DRAFT_BETA_TAG", "").lower() == "true"):
-            common.git_delete_tag(old_tag)
+        common.git_delete_tag(old_tag)
         print(f"[release-manager] Escalated draft to {target_version.tag()}")
     if f"## [{target_version.tag()}]" not in content:
         compare_from = (
@@ -821,6 +987,10 @@ def main():
     fs.add_argument("--github-token", required=True)
     fs.add_argument("--repo", required=True)
     fs.add_argument("--version", required=True)
+    mc = sub.add_parser("commit-pushed")
+    mc.add_argument("--github-token", required=True)
+    mc.add_argument("--repo", required=True)
+    mc.add_argument("--commit", required=True)
     args = ap.parse_args()
     if args.action == "pr-merged":
         cmd_pr_merged(args)
@@ -828,6 +998,8 @@ def main():
         cmd_finalize_beta(args)
     elif args.action == "publish-stable":
         cmd_finalize_stable(args)
+    elif args.action == "commit-pushed":
+        cmd_commit_pushed(args)
     else:
         print("[release-manager] Unknown action")
 

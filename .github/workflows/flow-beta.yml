@@ -6,6 +6,8 @@ on:
     branches: [beta]
   release:
     types: [published]
+  push:
+    branches: [beta]
 
 permissions:
   contents: write
@@ -20,7 +22,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'beta'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v6
         with:
@@ -42,9 +44,6 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
           REPO: ${{ github.repository }}
-          DELETE_DRAFT_STABLE_TAG: 'true'
-          DELETE_DRAFT_BETA_TAG: 'true'
-          NPM_VERIFY_PUBLISHED_BETA: 'true'
         run: |
           set -euo pipefail
           python .github/scripts/release_manager.py pr-merged \
@@ -56,11 +55,90 @@ jobs:
             --pr-labels-file "${{ steps.labels.outputs.path }}" \
             --base-branch "${BASE_BRANCH}"
 
+  dependabot-auto-merge:
+    if: github.event_name == 'push' && github.actor == 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12' }
+
+      - name: Find merged PR for commit
+        id: pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          SHA=$(git rev-parse HEAD)
+          PR_JSON=$(gh pr list --state merged --search "$SHA" --json number,title,author,baseRefName,labels --jq 'map(select(.baseRefName=="beta"))[0]')
+          echo "pr_json=$PR_JSON" >> $GITHUB_OUTPUT
+          if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "null" ]; then exit 0; fi
+          echo "$PR_JSON" | jq .
+          echo "number=$(echo $PR_JSON | jq -r .number)" >> $GITHUB_OUTPUT
+          echo "title=$(echo $PR_JSON | jq -r .title)" >> $GITHUB_OUTPUT
+          echo "author=$(echo $PR_JSON | jq -r .author.login)" >> $GITHUB_OUTPUT
+          echo "labels=$(echo $PR_JSON | jq -c .labels[].name)" >> $GITHUB_OUTPUT
+
+      - name: Serialize PR labels to file
+        if: steps.pr.outputs.number != ''
+        id: labels
+        uses: ./.github/actions/serialize-pr-labels
+        with:
+          labels_json: ${{ steps.pr.outputs.labels }}
+
+      - name: Update changelog, beta draft, and align package versions (auto-merge)
+        if: steps.pr.outputs.number != '' && contains(steps.pr.outputs.labels, 'auto-merged')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TITLE: ${{ steps.pr.outputs.title }}
+          PR_AUTHOR: ${{ steps.pr.outputs.author }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          BASE_BRANCH: beta
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python .github/scripts/release_manager.py pr-merged \
+            --github-token "${GITHUB_TOKEN}" \
+            --repo "${REPO}" \
+            --pr-title "${PR_TITLE}" \
+            --pr-author "${PR_AUTHOR}" \
+            --pr-number "${PR_NUMBER}" \
+            --pr-labels-file "${{ steps.labels.outputs.path }}" \
+            --base-branch "${BASE_BRANCH}"
+
+  manual-commit:
+    if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12' }
+
+      - name: Process manual push commits
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          COMMIT: ${{ github.event.after }}
+        run: |
+          set -euo pipefail
+          python .github/scripts/release_manager.py commit-pushed \
+            --github-token "${GITHUB_TOKEN}" \
+            --repo "${REPO}" \
+            --commit "${COMMIT}"
+
   finalize-beta:
     if: github.event_name == 'release' && github.event.release.prerelease == true && contains(github.event.release.tag_name, 'beta') && github.event.release.target_commitish == 'beta'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.release.target_commitish }}

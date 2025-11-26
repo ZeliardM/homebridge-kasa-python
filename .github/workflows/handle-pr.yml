@@ -19,9 +19,10 @@ jobs:
     outputs:
       is_fork: ${{ steps.detect-fork.outputs.is_fork }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
       - name: Detect fork context
         id: detect-fork
         uses: ./.github/actions/detect-fork
@@ -36,7 +37,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout base branch (needed for local actions)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
@@ -56,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout base branch (needed for local actions)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
@@ -80,6 +81,67 @@ jobs:
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}
 
+  dependabot-labeling:
+    needs: [detect-fork, apply-labels]
+    if: needs.detect-fork.outputs.is_fork == 'false' && github.actor == 'dependabot[bot]'
+    name: Apply Dependabot Labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Compute and apply labels
+        shell: bash
+        env:
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+          UPDATE_TYPE="${{ steps.metadata.outputs.update-type }}"
+          case "$UPDATE_TYPE" in
+            version-update:semver-major)
+              labels=("dependency-major")
+              ;;
+            version-update:semver-minor)
+              labels=("dependency-minor")
+              ;;
+            version-update:semver-patch)
+              labels=("dependency-patch")
+              ;;
+            ""|null)
+              labels=("dependency-lockfile")
+              ;;
+          esac
+          case "$UPDATE_TYPE" in
+            version-update:semver-minor|version-update:semver-patch|""|null)
+              labels+=("auto-merge")
+              ;;
+          esac
+          labels_json="["
+          first=true
+          for l in "${labels[@]}"; do
+            if [ "$first" = true ]; then
+              labels_json+='"'$l'"'
+              first=false
+            else
+              labels_json+=',"'$l'"'
+            fi
+          done
+          labels_json+="]"
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/$REPO/issues/$PR_NUMBER/labels \
+            -f labels="$labels_json"
+
   validate:
     needs: [detect-fork, apply-labels]
     if: needs.detect-fork.outputs.is_fork == 'false' && (github.actor != 'github-actions[bot]' || contains(github.event.pull_request.labels.*.name, 'stable-conversion'))
@@ -87,7 +149,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout base branch (scripts + actions)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0

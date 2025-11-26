@@ -67,7 +67,7 @@ jobs:
 
     steps:
       - name: Checkout source at tag (or ref)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.release.tag_name || github.ref_name }}
