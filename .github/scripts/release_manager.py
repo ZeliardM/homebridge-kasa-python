@@ -716,13 +716,27 @@ def _ensure_repo_node_version(version: Version, context: str):
 
 def _upsert_release(gh: GitHub, tag: str, body: str, *, draft: bool, prerelease: bool, target_commitish: Optional[str] = None):
     rel = gh.release_by_tag_any(tag)
+    if not rel:
+        for r in gh.releases():
+            tn = (r.get("tag_name") or "")
+            if not tn:
+                continue
+            if tn == tag or tn.lstrip("v") == tag.lstrip("v"):
+                rel = r
+                break
     if rel and rel.get("id"):
+        rel_id = rel["id"]
+        print(f"[release-manager] Found existing release id={rel_id} for tag {tag}; updating.")
         fields = {"body": body, "name": tag}
         fields["draft"] = bool(draft)
         fields["prerelease"] = bool(prerelease)
-        gh.update_release(rel["id"], **fields)
-    else:
-        gh.create_release(tag, tag, body, draft=draft, prerelease=prerelease, target=(target_commitish or "beta"))
+        try:
+            gh.update_release(rel_id, **fields)
+            return
+        except Exception as e:
+            print(f"[release-manager] Warning: update_release failed for id={rel_id}: {e}", file=sys.stderr)
+    print(f"[release-manager] Creating release {tag} (draft={draft}, prerelease={prerelease}).")
+    gh.create_release(tag, tag, body, draft=draft, prerelease=prerelease, target=(target_commitish or "beta"))
 
 def _load_labels_arg(args) -> List[str]:
     labels = []
