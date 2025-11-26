@@ -28,8 +28,6 @@ jobs:
     with:
       set_version_from_release_tag: true
       build_cmd: npm run build
-    secrets:
-      npm_auth_token: ${{ secrets.NPM_TOKEN }}
 
   release_to_discord:
     name: Discord Webhooks
