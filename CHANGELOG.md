@@ -13,6 +13,7 @@
 
 ### Bug Fixes
 
+- [bug] Fix release matching for drafts [25e8f85](https://github.com/ZeliardM/homebridge-kasa-python/commit/25e8f8565de358528fa69b9bfa912653dc5e5250) (@ZeliardM)
 - [bug] Add name search for draft releases [d187434](https://github.com/ZeliardM/homebridge-kasa-python/commit/d1874347b11fda5c6dec94624000e1cf418d5186) (@ZeliardM)
 - [bug] Remove duplicate release drafts [03e8ded](https://github.com/ZeliardM/homebridge-kasa-python/commit/03e8ded05df6bc7dde79ba812d40c31cbeae0b35) (@ZeliardM)
 - [bug] Remove duplicated release drafts [ac0c006](https://github.com/ZeliardM/homebridge-kasa-python/commit/ac0c00666c97db948b1ffdc0451e3043987167a0) (@ZeliardM)
