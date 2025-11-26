@@ -577,6 +577,25 @@ def _read_package_name() -> Optional[str]:
     except Exception:
         return None
 
+def _read_package_version() -> Optional[Version]:
+    try:
+        if not os.path.exists("package.json"):
+            return None
+        with open("package.json", "r", encoding="utf-8") as f:
+            d = json.load(f)
+        ver = d.get("version")
+        if not isinstance(ver, str) or not ver.strip():
+            return None
+        s = ver.strip()
+        if not s.startswith("v"):
+            s = "v" + s
+        try:
+            return Version.parse(s)
+        except Exception:
+            return None
+    except Exception:
+        return None
+
 def _npm_registry_versions(pkg_name: str, timeout: int = 30, *, force_refresh: bool = False) -> Optional[Set[str]]:
     global _NPM_VERSIONS_CACHE
     if not force_refresh and _NPM_VERSIONS_CACHE is not None:
@@ -787,6 +806,14 @@ def cmd_commit_pushed(args):
     latest_published_beta = max(published_beta_versions, key=_version_sort_key) if published_beta_versions else None
     existing_unpublished = _find_unpublished_beta_draft(gh)
     target_version, replace = _decide_beta_target(gh, latest_stable, latest_published_beta, existing_unpublished, derived_labels)
+    pkg_ver = _read_package_version()
+    if pkg_ver:
+        try:
+            if _version_sort_key(pkg_ver) > _version_sort_key(target_version):
+                print(f"[release-manager] package.json version {pkg_ver.tag()} is newer than computed target {target_version.tag()}; using package.json version")
+                target_version = pkg_ver
+        except Exception:
+            pass
     if replace and existing_unpublished and existing_unpublished.tag() != target_version.tag():
         if f"## [{existing_unpublished.tag()}]" in content:
             content = _rename_version_section(content, existing_unpublished.tag(), target_version.tag())
@@ -918,6 +945,14 @@ def cmd_pr_merged(args):
         print(f"[release-manager] Converted draft stable {base_version.tag()} -> beta draft {target_version.tag()}")
         return
     target_version, replace = _decide_beta_target(gh, latest_stable, latest_published_beta, existing_unpublished, labels)
+    pkg_ver = _read_package_version()
+    if pkg_ver:
+        try:
+            if _version_sort_key(pkg_ver) > _version_sort_key(target_version):
+                print(f"[release-manager] package.json version {pkg_ver.tag()} is newer than computed target {target_version.tag()}; using package.json version")
+                target_version = pkg_ver
+        except Exception:
+            pass
     if replace and existing_unpublished and existing_unpublished.tag() != target_version.tag():
         content = _rename_version_section(content, existing_unpublished.tag(), target_version.tag())
         old_tag = existing_unpublished.tag()
