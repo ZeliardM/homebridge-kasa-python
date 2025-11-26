@@ -8,6 +8,7 @@
 ### Other Changes
 
 - [other] Skip Merge branch commits when processing manual commits [9357f77](https://github.com/ZeliardM/homebridge-kasa-python/commit/9357f77b872a75248e472f8554304cbc3d1f7c2f) (@ZeliardM)
+- [other] Update npm publishing [83d6a2a](https://github.com/ZeliardM/homebridge-kasa-python/commit/83d6a2a3c651be86d15da40e63d3cbe056b1712d) (@ZeliardM)
 - [other] Prefer package.json version number if newer than computed [d4a4c8d](https://github.com/ZeliardM/homebridge-kasa-python/commit/d4a4c8def6e84a4e12e81187f326da9c2f79c9a3) (@ZeliardM)
 - [other] Fix manual commit entry format [9d48f9f](https://github.com/ZeliardM/homebridge-kasa-python/commit/9d48f9f6c650c310fa31f186a6781736da4e7f54) (@ZeliardM)
 - [other] Workflow rewrites for handling dependabot and manual commits [18af1fa](https://github.com/ZeliardM/homebridge-kasa-python/commit/18af1fab19ec75e8699844da0454806d185dc263) (@ZeliardM)
