@@ -736,7 +736,49 @@ def _upsert_release(gh: GitHub, tag: str, body: str, *, draft: bool, prerelease:
         except Exception as e:
             print(f"[release-manager] Warning: update_release failed for id={rel_id}: {e}", file=sys.stderr)
     print(f"[release-manager] Creating release {tag} (draft={draft}, prerelease={prerelease}).")
-    gh.create_release(tag, tag, body, draft=draft, prerelease=prerelease, target=(target_commitish or "beta"))
+    created_rel = None
+    try:
+        created_rel = gh.create_release(tag, tag, body, draft=draft, prerelease=prerelease, target=(target_commitish or "beta"))
+    except Exception as e:
+        print(f"[release-manager] ERROR: create_release failed for {tag}: {e}", file=sys.stderr)
+        return
+    try:
+        all_rels = gh.releases()
+        matches = []
+        for r in all_rels:
+            tn = (r.get("tag_name") or "")
+            if not tn:
+                continue
+            if tn == tag or tn.lstrip("v") == tag.lstrip("v"):
+                matches.append(r)
+        if len(matches) > 1:
+            preferred_id = None
+            created_id = None
+            try:
+                if created_rel is not None:
+                    created_id = created_rel.get("id")
+            except Exception:
+                try:
+                    created_id = getattr(created_rel, "id", None)
+                except Exception:
+                    created_id = None
+            if created_id:
+                preferred_id = created_id
+            else:
+                if any(r.get("created_at") for r in matches):
+                    preferred = max(matches, key=lambda x: x.get("created_at") or "")
+                else:
+                    preferred = max(matches, key=lambda x: x.get("id") or 0)
+                preferred_id = preferred.get("id")
+            for r in matches:
+                try:
+                    if r.get("id") != preferred_id:
+                        print(f"[release-manager] Deleting duplicate release id={r.get('id')} tag={r.get('tag_name')}")
+                        gh.delete_release(r.get("id"))
+                except Exception as e:
+                    print(f"[release-manager] Warning: failed to delete duplicate release id={r.get('id')}: {e}", file=sys.stderr)
+    except Exception as e:
+        print(f"[release-manager] Warning: could not reconcile duplicate releases: {e}", file=sys.stderr)
 
 def _load_labels_arg(args) -> List[str]:
     labels = []
