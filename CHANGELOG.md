@@ -1,12 +1,4 @@
 # Changelog
-## [v2.9.2-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.2-beta.0)
-
-### Other Changes
-
-- [other] [other] Workflow rewrites for handling dependabot and manual commits [18af1fa](https://github.com/ZeliardM/homebridge-kasa-python/commit/18af1fab19ec75e8699844da0454806d185dc263) (@ZeliardM)
-
-**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.1...v2.9.2-beta.0
-
 ## [v3.0.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.0)
 
 ### Breaking Changes
@@ -15,6 +7,7 @@
 
 ### Other Changes
 
+- [other] Workflow rewrites for handling dependabot and manual commits [18af1fa](https://github.com/ZeliardM/homebridge-kasa-python/commit/18af1fab19ec75e8699844da0454806d185dc263) (@ZeliardM)
 - npm(deps-dev): bump homebridge from 2.0.0-beta.55 to 2.0.0-beta.56 [#167](https://github.com/ZeliardM/homebridge-kasa-python/pull/167) (@dependabot[bot])
 - npm(deps): bump eventsource from 4.0.0 to 4.1.0 [#166](https://github.com/ZeliardM/homebridge-kasa-python/pull/166) (@dependabot[bot])
 - npm(deps-dev): bump homebridge from 2.0.0-beta.50 to 2.0.0-beta.53 [#161](https://github.com/ZeliardM/homebridge-kasa-python/pull/161) (@dependabot[bot])

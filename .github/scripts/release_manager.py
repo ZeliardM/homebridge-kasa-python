@@ -252,13 +252,12 @@ def _labels_from_commit_message(msg: str) -> List[str]:
             out.append("fix")
     return out
 
-def _build_commit_entry(display: str, commit_sha: str, repo: str, author: str, category: Optional[str] = None) -> str:
+def _build_commit_entry(display: str, commit_sha: str, repo: str, author: str) -> str:
     sha7 = commit_sha[:7]
     author_display = author or "unknown"
     if author_display and not author_display.startswith("@") and " " not in author_display:
         author_display = f"@{author_display}"
-    tag = _tag_from_category(category) if category else "[other]"
-    return f"- {tag} {display} [{sha7}](https://github.com/{repo}/commit/{commit_sha}) ({author_display})"
+    return f"- {display} [{sha7}](https://github.com/{repo}/commit/{commit_sha}) ({author_display})"
 
 def _bump_type(labels: List[str]) -> str:
     low = {l.lower() for l in labels}
@@ -823,7 +822,7 @@ def cmd_commit_pushed(args):
             author_display = author_proc.stdout.strip() if author_proc and getattr(author_proc, "stdout", None) else None
         except Exception:
             author_display = None
-    entry = _build_commit_entry(display, commit_sha, args.repo, author_display or "unknown", category)
+    entry = _build_commit_entry(display, commit_sha, args.repo, author_display or "unknown")
     content = _insert_entry(content, target_version, category, entry, compare_from, add_date=False)
     _write_changelog(content)
     sha7 = commit_sha[:7]
