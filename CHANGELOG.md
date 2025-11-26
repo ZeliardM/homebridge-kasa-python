@@ -1,4 +1,12 @@
 # Changelog
+## [v2.9.2-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v2.9.2-beta.0)
+
+### Other Changes
+
+- [other] Fix manual commit entry format [9d48f9f](https://github.com/ZeliardM/homebridge-kasa-python/commit/9d48f9f6c650c310fa31f186a6781736da4e7f54) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v2.9.1...v2.9.2-beta.0
+
 ## [v3.0.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.0)
 
 ### Breaking Changes
