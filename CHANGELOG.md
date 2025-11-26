@@ -7,6 +7,7 @@
 
 ### Other Changes
 
+- [other] Prefer package.json version number if newer than computed [d4a4c8d](https://github.com/ZeliardM/homebridge-kasa-python/commit/d4a4c8def6e84a4e12e81187f326da9c2f79c9a3) (@ZeliardM)
 - [other] Fix manual commit entry format [9d48f9f](https://github.com/ZeliardM/homebridge-kasa-python/commit/9d48f9f6c650c310fa31f186a6781736da4e7f54) (@ZeliardM)
 - [other] Workflow rewrites for handling dependabot and manual commits [18af1fa](https://github.com/ZeliardM/homebridge-kasa-python/commit/18af1fab19ec75e8699844da0454806d185dc263) (@ZeliardM)
 - npm(deps-dev): bump homebridge from 2.0.0-beta.55 to 2.0.0-beta.56 [#167](https://github.com/ZeliardM/homebridge-kasa-python/pull/167) (@dependabot[bot])
