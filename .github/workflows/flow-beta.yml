@@ -126,13 +126,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          COMMIT: ${{ github.event.after }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
         run: |
           set -euo pipefail
+          echo "Processing commits: $BEFORE..$AFTER via release_manager.py"
           python .github/scripts/release_manager.py commit-pushed \
             --github-token "${GITHUB_TOKEN}" \
             --repo "${REPO}" \
-            --commit "${COMMIT}"
+            --before "${BEFORE}" \
+            --after "${AFTER}"
 
   finalize-beta:
     if: github.event_name == 'release' && github.event.release.prerelease == true && contains(github.event.release.tag_name, 'beta') && github.event.release.target_commitish == 'beta'

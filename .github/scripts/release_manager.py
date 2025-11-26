@@ -769,98 +769,108 @@ def _finalize_common(gh: GitHub, v: Version, *, is_beta: bool):
 
 def cmd_commit_pushed(args):
     gh = GitHub(args.github_token, args.repo)
-    commit_sha = (getattr(args, "commit", "") or "").strip()
-    if not commit_sha or re.fullmatch(r"0+", commit_sha):
+    before = (getattr(args, "before", "") or "").strip()
+    after = (getattr(args, "after", "") or "").strip()
+    if not after or re.fullmatch(r"0+", after):
         print("[release-manager] No actionable commit SHA provided; exiting.")
         return
-    pulls = _commit_pulls_for_sha(args.repo, args.github_token, commit_sha)
-    if pulls:
-        pr_nums = ", ".join(str(p.get("number")) for p in pulls)
-        print(f"[release-manager] Commit {commit_sha[:7]} is part of PR(s) {pr_nums}; skipping manual changelog entry.")
-        return
-    subj_proc = common.run(["git", "show", "-s", "--format=%s", commit_sha], capture=True, check=False)
-    subject = subj_proc.stdout.strip() if subj_proc and getattr(subj_proc, "stdout", None) else commit_sha
-    display = subject or commit_sha
-    if isinstance(subject, str) and re.match(r"^\s*Merge branch\b", subject, re.IGNORECASE):
-        print(f"[release-manager] Skipping merge-branch commit {commit_sha[:7]}: '{subject}'")
-        return
-    category = _categorize_commit_message(subject)
-    derived_labels = _labels_from_commit_message(subject)
-    content = _read_changelog()
-    latest_stable, _ = _latest_versions(content)
-    npm_versions: Optional[Set[str]] = None
-    pkg = _read_package_name()
-    if pkg:
-        npm_versions = _npm_registry_versions(pkg, force_refresh=True)
+    common.run(["git", "fetch", "--no-tags", "origin", "HEAD"], check=False)
+    proc = common.run(["git", "rev-list", "--reverse", f"{before}..{after}"], capture=True, check=False)
+    shas = proc.stdout.strip().split() if proc and getattr(proc, "stdout", None) else []
+    if not shas:
+        print(f"[release-manager] No commits found in range {before}..{after}; falling back to single commit {after}")
+        shas = [after]
     else:
-        print("[release-manager] NPM verification enabled but no package name found; skipping npm check.", file=sys.stderr)
-    published_beta_versions: List[Version] = []
-    for rel in gh.releases():
-        tag_name = rel.get("tag_name", "")
-        if "beta" not in tag_name or rel.get("draft") or not rel.get("prerelease"):
-            continue
+        print(f"[release-manager] Processing {len(shas)} commit(s) from range {before}..{after}")
+    for sha in shas:
+        sha7 = sha[:7]
+        pulls = _commit_pulls_for_sha(args.repo, args.github_token, sha)
+        if pulls:
+            pr_nums = ", ".join(str(p.get("number")) for p in pulls)
+            print(f"[release-manager] Commit {sha7} is part of PR(s) {pr_nums}; skipping manual changelog entry.")
+            return
+        subj_proc = common.run(["git", "show", "-s", "--format=%s", sha], capture=True, check=False)
+        subject = subj_proc.stdout.strip() if subj_proc and getattr(subj_proc, "stdout", None) else sha
+        display = subject or sha
+        if isinstance(subject, str) and re.match(r"^\s*Merge branch\b", subject, re.IGNORECASE):
+            print(f"[release-manager] Skipping merge-branch commit {sha7}: '{subject}'")
+            return
+        category = _categorize_commit_message(subject)
+        derived_labels = _labels_from_commit_message(subject)
+        content = _read_changelog()
+        latest_stable, _ = _latest_versions(content)
+        npm_versions: Optional[Set[str]] = None
+        pkg = _read_package_name()
+        if pkg:
+            npm_versions = _npm_registry_versions(pkg, force_refresh=True)
+        else:
+            print("[release-manager] NPM verification enabled but no package name found; skipping npm check.", file=sys.stderr)
+        published_beta_versions: List[Version] = []
+        for rel in gh.releases():
+            tag_name = rel.get("tag_name", "")
+            if "beta" not in tag_name or rel.get("draft") or not rel.get("prerelease"):
+                continue
+            try:
+                version = Version.parse(tag_name)
+            except Exception:
+                continue
+            if npm_versions is not None and version.tag().lstrip("v") not in npm_versions:
+                continue
+            published_beta_versions.append(version)
+        latest_published_beta = max(published_beta_versions, key=_version_sort_key) if published_beta_versions else None
+        existing_unpublished = _find_unpublished_beta_draft(gh)
+        target_version, replace = _decide_beta_target(gh, latest_stable, latest_published_beta, existing_unpublished, derived_labels)
+        pkg_ver = _read_package_version()
+        if pkg_ver:
+            try:
+                if _version_sort_key(pkg_ver) > _version_sort_key(target_version):
+                    print(f"[release-manager] package.json version {pkg_ver.tag()} is newer than computed target {target_version.tag()}; using package.json version")
+                    target_version = pkg_ver
+            except Exception:
+                pass
+        if replace and existing_unpublished and existing_unpublished.tag() != target_version.tag():
+            if f"## [{existing_unpublished.tag()}]" in content:
+                content = _rename_version_section(content, existing_unpublished.tag(), target_version.tag())
+            old_tag = existing_unpublished.tag()
+            old_rel = gh.release_by_tag_any(old_tag)
+            if old_rel and old_rel.get("id"):
+                gh.update_release(old_rel["id"], tag_name=target_version.tag(), name=target_version.tag())
+            common.git_delete_tag(old_tag)
+            print(f"[release-manager] Escalated draft {old_tag} -> {target_version.tag()} to capture manual commit.")
+        compare_from: Optional[str]
+        if target_version.beta == 0:
+            compare_from = latest_stable.tag() if latest_stable else "v0.0.0"
+        elif target_version.beta and target_version.beta > 0:
+            compare_from = f"v{target_version.major}.{target_version.minor}.{target_version.patch}-beta.{target_version.beta - 1}"
+        else:
+            compare_from = None
+        author_display: Optional[str] = None
         try:
-            version = Version.parse(tag_name)
-        except Exception:
-            continue
-        if npm_versions is not None and version.tag().lstrip("v") not in npm_versions:
-            continue
-        published_beta_versions.append(version)
-    latest_published_beta = max(published_beta_versions, key=_version_sort_key) if published_beta_versions else None
-    existing_unpublished = _find_unpublished_beta_draft(gh)
-    target_version, replace = _decide_beta_target(gh, latest_stable, latest_published_beta, existing_unpublished, derived_labels)
-    pkg_ver = _read_package_version()
-    if pkg_ver:
-        try:
-            if _version_sort_key(pkg_ver) > _version_sort_key(target_version):
-                print(f"[release-manager] package.json version {pkg_ver.tag()} is newer than computed target {target_version.tag()}; using package.json version")
-                target_version = pkg_ver
-        except Exception:
-            pass
-    if replace and existing_unpublished and existing_unpublished.tag() != target_version.tag():
-        if f"## [{existing_unpublished.tag()}]" in content:
-            content = _rename_version_section(content, existing_unpublished.tag(), target_version.tag())
-        old_tag = existing_unpublished.tag()
-        old_rel = gh.release_by_tag_any(old_tag)
-        if old_rel and old_rel.get("id"):
-            gh.update_release(old_rel["id"], tag_name=target_version.tag(), name=target_version.tag())
-        common.git_delete_tag(old_tag)
-        print(f"[release-manager] Escalated draft {old_tag} -> {target_version.tag()} to capture manual commit.")
-    compare_from: Optional[str]
-    if target_version.beta == 0:
-        compare_from = latest_stable.tag() if latest_stable else "v0.0.0"
-    elif target_version.beta and target_version.beta > 0:
-        compare_from = f"v{target_version.major}.{target_version.minor}.{target_version.patch}-beta.{target_version.beta - 1}"
-    else:
-        compare_from = None
-    author_display: Optional[str] = None
-    try:
-        commit_info = gh._request("GET", f"/commits/{commit_sha}")
-        if isinstance(commit_info, dict):
-            author_obj = commit_info.get("author") or {}
-            if isinstance(author_obj, dict) and author_obj.get("login"):
-                author_display = f"@{author_obj['login']}"
-            else:
-                nested = commit_info.get("commit", {}).get("author", {})
-                if isinstance(nested, dict) and nested.get("name"):
-                    author_display = nested.get("name")
-    except Exception:
-        author_display = None
-    if not author_display:
-        try:
-            author_proc = common.run(["git", "show", "-s", "--format=%aN", commit_sha], capture=True, check=False)
-            author_display = author_proc.stdout.strip() if author_proc and getattr(author_proc, "stdout", None) else None
+            commit_info = gh._request("GET", f"/commits/{sha}")
+            if isinstance(commit_info, dict):
+                author_obj = commit_info.get("author") or {}
+                if isinstance(author_obj, dict) and author_obj.get("login"):
+                    author_display = f"@{author_obj['login']}"
+                else:
+                    nested = commit_info.get("commit", {}).get("author", {})
+                    if isinstance(nested, dict) and nested.get("name"):
+                        author_display = nested.get("name")
         except Exception:
             author_display = None
-    entry = _build_commit_entry(display, commit_sha, args.repo, author_display or "unknown")
-    content = _insert_entry(content, target_version, category, entry, compare_from, add_date=False)
-    _write_changelog(content)
-    sha7 = commit_sha[:7]
-    _git_commit_files(["CHANGELOG.md"], f"Update CHANGELOG.md for manual commit {sha7}")
-    _ensure_repo_node_version(target_version, context=f"manual commit {sha7}")
-    body = _build_beta_body(target_version, content, latest_stable)
-    _upsert_release(gh, target_version.tag(), body, draft=True, prerelease=True, target_commitish="beta")
-    print(f"[release-manager] Added manual commit {sha7} to beta draft {target_version.tag()} ({category}).")
+        if not author_display:
+            try:
+                author_proc = common.run(["git", "show", "-s", "--format=%aN", sha], capture=True, check=False)
+                author_display = author_proc.stdout.strip() if author_proc and getattr(author_proc, "stdout", None) else None
+            except Exception:
+                author_display = None
+        entry = _build_commit_entry(display, sha, args.repo, author_display or "unknown")
+        content = _insert_entry(content, target_version, category, entry, compare_from, add_date=False)
+        _write_changelog(content)
+        _git_commit_files(["CHANGELOG.md"], f"Update CHANGELOG.md for manual commit {sha7}")
+        _ensure_repo_node_version(target_version, context=f"manual commit {sha7}")
+        body = _build_beta_body(target_version, content, latest_stable)
+        _upsert_release(gh, target_version.tag(), body, draft=True, prerelease=True, target_commitish="beta")
+        print(f"[release-manager] Added manual commit {sha7} to beta draft {target_version.tag()} ({category}).")
 
 def cmd_pr_merged(args):
     gh = GitHub(args.github_token, args.repo)
@@ -1027,7 +1037,8 @@ def main():
     mc = sub.add_parser("commit-pushed")
     mc.add_argument("--github-token", required=True)
     mc.add_argument("--repo", required=True)
-    mc.add_argument("--commit", required=True)
+    mc.add_argument("--before", dest="before", required=False)
+    mc.add_argument("--after", dest="after", required=True)
     args = ap.parse_args()
     if args.action == "pr-merged":
         cmd_pr_merged(args)
