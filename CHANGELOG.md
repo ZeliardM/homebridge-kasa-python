@@ -13,6 +13,7 @@
 
 ### Bug Fixes
 
+- [bug] Fix release secret, revert CHANGELOG.md, and update finalization [0360439](https://github.com/ZeliardM/homebridge-kasa-python/commit/03604399a6ef0c38fb744e408f3af6414cc8bb24) (@ZeliardM)
 - [bug] Fix multiple commit handling [3a9bdba](https://github.com/ZeliardM/homebridge-kasa-python/commit/3a9bdba7728ef87ecf1ec46e213dcf0988ead5e1) (@ZeliardM)
 - [bug] Skip Merge branch commits when processing manual commits [9357f77](https://github.com/ZeliardM/homebridge-kasa-python/commit/9357f77b872a75248e472f8554304cbc3d1f7c2f) (@ZeliardM)
 - [bug] Prefer package.json version number if newer than computed [d4a4c8d](https://github.com/ZeliardM/homebridge-kasa-python/commit/d4a4c8def6e84a4e12e81187f326da9c2f79c9a3) (@ZeliardM)
