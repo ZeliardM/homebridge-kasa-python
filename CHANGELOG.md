@@ -14,6 +14,7 @@
 
 ### Bug Fixes
 
+- [bug] Fix publishing error [cb793a9](https://github.com/ZeliardM/homebridge-kasa-python/commit/cb793a9bf946128876ef83d008bc2bbefab9bbd7) (@ZeliardM)
 - [bug] Fix release handling [a9fd074](https://github.com/ZeliardM/homebridge-kasa-python/commit/a9fd0744ba0c67c3eb17b502207746ffe077ddd8) (@ZeliardM)
 - [bug] Update publish commands [d565307](https://github.com/ZeliardM/homebridge-kasa-python/commit/d565307a870d8004c42c7bfe9f0b7e8c0640207c) (@ZeliardM)
 - [bug] Fix publish workflows [bf1d409](https://github.com/ZeliardM/homebridge-kasa-python/commit/bf1d4096ba746f66c1470c6cae6f00fa90b43584) (@ZeliardM)
