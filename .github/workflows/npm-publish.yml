@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
 
     outputs:
       NPM_VERSION: ${{ steps.publish.outputs.NPM_VERSION }}

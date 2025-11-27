@@ -23,6 +23,7 @@ jobs:
       github.repository == 'ZeliardM/homebridge-kasa-python'
     permissions:
       contents: write
+      id-token: write
     uses: ./.github/workflows/npm-publish.yml
     secrets:
       npm_auth_token: ${{ secrets.NPM_TOKEN }}
