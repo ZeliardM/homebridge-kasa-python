@@ -192,7 +192,17 @@ def main():
             raise RuntimeError(f"package.json version ({current_ver}) does not match expected version from tag ({expected_version})")
         common.run("npm ci")
         common.run("npm run build")
-        pub_cmd = "npm publish" + (f" --tag {dist_tag}" if dist_tag else "")
+        pub_cmd = "npm publish --access public --provenance" + (f" --tag {dist_tag}" if dist_tag else "")
+        npm_token = os.environ.get("NPM_AUTH_TOKEN")
+        if npm_token:
+            try:
+                npmrc_path = os.path.expanduser("~/.npmrc")
+                with open(npmrc_path, "w", encoding="utf-8") as nf:
+                    nf.write(f"//registry.npmjs.org/:_authToken={npm_token}\n")
+                os.environ["NODE_AUTH_TOKEN"] = npm_token
+                print("[publish] Wrote ~/.npmrc from NODE_AUTH_TOKEN/NPM_TOKEN")
+            except Exception as e:
+                print(f"::warning::Failed to write ~/.npmrc: {e}")
         common.run(pub_cmd)
         version_out = common.npm_read_version()
         gh_out = os.environ.get("GITHUB_OUTPUT")
