@@ -8,6 +8,7 @@
 
 ### Featured Changes
 
+- [feature] Combine publish workflows [bdb2bfe](https://github.com/ZeliardM/homebridge-kasa-python/commit/bdb2bfea5983b73d0734e2c99bcb1b6725ec458a) (@ZeliardM)
 - [feature] Update manual commit push to handle multiple commits [f421e6a](https://github.com/ZeliardM/homebridge-kasa-python/commit/f421e6a20673255357b6c547386b5bd32f2a8865) (@ZeliardM)
 - [feature] Update npm publishing [83d6a2a](https://github.com/ZeliardM/homebridge-kasa-python/commit/83d6a2a3c651be86d15da40e63d3cbe056b1712d) (@ZeliardM)
 
