@@ -192,7 +192,7 @@ def main():
             raise RuntimeError(f"package.json version ({current_ver}) does not match expected version from tag ({expected_version})")
         common.run("npm ci")
         common.run("npm run build")
-        pub_cmd = ["npm", "publish", "--access", "public", "--provenance"] + (["--tag", dist_tag] if dist_tag else [])
+        pub_cmd = "npm publish" + (f" --tag {dist_tag}" if dist_tag else "")
         common.run(pub_cmd)
         version_out = common.npm_read_version()
         gh_out = os.environ.get("GITHUB_OUTPUT")
