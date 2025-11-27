@@ -14,6 +14,7 @@
 
 ### Bug Fixes
 
+- [bug] Fix publish workflows [bf1d409](https://github.com/ZeliardM/homebridge-kasa-python/commit/bf1d4096ba746f66c1470c6cae6f00fa90b43584) (@ZeliardM)
 - [bug] Fix draft editing tag handling [59cdeea](https://github.com/ZeliardM/homebridge-kasa-python/commit/59cdeeadedb3f0fac8422d62026a5e4cf8443934) (@ZeliardM)
 - [bug] Fix release matching for drafts [25e8f85](https://github.com/ZeliardM/homebridge-kasa-python/commit/25e8f8565de358528fa69b9bfa912653dc5e5250) (@ZeliardM)
 - [bug] Add name search for draft releases [d187434](https://github.com/ZeliardM/homebridge-kasa-python/commit/d1874347b11fda5c6dec94624000e1cf418d5186) (@ZeliardM)
