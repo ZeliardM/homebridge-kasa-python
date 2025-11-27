@@ -108,6 +108,33 @@ def gh_release_set_draft(repo: str, token: str, release_id: int, prerelease: boo
     code, _ = github_api(repo, token, f"/releases/{release_id}", method="PATCH", data={"draft": True, "prerelease": bool(prerelease)})
     return 200 <= code < 300
 
+def gh_release_create(
+    repo: str,
+    token: str,
+    tag: str,
+    target_commitish: Optional[str] = None,
+    draft: bool = True,
+    prerelease: bool = False,
+    name: Optional[str] = None,
+    body: Optional[str] = None,
+) -> Optional[dict]:
+    """Create a GitHub release (usually as a draft).
+
+    Returns the created release object as a dict, or None on failure.
+    """
+    payload = {"tag_name": tag, "draft": bool(draft), "prerelease": bool(prerelease)}
+    if target_commitish:
+        payload["target_commitish"] = target_commitish
+    if name:
+        payload["name"] = name
+    if body:
+        payload["body"] = body
+    code, data = github_api(repo, token, "/releases", method="POST", data=payload)
+    if 200 <= code < 300 and isinstance(data, dict):
+        return data
+    print(f"::warning::Failed to create release {tag}: {code} {data}")
+    return None
+
 def git_force_tag(tag: str):
     try:
         run(["git", "fetch", "--tags"], check=False)

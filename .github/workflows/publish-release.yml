@@ -28,9 +28,7 @@ jobs:
       id-token: write
     uses: ./.github/workflows/npm-publish.yml
     with:
-      set_version_from_release_tag: true
       tag: beta
-      build_cmd: npm run build
 
   beta_release_to_discord:
     name: Discord Webhooks (Beta)
@@ -65,9 +63,7 @@ jobs:
       contents: write
       id-token: write
     uses: ./.github/workflows/npm-publish.yml
-    with:
-      set_version_from_release_tag: true
-      build_cmd: npm run build
+    # No inputs required; `release_publish.py` uses sane defaults
 
   release_to_discord:
     name: Discord Webhooks (Stable)

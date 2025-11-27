@@ -171,7 +171,7 @@ def do_validate(token: str, repo: str, num: str) -> dict:
 
 def main():
     mode = (os.getenv("MODE") or "").strip().lower()
-    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or ""
+    token = os.getenv("GITHUB_TOKEN") or ""
     repo = os.getenv("GITHUB_REPOSITORY", "")
     num = os.getenv("ISSUE_NUMBER", "")
     if not token or not repo or not num:

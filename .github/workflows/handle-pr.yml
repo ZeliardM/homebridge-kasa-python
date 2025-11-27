@@ -45,7 +45,6 @@ jobs:
       - name: Retarget PR base if needed
         uses: ./.github/actions/retarget-base
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           number: ${{ github.event.pull_request.number }}
@@ -65,7 +64,6 @@ jobs:
       - name: Clear all labels from PR
         uses: ./.github/actions/clear-labels
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           number: ${{ github.event.pull_request.number }}
@@ -161,7 +159,6 @@ jobs:
         id: validate
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
@@ -179,7 +176,6 @@ jobs:
         if: steps.validate.outputs.ok != 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
@@ -201,7 +197,6 @@ jobs:
         if: steps.validate.outputs.ok != 'true'
         uses: ./.github/actions/sticky-comment
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           number: ${{ github.event.pull_request.number }}
@@ -213,7 +208,6 @@ jobs:
         if: steps.validate.outputs.ok == 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
@@ -246,7 +240,6 @@ jobs:
         if: steps.validate.outputs.ok == 'true'
         uses: ./.github/actions/sticky-comment
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           number: ${{ github.event.pull_request.number }}

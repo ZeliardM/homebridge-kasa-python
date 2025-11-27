@@ -32,7 +32,7 @@ def _give(payload, code=0):
     sys.exit(code)
 
 def main():
-    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or ""
+    token = os.getenv("GITHUB_TOKEN") or ""
     repo_full = os.getenv("GITHUB_REPOSITORY", "")
     pr_number = os.getenv("PR_NUMBER", "")
     if not token or not repo_full or not pr_number:
@@ -54,7 +54,7 @@ def main():
     base = (pr.get("base") or {}).get("ref", "")
     head_ref = (pr.get("head") or {}).get("ref", "")
     author_login = ((pr.get("user") or {}).get("login") or "")
-    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or ""
+    token = os.getenv("GITHUB_TOKEN") or ""
     repo_full = os.getenv("GITHUB_REPOSITORY", "")
     pr_number = pr.get("number")
     body = pr.get("body") or ""
