@@ -5,6 +5,10 @@
 
 - [feature] Major Workflow Re-Writes [bd664c8](https://github.com/ZeliardM/homebridge-kasa-python/commit/bd664c817167c7fe4b4b68d1dd4789e95e707673) (@ZeliardM)
 
+### Bug Fixes
+
+- [bug] Fix release_manager.py release function calls [6114fc3](https://github.com/ZeliardM/homebridge-kasa-python/commit/6114fc3fcf3a8a20909b5787efff5c8a03aa26d7) (@ZeliardM)
+
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.0.0-beta.0...v3.0.0-beta.1
 
 ## [v3.0.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.0) (2025-11-27)
