@@ -8,39 +8,45 @@ branding:
 
 enhancement:
   - any:
-      - changed-files:
-          - any-glob-to-any-file: 'src/**/*'
-          - any-glob-to-any-file: 'config.schema.json'
-      - head-branch: '^feature/.*'
-      - head-branch: '^feat/.*'
+    - changed-files:
+      - any-glob-to-any-file: 'src/**/*'
+      - any-glob-to-any-file: 'config.schema.json'
+    - head-branch:
+      - '^feature/.*'
+      - '^feat/.*'
 
 dependency:
-  - changed-files:
+  - any:
+    - changed-files:
       - any-glob-to-any-file: 'package.json'
       - any-glob-to-any-file: 'package-lock.json'
       - any-glob-to-any-file: 'requirements.txt'
 
 workflow:
   - changed-files:
-      - any-glob-to-any-file: '.github/**'
+    - any-glob-to-any-file: '.github/**'
 
 fix:
   - any:
-      - head-branch: '^fix/.*'
-      - head-branch: '^hotfix/.*'
-      - head-branch: '.*/fix-.*'
+    - head-branch:
+      - '^fix/.*'
+      - '^hotfix/.*'
+      - '.*/fix-.*'
 
 bug:
   - any:
-      - head-branch: '^bug/.*'
-      - head-branch: '.*/bug-.*'
+    - head-branch:
+      - '^bug/.*'
+      - '.*/bug-.*'
 
 breaking-change:
-  - any:
-      - head-branch: '(?i).*breaking.*'
+  - head-branch:
+    - '.*[bB]reaking.*'
 
 beta:
-  - base-branch: 'beta'
+  - base-branch:
+    - 'beta'
 
 latest:
-  - base-branch: 'latest'
+  - base-branch:
+    - 'latest'
