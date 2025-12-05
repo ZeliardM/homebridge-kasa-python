@@ -1,0 +1,220 @@
+---
+name: Release Flow
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [beta, latest]
+  push:
+    branches: [beta]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_REPOSITORY: ${{ github.repository }}
+
+concurrency:
+  group: release-flow-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-fork:
+    name: Detect Fork
+    runs-on: ubuntu-latest
+    outputs:
+      is_fork: ${{ steps.detect-fork.outputs.is_fork }}
+    steps:
+      - name: Checkout Actions
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect Fork Context
+        id: detect-fork
+        uses: ./.github/actions/detect-fork
+
+  prepare:
+    name: Validate Environment
+    runs-on: ubuntu-latest
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'false'
+    steps:
+      - name: Validate Environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
+          : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+
+  pr-merge:
+    name: Pull Request Merge
+    needs: prepare
+    if: >
+      needs.prepare.result == 'success' &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      (
+        github.event.pull_request.base.ref == 'beta' ||
+        (
+          github.event.pull_request.base.ref == 'latest' &&
+          contains(github.event.pull_request.labels.*.name, 'stable-conversion')
+        )
+      )
+    runs-on: ubuntu-latest
+    env:
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+    steps:
+      - name: Checkout Actions
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Ensure jq
+        uses: ./.github/actions/ensure-jq
+
+      - name: Serialize Labels
+        id: labels
+        uses: ./.github/actions/serialize-labels
+        with:
+          labels_json: ${{ toJson(github.event.pull_request.labels.*.name) }}
+
+      - name: Update CHANGELOG.md and Create/Update Draft Release
+        if: steps.labels.outcome == 'success'
+        shell: bash
+        env:
+          PR_LABELS: ${{ steps.labels.outputs.path }}
+          MODE: pr-merge
+        run: |
+          set -euo pipefail
+          python .github/scripts/release_manager.py
+
+  dependabot-auto-merge:
+    name: Dependabot Auto-Merge
+    needs: prepare
+    if: >
+      needs.prepare.result == 'success' &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/beta' &&
+      github.actor == 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Actions
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Ensure jq
+        uses: ./.github/actions/ensure-jq
+
+      - name: Find Merged Pull Request
+        id: pr
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA=$(git rev-parse HEAD)
+          PR_JSON=$(gh pr list --state merged --search "$SHA" --json number,title,author,baseRefName,labels --jq 'map(select(.baseRefName=="beta"))[0]')
+          echo "pr_json=$PR_JSON" >> "$GITHUB_OUTPUT"
+          if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "null" ]; then
+            echo "No merged PR found for SHA $SHA on beta branch."
+            exit 0
+          fi
+          echo "$PR_JSON" | jq .
+          echo "number=$(echo "$PR_JSON" | jq -r .number)" >> "$GITHUB_OUTPUT"
+          echo "title=$(echo "$PR_JSON" | jq -r .title)" >> "$GITHUB_OUTPUT"
+          echo "author=$(echo "$PR_JSON" | jq -r .author.login)" >> "$GITHUB_OUTPUT"
+          echo "labels=$(echo "$PR_JSON" | jq -c '[.labels[].name]')" >> "$GITHUB_OUTPUT"
+
+      - name: Serialize Labels
+        if: steps.pr.outcome == 'success'
+        id: labels
+        uses: ./.github/actions/serialize-labels
+        with:
+          labels_json: ${{ steps.pr.outputs.labels }}
+
+      - name: Update CHANGELOG.md and Create/Update Draft Release
+        if: steps.labels.outcome == 'success'
+        shell: bash
+        env:
+          PR_TITLE: ${{ steps.pr.outputs.title }}
+          PR_AUTHOR: ${{ steps.pr.outputs.author }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_LABELS: ${{ steps.labels.outputs.path }}
+          BASE_BRANCH: beta
+          MODE: pr-merge
+        run: |
+          set -euo pipefail
+          python .github/scripts/release_manager.py
+
+  manual-commit-push:
+    name: Manual Commit Push
+    needs: prepare
+    if: >
+      needs.prepare.result == 'success' &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/beta' &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    env:
+      BEFORE: ${{ github.event.before }}
+      AFTER: ${{ github.event.after }}
+    steps:
+      - name: Checkout Actions
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Update CHANGELOG.md and Create/Update Draft Release
+        shell: bash
+        env:
+          MODE: commit-push
+        run: |
+          set -euo pipefail
+          python .github/scripts/release_manager.py
+
+  fork-notice:
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fork Notice
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::notice:: This workflow is running in a forked repository. All privileged steps have been skipped."
+

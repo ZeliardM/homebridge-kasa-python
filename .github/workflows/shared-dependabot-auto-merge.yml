@@ -1,0 +1,79 @@
+---
+name: Dependabot Auto-Merge
+
+on:
+  workflow_call: {}
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_REPOSITORY: ${{ github.repository }}
+  PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+  PULL_REQUEST_URL: ${{ github.event.pull_request.html_url }}
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    name: Auto-Merge Dependabot Pull Request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout actions (needed for local action)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Ensure jq
+        id: ensure-jq
+        uses: ./.github/actions/ensure-jq
+
+      - name: Determine Safety from Labels
+        id: safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          LABELS="$(gh api repos/"$GITHUB_REPOSITORY"/issues/"$PULL_REQUEST_NUMBER"/labels --jq '.[].name' || true)"
+          block=true
+          if ! printf '%s\n' "$LABELS" | grep -qi '^dependency-major$'; then
+            block=false
+          fi
+          echo "block=$block" >> "$GITHUB_OUTPUT"
+
+      - name: Build Sticky Comment
+        id: build_sticky
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.safety.outputs.block }}" = "false" ]; then
+            {
+              echo "✅ Dependabot Update is Safe and will be Auto-Merged."
+              echo
+              echo "<!-- COPILOT-STICKY:DEPENDABOT -->"
+            } > body.txt
+          else
+            {
+              echo "⚠️ Dependabot Update Requires Manual Review."
+              echo
+              echo "<!-- COPILOT-STICKY:DEPENDABOT -->"
+            } > body.txt
+          fi
+
+      - name: Upsert Sticky Comment
+        uses: ./.github/actions/sticky-comment
+        with:
+          number: ${{ env.PULL_REQUEST_NUMBER }}
+          marker: "<!-- COPILOT-STICKY:DEPENDABOT -->"
+          body_file: body.txt
+
+      - name: Auto-Merge Pull Request
+        if: steps.safety.outcome == 'success' && steps.safety.outputs.block == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr merge --auto --squash "$PULL_REQUEST_URL"

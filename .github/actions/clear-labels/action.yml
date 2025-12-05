@@ -10,9 +10,8 @@ runs:
     - id: clear
       shell: bash
       env:
-        REPO: ${{ github.repository }}
-        NUM: ${{ inputs.number }}
+        NUMBER: ${{ inputs.number }}
       run: |
         set -euo pipefail
         printf '{"labels":[]}\n' > payload.json
-        gh api --method PUT -H "Accept: application/vnd.github+json" repos/"$REPO"/issues/"$NUM"/labels --input payload.json
+        gh api --method PUT -H "Accept: application/vnd.github+json" repos/"$GITHUB_REPOSITORY"/issues/"$NUMBER"/labels --input payload.json

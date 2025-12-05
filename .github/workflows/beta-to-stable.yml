@@ -8,22 +8,68 @@ permissions:
   pull-requests: write
   issues: write
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_REPOSITORY: ${{ github.repository }}
+
 jobs:
-  create-pr:
+  detect-fork:
+    name: Detect Fork
     runs-on: ubuntu-latest
+    outputs:
+      is_fork: ${{ steps.detect-fork.outputs.is_fork }}
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout Actions
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
+      - name: Detect Fork Context
+        id: detect-fork
+        uses: ./.github/actions/detect-fork
+
+  prepare:
+    name: Validate Environment
+    runs-on: ubuntu-latest
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'false'
+    steps:
+      - name: Validate Environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
+          : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+
+  create-pr:
+    name: Create Stable Release PR
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.result == 'success'
+    steps:
+      - name: Checkout Actions
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - name: Create or update beta -> latest PR (auto-detect version from last published beta)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
+      - name: Create Stable Release PR
+        shell: bash
         run: |
           set -euo pipefail
           python3 .github/scripts/beta_to_stable.py
+
+  fork-notice:
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fork Notice
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::notice:: This workflow is running in a forked repository. All privileged steps have been skipped."

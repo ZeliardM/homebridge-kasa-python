@@ -1,35 +1,26 @@
 name: Build, Lint, and Test
 
 on:
-  push:
-    branches: [latest, beta]
-  pull_request:
-    branches: [latest, beta]
-  workflow_call:
-    inputs:
-      node_versions:
-        description: JSON array of Node versions
-        required: false
-        type: string
-      python_versions:
-        description: JSON array of Python versions
-        required: false
-        type: string
+  workflow_call: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: build-lint-test-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build_lint_test:
+    name: Build, Lint, and Test
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        node-version: ${{ fromJson(inputs.node_versions || '["20","22","24"]') }}
-        python-version: ${{ fromJson(inputs.python_versions || '["3.11","3.12","3.13"]') }}
+        node-version: ${{ fromJson('["20","22","24"]') }}
+        python-version: ${{ fromJson('["3.11","3.12","3.13"]') }}
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout Actions
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Node ${{ matrix.node-version }}
         uses: actions/setup-node@v6
@@ -43,13 +34,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install Python deps
+      - name: Install Python Dependencies
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Install Node deps
+      - name: Install Node Dependencies
         run: npm ci
 
       - name: Lint
@@ -72,17 +63,14 @@ jobs:
           })();
           NODE
 
-      - name: Python Imports Test
+      - name: Python Import Test
         run: |
           if [ -f requirements.txt ]; then
             set -e
             while IFS= read -r pkg || [ -n "$pkg" ]; do
-              # strip whitespace
               line="$(printf '%s' "$pkg" | sed 's/[[:space:]]//g')"
-              # skip blank or comment lines
               [ -z "$line" ] && continue
               case "$line" in \#*) continue ;; esac
-              # Extract top-level package name, drop extras, normalize dashes
               mod="$(printf '%s' "$line" | cut -d'=' -f1 | sed 's/\[.*\]//' | tr '-' '_' )"
               case "$mod" in
                 python_kasa) mod="kasa" ;;
@@ -93,7 +81,7 @@ jobs:
             echo "Python Imports OK"
           fi
 
-      - name: Outdated / Audit (non-blocking)
+      - name: Outdated / Audit
         run: |
           npm list --outdated || true
           npm audit || true

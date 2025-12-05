@@ -1,8 +1,8 @@
 name: Detect Fork Context
-description: Outputs is_fork=true if running in a fork, false if main repo
+description: Output Fork Detectio
 outputs:
   is_fork:
-    description: "true if running in a forked repo context"
+    description: True if the Repository is a Fork, false if it is the Main Repository
     value: ${{ steps.detect.outputs.is_fork }}
 runs:
   using: composite

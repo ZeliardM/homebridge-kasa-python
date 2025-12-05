@@ -1,5 +1,5 @@
 name: Ensure jq
-description: Ensure jq is installed (apt-get if missing)
+description: Ensure jq is Installed
 runs:
   using: composite
   steps:
