@@ -1,9 +1,13 @@
 # Changelog
-## [v3.0.0-beta.2](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.2)
+## [v3.0.0-beta.2](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.2) (2025-12-05)
 
 ### Bug Fixes
 
 - [bug] Fix Discord Notifications [399e94d](https://github.com/ZeliardM/homebridge-kasa-python/commit/399e94de7f08beb2b41a822a49ea178d5b3b05e6) (@ZeliardM)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.0.0-beta.2 [beta-release] (@github-actions)
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.0.0-beta.1...v3.0.0-beta.2
 
