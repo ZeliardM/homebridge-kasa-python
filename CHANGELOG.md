@@ -1,5 +1,5 @@
 # Changelog
-## [v3.0.0-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.1)
+## [v3.0.0-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.1) (2025-12-05)
 
 ### Featured Changes
 
@@ -11,6 +11,8 @@
 - [bug] Fix release_manager.py release function calls [6114fc3](https://github.com/ZeliardM/homebridge-kasa-python/commit/6114fc3fcf3a8a20909b5787efff5c8a03aa26d7) (@ZeliardM)
 
 ### Other Changes
+
+- Update CHANGELOG.md for beta release v3.0.0-beta.1 [beta-release] (@github-actions)
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.0.0-beta.0...v3.0.0-beta.1
 
