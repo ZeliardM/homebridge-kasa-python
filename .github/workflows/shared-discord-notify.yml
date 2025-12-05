@@ -23,6 +23,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Python 3.12
+        id: setup-python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install Python requests
+        id: install_requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install requests
+
       - name: Get Discord Payload
         id: webhook
         uses: sarisia/actions-status-discord@v1
@@ -66,7 +80,7 @@ jobs:
         env:
           CMD: post
           WEBHOOK_URL: ${{ secrets.discord_webhook }}
-          WEBHOOK_PAYLOAD: ${{ steps.edit_payload.outputs.payload }}
+          EDITED_PAYLOAD: ${{ steps.edit_payload.outputs.edited_payload }}
         run: |
           set -euo pipefail
           python3 .github/scripts/discord_tools.py

@@ -12,6 +12,7 @@ CMD=trim
       * Round-robins remaining bullets under correct categories until the Discord field limit (1024 chars) is reached
       * If not all bullets fit, appends "- …" to the last non-empty category (if space allows)
   - Writes Actions output key "body" (multiline <<EOF block)
+  - Prints the final trimmed value to stdout
 
 CMD=edit-payload
   - Reads the Discord webhook payload JSON from env WEBHOOK_PAYLOAD
@@ -19,20 +20,19 @@ CMD=edit-payload
   - Replaces the first embed field whose name starts with "Event -"
     with the trimmed value
   - Ensures the event field value <= 1024 chars
-  - Writes Actions output key "payload" (multiline <<EOF block)
+  - Writes Actions output key "edited_payload" (multiline <<EOF block)
   - Prints the final JSON to stdout
 
 CMD=post
   - Posts the payload to the Discord webhook
   - Requires:
-      * env WEBHOOK_URL or DISCORD_WEBHOOK
-      * env WEBHOOK_PAYLOAD (stringified JSON payload)
+      * env WEBHOOK_URL
+      * env EDITED_PAYLOAD (stringified JSON payload)
 """
 import json
 import os
+import requests
 import sys
-import urllib.request
-import urllib.error
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
@@ -249,42 +249,30 @@ def cmd_edit_payload() -> int:
             return 1
     _ensure_event_field(payload, event_value)
     final_json = json.dumps(payload, ensure_ascii=False)
-    _write_actions_output("payload", final_json)
+    _write_actions_output("edited_payload", final_json)
     print(final_json)
     return 0
 
 def cmd_post() -> int:
-    webhook = os.environ.get("WEBHOOK_URL") or os.environ.get("DISCORD_WEBHOOK")
-    payload_str = os.environ.get("WEBHOOK_PAYLOAD")
-    if not webhook:
-        print("::error::WEBHOOK_URL (or DISCORD_WEBHOOK) not provided", file=sys.stderr)
-        return 1
-    if not payload_str:
-        print("::error::WEBHOOK_PAYLOAD not provided", file=sys.stderr)
-        return 1
+    webhook = os.environ.get("WEBHOOK_URL")
+    edited_payload_raw = os.environ.get("EDITED_PAYLOAD")
     try:
-        payload = json.loads(payload_str)
-    except Exception as e:
-        print(f"::error::Invalid JSON payload: {e}", file=sys.stderr)
-        return 1
+        edited_payload = json.loads(edited_payload_raw)
+    except Exception:
+        try:
+            fixed = edited_payload_raw.replace("'", '"')
+            edited_payload = json.loads(fixed)
+        except Exception:
+            print("::error::EDITED_PAYLOAD was invalid JSON", file=sys.stderr)
+            return 1
     try:
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            webhook,
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=45) as resp:
-            status = resp.getcode()
-            reason = getattr(resp, "reason", "")
-            print(f"POST -> {status} {reason}")
+        response = requests.post(webhook, json=edited_payload, timeout=45)
+        if response.ok:
+            print(f"POST -> {response.status_code} {response.reason}")
             return 0
-    except urllib.error.HTTPError as e:
-        text = e.read().decode("utf-8", errors="replace")
-        print(f"::error::Discord webhook failed {e.code}: {text}", file=sys.stderr)
+        print(f"::error::Discord webhook failed {response.status_code}: {response.text}", file=sys.stderr)
         return 1
-    except Exception as e:
+    except requests.RequestException as e:
         print(f"::error::Request failed: {e}", file=sys.stderr)
         return 1
 
