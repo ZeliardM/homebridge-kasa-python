@@ -6,6 +6,10 @@
 - [bug] Fix labeler.yml and dependabot labeling [c24383b](https://github.com/ZeliardM/homebridge-kasa-python/commit/c24383b81678fce55690f0f47aef9ccbba82de8d) (@ZeliardM)
 - [bug] Workflow permissions and clean-up [6a3fb55](https://github.com/ZeliardM/homebridge-kasa-python/commit/6a3fb55a5e6e9d21228c382a9fb4fbfbd9cdb4c7) (@ZeliardM)
 
+### Other Changes
+
+- [other] Change PR Workflow triggers [d5ab470](https://github.com/ZeliardM/homebridge-kasa-python/commit/d5ab470dfb9108fa4affcab2709f96d6a1142372) (@ZeliardM)
+
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.0.0-beta.4...v3.0.0-beta.5
 
 ## [v3.0.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.4) (2025-12-05)
