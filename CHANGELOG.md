@@ -7,6 +7,7 @@
 
 ### Bug Fixes
 
+- [bug] Fix publish and rollback handling [f21f17c](https://github.com/ZeliardM/homebridge-kasa-python/commit/f21f17c307f2dad80c5bf93617136f9cbbe9d95a) (@ZeliardM)
 - [bug] Fix release_manager.py release function calls [6114fc3](https://github.com/ZeliardM/homebridge-kasa-python/commit/6114fc3fcf3a8a20909b5787efff5c8a03aa26d7) (@ZeliardM)
 
 ### Other Changes
