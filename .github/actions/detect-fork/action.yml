@@ -3,11 +3,12 @@ description: Output Fork Detectio
 outputs:
   is_fork:
     description: True if the Repository is a Fork, false if it is the Main Repository
-    value: ${{ steps.detect.outputs.is_fork }}
+    value: ${{ steps.detect-fork-context.outputs.is_fork }}
 runs:
   using: composite
   steps:
-    - id: detect
+    - name: Detect Fork Context
+      id: detect-fork-context
       shell: bash
       run: |
         if [ "${GITHUB_REPOSITORY}" != "ZeliardM/homebridge-kasa-python" ]; then

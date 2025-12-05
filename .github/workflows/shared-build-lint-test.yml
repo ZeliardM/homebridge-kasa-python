@@ -18,38 +18,51 @@ jobs:
         python-version: ${{ fromJson('["3.11","3.12","3.13"]') }}
     steps:
       - name: Checkout Actions
+        id: checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Setup Node ${{ matrix.node-version }}
+        id: setup-node
         uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
       - name: Setup Python ${{ matrix.python-version }}
+        id: setup-python
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
       - name: Install Python Dependencies
+        id: install-python-deps
+        shell: bash
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Install Node Dependencies
+        id: install-node-deps
+        shell: bash
         run: npm ci
 
       - name: Lint
+        id: lint
+        shell: bash
         run: npm run lint
 
       - name: Build
+        id: build
+        shell: bash
         run: npm run build
 
       - name: Node Import Test
+        id: node-import-test
+        shell: bash
         run: |
           node <<'NODE'
           (async () => {
@@ -64,6 +77,8 @@ jobs:
           NODE
 
       - name: Python Import Test
+        id: python-import-test
+        shell: bash
         run: |
           if [ -f requirements.txt ]; then
             set -e
@@ -82,6 +97,8 @@ jobs:
           fi
 
       - name: Outdated / Audit
+        id: outdated-audit
+        shell: bash
         run: |
           npm list --outdated || true
           npm audit || true

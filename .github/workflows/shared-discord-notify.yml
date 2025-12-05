@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Actions
+        id: checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -41,6 +42,7 @@ jobs:
 
       - name: Build Trimmed Event Field Value
         id: release_notes
+        shell: bash
         env:
           CMD: trim
         run: |
@@ -49,6 +51,7 @@ jobs:
 
       - name: Edit Payload with Trimmed Release Notes
         id: edit_payload
+        shell: bash
         env:
           CMD: edit-payload
           WEBHOOK_PAYLOAD: ${{ steps.webhook.outputs.payload }}
@@ -58,6 +61,8 @@ jobs:
           python3 .github/scripts/discord_tools.py
 
       - name: Post to Discord
+        id: post
+        shell: bash
         env:
           CMD: post
           WEBHOOK_URL: ${{ secrets.discord_webhook }}

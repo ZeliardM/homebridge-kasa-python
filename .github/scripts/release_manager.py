@@ -949,8 +949,34 @@ def _rollback_changelog_finalize_metadata(tag: str, target_branch: str | None) -
     if not changed:
         print(f"[rollback] No finalize metadata to remove for {tag}")
         return False
-    new_section = [lines[start]] + keep
-    new_lines = lines[:start] + new_section + lines[end:]
+    sec = [lines[start]] + keep
+    sec_start = 1
+    sec_end = len(sec)
+    i = sec_start
+    while i < sec_end:
+        line = sec[i]
+        if line.startswith("### Other Changes"):
+            j = i + 1
+            has_bullets = False
+            while j < sec_end:
+                cur = sec[j]
+                if cur.startswith("### "):
+                    break
+                if cur.startswith("**Full Changelog**"):
+                    break
+                if cur.startswith("- "):
+                    has_bullets = True
+                    break
+                j += 1
+            if not has_bullets:
+                remove_end = i + 1
+                while remove_end < sec_end and sec[remove_end].strip() == "":
+                    remove_end += 1
+                sec = sec[:i] + sec[remove_end:]
+                sec_end = len(sec)
+                continue
+        i += 1
+    new_lines = lines[:start] + sec + lines[end:]
     out_lines: list[str] = []
     prev_blank = False
     for l in new_lines:

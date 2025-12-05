@@ -25,15 +25,16 @@ jobs:
     name: Detect Fork
     runs-on: ubuntu-latest
     outputs:
-      is_fork: ${{ steps.detect-fork.outputs.is_fork }}
+      is_fork: ${{ steps.detect-fork-context.outputs.is_fork }}
     steps:
       - name: Checkout Actions
+        id: checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Detect Fork Context
-        id: detect-fork
+        id: detect-fork-context
         uses: ./.github/actions/detect-fork
 
   prepare:
@@ -43,6 +44,7 @@ jobs:
     if: needs.detect-fork.outputs.is_fork == 'false'
     steps:
       - name: Validate Environment
+        id: validate
         shell: bash
         run: |
           set -euo pipefail
@@ -52,18 +54,20 @@ jobs:
           : "${PULL_REQUEST_BASE_SHA:?PULL_REQUEST_BASE_SHA is required}"
 
   retarget-base:
-    needs: prepare
-    if: needs.prepare.result == 'success' && github.actor != 'github-actions[bot]'
     name: Retarget PR Base to Beta
     runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.result == 'success' && github.actor != 'github-actions[bot]'
     steps:
       - name: Checkout Actions
+        id: checkout
         uses: actions/checkout@v6
         with:
           ref: ${{ env.PULL_REQUEST_BASE_SHA }}
           fetch-depth: 0
 
       - name: Retarget PR
+        id: retarget-pr
         shell: bash
         run: |
           set -euo pipefail
@@ -91,42 +95,46 @@ jobs:
           fi
 
   label:
-    needs: retarget-base
-    if: needs.retarget-base.result == 'success'
     name: Clear & Apply Labels
     runs-on: ubuntu-latest
+    needs: retarget-base
+    if: needs.retarget-base.result == 'success'
     steps:
       - name: Checkout Actions
+        id: checkout
         uses: actions/checkout@v6
         with:
           ref: ${{ env.PULL_REQUEST_BASE_SHA }}
           fetch-depth: 0
 
       - name: Clear All Labels
+        id: clear-labels
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'stable-conversion') }}
         uses: ./.github/actions/clear-labels
         with:
           number: ${{ env.PULL_REQUEST_NUMBER }}
 
       - name: Apply Labels
+        id: apply-labels
         uses: actions/labeler@v5
         with:
           repo-token: ${{ env.GITHUB_TOKEN }}
           configuration-path: .github/labeler.yml
 
       - name: Ensure jq
-        if: github.actor == 'dependabot[bot]'
         id: ensure-jq
+        if: github.actor == 'dependabot[bot]'
         uses: ./.github/actions/ensure-jq
 
       - name: Fetch Dependabot Metadata
-        if: steps.ensure-jq.outcome == 'success'
         id: metadata
+        if: steps.ensure-jq.outcome == 'success'
         uses: dependabot/fetch-metadata@v2
         with:
           github-token: "${{ env.GITHUB_TOKEN }}"
 
       - name: Apply Dependabot Labels
+        id: apply-dependabot-labels
         if: steps.metadata.outcome == 'success'
         shell: bash
         env:
@@ -168,25 +176,27 @@ jobs:
             "/repos/$GITHUB_REPOSITORY/issues/$PULL_REQUEST_NUMBER/labels" \
             -f labels="$labels_json"
 
-  validate:
-    needs: label
-    if: needs.label.result == 'success'
+  validate-pr:
     name: Validate Pull Request
     runs-on: ubuntu-latest
+    needs: label
+    if: needs.label.result == 'success'
     outputs:
-      ok: ${{ steps.validate.outputs.ok }}
+      ok: ${{ steps.validate-pr.outputs.ok }}
     steps:
       - name: Checkout Actions
+        id: checkout
         uses: actions/checkout@v6
         with:
           ref: ${{ env.PULL_REQUEST_BASE_SHA }}
           fetch-depth: 0
 
       - name: Ensure jq
+        id: ensure-jq
         uses: ./.github/actions/ensure-jq
 
       - name: Validate Pull Request
-        id: validate
+        id: validate-pr
         shell: bash
         run: |
           set -euo pipefail
@@ -198,12 +208,13 @@ jobs:
           echo "messages=$MSGS" >> "$GITHUB_OUTPUT"
 
       - name: Build Validation Sticky
+        id: build-validation-sticky
         shell: bash
         run: |
           set -euo pipefail
           MARK="<!-- COPILOT-STICKY:PULL-REQUEST -->"
-          OK="${{ steps.validate.outputs.ok }}"
-          MSGS_JSON='${{ steps.validate.outputs.messages }}'
+          OK="${{ steps.validate-pr.outputs.ok }}"
+          MSGS_JSON='${{ steps.validate-pr.outputs.messages }}'
 
           if [ -n "$MSGS_JSON" ] && [ "$MSGS_JSON" != "null" ]; then
             VALMSGS="$(printf '%s' "$MSGS_JSON" | jq -r '.[]?')"
@@ -237,6 +248,7 @@ jobs:
           fi
 
       - name: Upsert PR Validation Sticky
+        id: upsert-validation-sticky
         uses: ./.github/actions/sticky-comment
         with:
           number: ${{ github.event.pull_request.number }}
@@ -245,16 +257,18 @@ jobs:
 
   dependabot-auto-merge:
     name: Dependabot Auto-Merge
-    needs: validate
-    if: needs.validate.result == 'success' && needs.validate.outputs.ok == 'true' && github.actor == 'dependabot[bot]'
+    needs: validate-pr
+    if: needs.validate-pr.result == 'success' && needs.validate-pr.outputs.ok == 'true' && github.actor == 'dependabot[bot]'
     uses: ./.github/workflows/shared-dependabot-auto-merge.yml
 
   fork-notice:
+    name: Fork Notice
+    runs-on: ubuntu-latest
     needs: detect-fork
     if: needs.detect-fork.outputs.is_fork == 'true'
-    runs-on: ubuntu-latest
     steps:
       - name: Fork Notice
+        id: fork-notice
         shell: bash
         run: |
           set -euo pipefail

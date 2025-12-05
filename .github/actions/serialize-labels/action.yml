@@ -7,11 +7,12 @@ inputs:
 outputs:
   path:
     description: Path to the written labels JSON file
-    value: ${{ steps.write.outputs.path }}
+    value: ${{ steps.serialize.outputs.path }}
 runs:
   using: composite
   steps:
-    - id: write
+    - name: Serialize Labels
+      id: serialize
       shell: bash
       run: |
         set -euo pipefail

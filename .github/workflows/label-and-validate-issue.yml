@@ -23,15 +23,16 @@ jobs:
     name: Detect Fork
     runs-on: ubuntu-latest
     outputs:
-      is_fork: ${{ steps.detect-fork.outputs.is_fork }}
+      is_fork: ${{ steps.detect-fork-context.outputs.is_fork }}
     steps:
       - name: Checkout Actions
+        id: checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Detect Fork Context
-        id: detect-fork
+        id: detect-fork-context
         uses: ./.github/actions/detect-fork
 
   prepare:
@@ -41,6 +42,7 @@ jobs:
     if: needs.detect-fork.outputs.is_fork == 'false'
     steps:
       - name: Validate Environment
+        id: validate
         shell: bash
         run: |
           set -euo pipefail
@@ -49,20 +51,22 @@ jobs:
           : "${ISSUE_NUMBER:?ISSUE_NUMBER is required}"
 
   classify:
-    needs: prepare
-    if: needs.prepare.result == 'success' && github.actor != 'github-actions[bot]'
     name: Classify Issue
     runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.result == 'success' && github.actor != 'github-actions[bot]'
     outputs:
       applied_label: ${{ steps.classify.outputs.applied_label }}
       needs_info: ${{ steps.classify.outputs.needs_info }}
     steps:
       - name: Checkout Actions
+        id: checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Ensure jq
+        id: ensure-jq
         uses: ./.github/actions/ensure-jq
 
       - name: Classify
@@ -80,22 +84,25 @@ jobs:
           echo "needs_info=$NEEDS" >> "$GITHUB_OUTPUT"
 
   label:
-    needs: classify
-    if: needs.classify.result == 'success'
     name: Clear & Apply Labels
     runs-on: ubuntu-latest
+    needs: classify
+    if: needs.classify.result == 'success'
     steps:
       - name: Checkout Actions
+        id: checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Clear Labels
+        id: clear-labels
         uses: ./.github/actions/clear-labels
         with:
           number: ${{ env.ISSUE_NUMBER }}
 
       - name: Apply Label
+        id: apply-label
         shell: bash
         run: |
           set -euo pipefail
@@ -105,6 +112,7 @@ jobs:
           fi
 
       - name: Apply or Remove needs-info Label
+        id: apply-remove-needs-info
         shell: bash
         run: |
           set -euo pipefail
@@ -120,22 +128,24 @@ jobs:
             gh issue edit "$ISSUE_NUMBER" --remove-label needs-info || true
           fi
 
-  validate:
-    needs: label
-    if: needs.label.result == 'success'
+  validate-issue:
     name: Validate Issue
     runs-on: ubuntu-latest
+    needs: label
+    if: needs.label.result == 'success'
     steps:
       - name: Checkout Actions
+        id: checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Ensure jq
+        id: ensure-jq
         uses: ./.github/actions/ensure-jq
 
       - name: Validate Issue
-        id: validate
+        id: validate-issue
         shell: bash
         env:
           MODE: validate
@@ -149,12 +159,13 @@ jobs:
           echo "messages=$MSGS" >> "$GITHUB_OUTPUT"
 
       - name: Build Validation Sticky
+        id: build-validation-sticky
         shell: bash
         run: |
           set -euo pipefail
           MARK="<!-- COPILOT-STICKY:ISSUE -->"
-          OK="${{ steps.validate.outputs.ok }}"
-          MSGS_JSON='${{ steps.validate.outputs.messages }}'
+          OK="${{ steps.validate-issue.outputs.ok }}"
+          MSGS_JSON='${{ steps.validate-issue.outputs.messages }}'
 
           if [ -n "$MSGS_JSON" ] && [ "$MSGS_JSON" != "null" ]; then
             VALMSGS="$(printf '%s' "$MSGS_JSON" | jq -r '.[]?')"
@@ -188,6 +199,7 @@ jobs:
           fi
 
       - name: Upsert Validation Sticky
+        id: upsert-validation-sticky
         uses: ./.github/actions/sticky-comment
         with:
           number: ${{ env.ISSUE_NUMBER }}
@@ -195,11 +207,13 @@ jobs:
           body_file: body.txt
 
   fork-notice:
+    name: Fork Notice
+    runs-on: ubuntu-latest
     needs: detect-fork
     if: needs.detect-fork.outputs.is_fork == 'true'
-    runs-on: ubuntu-latest
     steps:
       - name: Fork Notice
+        id: fork-notice
         shell: bash
         run: |
           set -euo pipefail

@@ -13,7 +13,9 @@ inputs:
 runs:
   using: composite
   steps:
-    - shell: bash
+    - name: Sticky Comment
+      id: sticky
+      shell: bash
       env:
         NUMBER: ${{ inputs.number }}
         MARK: ${{ inputs.marker }}
