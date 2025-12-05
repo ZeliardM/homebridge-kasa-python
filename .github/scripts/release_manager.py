@@ -657,7 +657,7 @@ def _escalate_beta_draft(
             content, existing_unpublished.tag(), target_version.tag()
         )
     old_tag = existing_unpublished.tag()
-    old_rel = common.gh_release(context.github_repository, context.github_token, old_tag)
+    old_rel = common.gh_release(context.github_repository, context.github_token, tag=old_tag)
     if old_rel and old_rel.get("id"):
         common.gh_release_update(
             context.github_repository,
@@ -779,7 +779,7 @@ def _upsert_release(
     prerelease: bool,
     target_commitish: str | None = None,
 ) -> None:
-    rel = common.gh_release(context.github_repository, context.github_token, tag)
+    rel = common.gh_release(context.github_repository, context.github_token, tag=tag)
     if not rel:
         for r in common.gh_releases(context.github_repository, context.github_token, max_pages=50):
             if _release_matches_tag(r, tag):
@@ -906,7 +906,7 @@ def _finalize_common(context: Context, v: Version, *, is_beta: bool) -> None:
         if len(versions_sorted) > 1 and versions_sorted[-1] == v:
             prev = versions_sorted[-2]
         body = _build_stable_body(v, content, prev)
-    rel = common.gh_release(context.github_repository, context.github_token, v.tag())
+    rel = common.gh_release(context.github_repository, context.github_token, tag=v.tag())
     if rel and rel.get("id"):
         common.gh_release_update(context.github_repository, context.github_token, int(rel["id"]), body=body)
 
@@ -984,7 +984,7 @@ def _clean_finalize_lines(text: str, tag: str) -> str:
 def _handle_rollback(context: Context) -> None:
     print("::warning::npm publish failed; beginning rollback sequence...")
     tag = context.tag
-    rel = common.gh_release(context.github_repository, context.github_token, tag)
+    rel = common.gh_release(context.github_repository, context.github_token, tag=tag)
     rel_name = None
     rel_body = None
     prerelease_flag = None
