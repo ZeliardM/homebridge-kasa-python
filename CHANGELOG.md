@@ -1,4 +1,12 @@
 # Changelog
+## [v3.0.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.4)
+
+### Other Changes
+
+- [other] Clean Up Workflow Syntax [8fa1768](https://github.com/ZeliardM/homebridge-kasa-python/commit/8fa17685fb5568b9e825768cf6e3ef66d85ce02e) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.0.0-beta.3...v3.0.0-beta.4
+
 ## [v3.0.0-beta.3](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.3) (2025-12-05)
 
 ### Bug Fixes
