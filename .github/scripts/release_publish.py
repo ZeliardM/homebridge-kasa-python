@@ -19,7 +19,7 @@ import common
 
 from common import Context
 
-def resolve_tag_and_expected_version(evt: dict) -> tuple[str, str]:
+def _resolve_tag_and_expected_version(evt: dict) -> tuple[str, str]:
     release_info = evt.get("release") or {}
     tag = release_info.get("tag_name")
     if not tag:
@@ -27,7 +27,7 @@ def resolve_tag_and_expected_version(evt: dict) -> tuple[str, str]:
     expected = tag[1:] if tag.startswith("v") else tag
     return tag, expected
 
-def delegate_rollback(context: Context) -> None:
+def _delegate_rollback(context: Context) -> None:
     print("::warning::npm publish failed; delegating rollback to release_manager.py...")
     env = os.environ.copy()
     env["GITHUB_REPOSITORY"] = context.github_repository
@@ -50,11 +50,11 @@ def main() -> None:
     github_token = os.environ.get("GITHUB_TOKEN")
     context = Context(github_token=github_token, github_repository=github_repository)
     evt = common.read_event()
-    tag, expected_version = resolve_tag_and_expected_version(evt)
+    tag, expected_version = _resolve_tag_and_expected_version(evt)
     release_info = evt.get("release")
     context.tag = tag
     context.target_branch = release_info.get("target_commitish")
-    dist_tag = os.environ.get("INPUT_DIST_TAG")
+    dist_tag = os.environ.get("NPM_TAG")
     try:
         print(f"[publish] Resolved tag: {tag}")
         print(f"[publish] Expected version from tag: {expected_version}")
@@ -77,7 +77,7 @@ def main() -> None:
         pub_cmd = "npm publish --access public --provenance"
         if dist_tag:
             pub_cmd += f" --tag {dist_tag}"
-        npm_token = os.environ.get("NPM_AUTH_TOKEN")
+        npm_token = os.environ.get("NPM_TOKEN")
         try:
             npmrc_path = os.path.expanduser("~/.npmrc")
             with open(npmrc_path, "w", encoding="utf-8") as nf:
@@ -95,7 +95,7 @@ def main() -> None:
         print(f"::notice::Publish succeeded: {version_out}")
     except Exception as e:
         print(f"::error::Publish failed: {e}")
-        delegate_rollback(context)
+        _delegate_rollback(context)
         sys.exit(1)
 
 if __name__ == "__main__":

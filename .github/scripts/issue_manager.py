@@ -101,7 +101,7 @@ def _first_existing_classification(labels: list[str]) -> str:
             return ll
     return ""
 
-def do_classify(context: Context) -> dict:
+def _classify_issue(context: Context) -> dict:
     code, issue = common.github_api(context.github_repository, context.github_token, f"/issues/{context.issue_number}")
     if code != 200 or not isinstance(issue, dict):
         return {
@@ -143,7 +143,7 @@ def do_classify(context: Context) -> dict:
         "needs_info": needs_info,
     }
 
-def do_validate(context: Context) -> dict:
+def _validate_issue(context: Context) -> dict:
     code, issue = common.github_api(context.github_repository, context.github_token, f"/issues/{context.issue_number}")
     if code != 200 or not isinstance(issue, dict):
         return {
@@ -189,10 +189,10 @@ def main():
     issue_number = os.getenv("ISSUE_NUMBER")
     context = Context(github_token=github_token, github_repository=github_repository, mode=mode, issue_number=issue_number)
     if mode == "classify":
-        result = do_classify(context)
+        result = _classify_issue(context)
         print(json.dumps(result))
     elif mode == "validate":
-        result = do_validate(context)
+        result = _validate_issue(context)
         print(json.dumps(result))
     sys.exit(0)
 

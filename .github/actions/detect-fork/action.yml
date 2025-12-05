@@ -1,5 +1,5 @@
 name: Detect Fork Context
-description: Output Fork Detectio
+description: Output Fork Detection
 outputs:
   is_fork:
     description: True if the Repository is a Fork, false if it is the Main Repository
@@ -11,6 +11,7 @@ runs:
       id: detect-fork-context
       shell: bash
       run: |
+        set -euo pipefail
         if [ "${GITHUB_REPOSITORY}" != "ZeliardM/homebridge-kasa-python" ]; then
           echo "is_fork=true" >> "$GITHUB_OUTPUT"
         else
