@@ -121,14 +121,9 @@ jobs:
           repo-token: ${{ env.GITHUB_TOKEN }}
           configuration-path: .github/labeler.yml
 
-      - name: Ensure jq
-        id: ensure-jq
-        if: github.actor == 'dependabot[bot]'
-        uses: ./.github/actions/ensure-jq
-
       - name: Fetch Dependabot Metadata
         id: metadata
-        if: steps.ensure-jq.outcome == 'success'
+        if: github.actor == 'dependabot[bot]'
         uses: dependabot/fetch-metadata@v2
         with:
           github-token: "${{ env.GITHUB_TOKEN }}"
@@ -170,11 +165,13 @@ jobs:
             exit 0
           fi
           printf 'Applying labels: %s\n' "${labels[*]}"
-          labels_json="$(printf '%s\n' "${labels[@]}" | jq -R . | jq -s .)"
-          gh api --method POST \
+          args=(--method POST \
             -H "Accept: application/vnd.github+json" \
-            "/repos/$GITHUB_REPOSITORY/issues/$PULL_REQUEST_NUMBER/labels" \
-            -f labels="$labels_json"
+            "/repos/$GITHUB_REPOSITORY/issues/$PULL_REQUEST_NUMBER/labels")
+          for lbl in "${labels[@]}"; do
+            args+=("-f" "labels[]=$lbl")
+          done
+          gh api "${args[@]}"
 
   validate-pr:
     name: Validate Pull Request

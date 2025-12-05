@@ -7,41 +7,37 @@ branding:
     - any-glob-to-any-file: branding/**
 
 enhancement:
-  - changed-files:
-    - any-glob-to-any-file: 'src/**/*'
-    - any-glob-to-any-file: 'config.schema.json'
-  - head-branch: '^feature/.*'
-  - head-branch: '^feat/.*'
-  - title: '^feat.*'
+  - any:
+      - changed-files:
+          - any-glob-to-any-file: 'src/**/*'
+          - any-glob-to-any-file: 'config.schema.json'
+      - head-branch: '^feature/.*'
+      - head-branch: '^feat/.*'
 
 dependency:
   - changed-files:
-    - any-glob-to-any-file: 'package.json'
-    - any-glob-to-any-file: 'package-lock.json'
-    - any-glob-to-any-file: 'requirements.txt'
+      - any-glob-to-any-file: 'package.json'
+      - any-glob-to-any-file: 'package-lock.json'
+      - any-glob-to-any-file: 'requirements.txt'
 
 workflow:
   - changed-files:
-    - any-glob-to-any-file: '.github/**'
+      - any-glob-to-any-file: '.github/**'
 
 fix:
-  - head-branch: '^fix/.*'
-  - head-branch: '^hotfix/.*'
-  - head-branch: '.*/fix-.*'
-  - title: '^fix.*'
-  - title: '^Fix.*'
+  - any:
+      - head-branch: '^fix/.*'
+      - head-branch: '^hotfix/.*'
+      - head-branch: '.*/fix-.*'
 
 bug:
-  - head-branch: '^bug/.*'
-  - head-branch: '.*/bug-.*'
-  - title: '.*[Bb]ug.*'
+  - any:
+      - head-branch: '^bug/.*'
+      - head-branch: '.*/bug-.*'
 
 breaking-change:
-  - head-branch: '.*breaking.*'
-  - title: '.*BREAKING CHANGE.*'
-  - title: '.*breaking change.*'
-  - title: '.*BREAKING.*'
-  - title: '.*breaking.*'
+  - any:
+      - head-branch: '(?i).*breaking.*'
 
 beta:
   - base-branch: 'beta'
