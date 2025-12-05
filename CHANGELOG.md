@@ -3,6 +3,7 @@
 
 ### Bug Fixes
 
+- [bug] Fix labeler.yml [71bd2b9](https://github.com/ZeliardM/homebridge-kasa-python/commit/71bd2b9f46dbcfb823573ba7703d47019a81c5f8) (@ZeliardM)
 - [bug] Fix labeler.yml and dependabot labeling [c24383b](https://github.com/ZeliardM/homebridge-kasa-python/commit/c24383b81678fce55690f0f47aef9ccbba82de8d) (@ZeliardM)
 - [bug] Workflow permissions and clean-up [6a3fb55](https://github.com/ZeliardM/homebridge-kasa-python/commit/6a3fb55a5e6e9d21228c382a9fb4fbfbd9cdb4c7) (@ZeliardM)
 
