@@ -11,6 +11,8 @@ CMD=trim
       * Appends "**Full Changelog**: ..." at the bottom (if present)
       * Round-robins remaining bullets under correct categories until the Discord field limit (1024 chars) is reached
       * If not all bullets fit, appends "- …" to the last non-empty category (if space allows)
+      * Ensures an "Update CHANGELOG.md for (beta) release <version> ..." bullet exists in Other Changes,
+        inserting it as the first bullet there if missing
   - Writes Actions output key "body" (multiline <<EOF block)
   - Prints the final trimmed value to stdout
 
@@ -101,10 +103,29 @@ def _ordered_categories(sections: dict) -> list[str]:
             ordered.append(c)
     return ordered
 
+def _ensure_changelog_update_bullet(sections: dict, version: str) -> None:
+    other = sections.get("Other Changes")
+    if other is None:
+        sections["Other Changes"] = []
+        other = sections["Other Changes"]
+    already = any(
+        b.startswith("- Update CHANGELOG.md for beta release")
+        or b.startswith("- Update CHANGELOG.md for release")
+        for b in other
+    )
+    if already or not version:
+        return
+    if "beta" in version:
+        bullet = f"- Update CHANGELOG.md for beta release {version} [beta-release] (@github-actions)"
+    else:
+        bullet = f"- Update CHANGELOG.md for release {version} [release] (@github-actions)"
+    other.insert(0, bullet)
+
 def _build_event_value_from_body(body: str, name_or_tag: str, field_hard_max: int) -> str:
     lines_all = body.splitlines()
     fc_line, keep_lines = _extract_full_changelog_line(lines_all)
     sections = _parse_sections("\n".join(keep_lines))
+    _ensure_changelog_update_bullet(sections, name_or_tag)
     order = _ordered_categories(sections)
     section_lines: dict = {}
     included_counts: dict = {cat: 0 for cat in order}
