@@ -3,6 +3,7 @@
 
 ### Bug Fixes
 
+- [bug] Fix _insert_entry logic for CHANGELOG.md [17c1242](https://github.com/ZeliardM/homebridge-kasa-python/commit/17c12420583b7ba8ed9d3aa037d0fda8060819e0) (@ZeliardM)
 - [bug] Fix package.json [7ec8d40](https://github.com/ZeliardM/homebridge-kasa-python/commit/7ec8d40673e7f80ee2bfbfda2b173ecb4f5191e4) (@ZeliardM)
 - [bug] Return to rebase instead of fast-forward [e943a65](https://github.com/ZeliardM/homebridge-kasa-python/commit/e943a6592838d9fa19ad19dbf5cdf06c7597dc54) (@ZeliardM)
 - [bug] Add --ff-only flag [161a8c7](https://github.com/ZeliardM/homebridge-kasa-python/commit/161a8c74cd1c0d6224a7641f90701f02560c3c97) (@ZeliardM)
