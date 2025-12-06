@@ -3,6 +3,7 @@
 
 ### Bug Fixes
 
+- [bug] Correct PR sorting [6a8a31c](https://github.com/ZeliardM/homebridge-kasa-python/commit/6a8a31c52da51fe9fa9f30b3f861f9b3c00ae4e6) (@ZeliardM)
 - [bug] Correct package.json [9a49cd6](https://github.com/ZeliardM/homebridge-kasa-python/commit/9a49cd64c8efb3e3a513530653cee2097059a356) (@ZeliardM)
 - [bug] Reverse sort pattern for descending instead of ascending [616410f](https://github.com/ZeliardM/homebridge-kasa-python/commit/616410f4b8e432d7963b1e0eb474275c96d10dad) (@ZeliardM)
 - [bug] Fix _insert_entry logic for CHANGELOG.md [17c1242](https://github.com/ZeliardM/homebridge-kasa-python/commit/17c12420583b7ba8ed9d3aa037d0fda8060819e0) (@ZeliardM)
@@ -23,6 +24,7 @@
 
 ### Other Changes
 
+- [other] Correct package.json and CHANGELOG.md [33a11d4](https://github.com/ZeliardM/homebridge-kasa-python/commit/33a11d47e97dddb54de5eeb9326231dd947c69cb) (@ZeliardM)
 - [other] Change PR Workflow triggers [d5ab470](https://github.com/ZeliardM/homebridge-kasa-python/commit/d5ab470dfb9108fa4affcab2709f96d6a1142372) (@ZeliardM)
 - npm(deps-dev): bump homebridge from 2.0.0-beta.60 to 2.0.0-beta.64 [#187](https://github.com/ZeliardM/homebridge-kasa-python/pull/187) (@dependabot[bot])
 - npm(deps-dev): bump homebridge from 2.0.0-beta.60 to 2.0.0-beta.64 [#186](https://github.com/ZeliardM/homebridge-kasa-python/pull/186) (@dependabot[bot])
