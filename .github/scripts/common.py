@@ -212,7 +212,7 @@ def git_checkout_tag(tag: str) -> None:
     if cp.returncode != 0:
         run(["git", "checkout", "-f", f"refs/tags/{tag}"], check=True)
 
-def git_commit_files(files: Sequence[str], message: str) -> None:
+def git_commit_files(files: Sequence[str], message: str, rebase_beta: bool = False) -> None:
     run(["git", "config", "--local", "user.email", "action@github.com"], check=False)
     run(["git", "config", "--local", "user.name", "GitHub Action"], check=False)
     staged_any = False
@@ -225,7 +225,12 @@ def git_commit_files(files: Sequence[str], message: str) -> None:
     if run(["git", "diff", "--cached", "--quiet"], check=False).returncode == 0:
         return
     run(["git", "commit", "-m", message], check=False)
-    run(["git", "push"], check=False)
+    if rebase_beta:
+        run(["git", "fetch", "origin", "beta"], check=True)
+        run(["git", "rebase", "origin/beta"], check=True)
+        run(["git", "push", "origin", "beta"], check=True)
+    else:
+        run(["git", "push"], check=False)
 
 def git_delete_tag(tag: str) -> None:
     try:
