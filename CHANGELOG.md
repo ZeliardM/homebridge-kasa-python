@@ -3,6 +3,7 @@
 
 ### Bug Fixes
 
+- [bug] Return to rebase instead of fast-forward [e943a65](https://github.com/ZeliardM/homebridge-kasa-python/commit/e943a6592838d9fa19ad19dbf5cdf06c7597dc54) (@ZeliardM)
 - [bug] Add --ff-only flag [161a8c7](https://github.com/ZeliardM/homebridge-kasa-python/commit/161a8c74cd1c0d6224a7641f90701f02560c3c97) (@ZeliardM)
 - [bug] Correct dependabot PR handling [fe385cc](https://github.com/ZeliardM/homebridge-kasa-python/commit/fe385cc3e5e80752e26e55718b36e00f8101031e) (@ZeliardM)
 - [bug] Fast Forward instead of rebase [f135835](https://github.com/ZeliardM/homebridge-kasa-python/commit/f135835664e8b1e0f117dc587c48860c32cfae33) (@ZeliardM)
