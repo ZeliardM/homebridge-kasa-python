@@ -59,7 +59,7 @@ jobs:
         id: release_notes
         shell: bash
         env:
-          CMD: trim
+          MODE: trim
         run: |
           set -euo pipefail
           python3 .github/scripts/discord_tools.py
@@ -68,7 +68,7 @@ jobs:
         id: edit_payload
         shell: bash
         env:
-          CMD: edit-payload
+          MODE: edit-payload
           EVENT_VALUE: ${{ steps.release_notes.outputs.body }}
           WEBHOOK_PAYLOAD: ${{ steps.webhook.outputs.payload }}
         run: |
@@ -79,7 +79,7 @@ jobs:
         id: post
         shell: bash
         env:
-          CMD: post
+          MODE: post
           EDITED_PAYLOAD: ${{ steps.edit_payload.outputs.edited_payload }}
           WEBHOOK_URL: ${{ secrets.discord_webhook }}
         run: |
