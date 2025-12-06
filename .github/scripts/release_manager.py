@@ -330,8 +330,8 @@ def _insert_entry(
             if fc_idx is None and l.startswith("**Full Changelog**"):
                 fc_idx = idx
         return cat_pos, fc_idx
-
-    if cat_header not in section:
+    has_cat = any(l.strip() == cat_header for l in section)
+    if not has_cat:
         cat_pos, fc_idx = section_category_positions(section)
         desired_prio = (
             CATEGORY_ORDER.index(category) if category in CATEGORY_ORDER else 999
@@ -350,55 +350,40 @@ def _insert_entry(
             + section[insertion_local_idx:]
         )
     else:
-        cat_idx = next((i for i, l in enumerate(section) if l == cat_header), None)
-        if cat_idx is None:
-            new_sec: list[str] = []
-            j = 0
-            inserted = False
-            while j < len(section):
-                line = section[j]
-                new_sec.append(line)
-                if line == cat_header and not inserted:
-                    if j + 1 >= len(section) or section[j + 1].strip() != "":
-                        new_sec.append("")
-                    new_sec.append(entry)
-                    inserted = True
-                j += 1
-            section = new_sec
+        cat_idx = next(i for i, l in enumerate(section) if l.strip() == cat_header)
+        i = cat_idx + 1
+        items: list[str] = []
+        while i < len(section):
+            cur = section[i]
+            if cur.startswith("### ") or cur.startswith("**Full Changelog**"):
+                break
+            if cur.startswith("- "):
+                items.append(cur)
+            i += 1
+        commits = [it for it in items if "/commit/" in it]
+        prs = [it for it in items if "/commit/" not in it]
+        is_commit = "/commit/" in entry
+        is_housekeeping = ("[beta-release]" in entry) or ("[release]" in entry)
+        if is_commit:
+            commits.insert(0, entry)
+        elif not is_housekeeping:
+            prs.append(entry)
+
+            def _pr_sort_key(line: str) -> int:
+                m = re.search(r"#(\\d+)\\]", line)
+                if not m:
+                    m = re.search(r"/pull/(\\d+)", line)
+                return int(m.group(1)) if m else 10**9
+
+            prs = sorted(prs, key=_pr_sort_key)
+        if is_housekeeping:
+            new_block: list[str] = [cat_header, "", entry, ""]
         else:
-            i = cat_idx + 1
-            items: list[str] = []
-            while i < len(section):
-                cur = section[i]
-                if cur.startswith("### ") or cur.startswith("**Full Changelog**"):
-                    break
-                if cur.startswith("- "):
-                    items.append(cur)
-                i += 1
-            commits = [it for it in items if "/commit/" in it]
-            prs = [it for it in items if "/commit/" not in it]
-            is_commit = "/commit/" in entry
-            is_housekeeping = ("[beta-release]" in entry) or ("[release]" in entry)
-            if is_commit:
-                commits.insert(0, entry)
-            elif not is_housekeeping:
-                prs.append(entry)
-
-                def _pr_sort_key(line: str) -> int:
-                    m = re.search(r"#(\\d+)\\]", line)
-                    if not m:
-                        m = re.search(r"/pull/(\\d+)", line)
-                    return int(m.group(1)) if m else 10**9
-
-                prs = sorted(prs, key=_pr_sort_key)
-            if is_housekeeping:
-                new_block: list[str] = [cat_header, "", entry, ""]
-            else:
-                new_block = [cat_header, ""]
-            new_block.extend(commits)
-            new_block.extend(prs)
-            new_block.append("")
-            section = section[:cat_idx] + new_block + section[i:]
+            new_block = [cat_header, ""]
+        new_block.extend(commits)
+        new_block.extend(prs)
+        new_block.append("")
+        section = section[:cat_idx] + new_block + section[i:]
     if compare_from and not any("**Full Changelog**" in l for l in section):
         section += [
             f"**Full Changelog**: https://github.com/{_repo()}/compare/{compare_from}...{tag}",
