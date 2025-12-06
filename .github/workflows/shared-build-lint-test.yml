@@ -38,6 +38,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
+      - name: Update npm
+        id: update-npm
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
+
       - name: Install Python Dependencies
         id: install-python-deps
         shell: bash
@@ -49,22 +56,29 @@ jobs:
       - name: Install Node Dependencies
         id: install-node-deps
         shell: bash
-        run: npm ci
+        run: |
+          set -euo pipefail
+          npm ci
 
       - name: Lint
         id: lint
         shell: bash
-        run: npm run lint
+        run: |
+          set -euo pipefail
+          npm run lint
 
       - name: Build
         id: build
         shell: bash
-        run: npm run build
+        run: |
+          set -euo pipefail
+          npm run build
 
       - name: Node Import Test
         id: node-import-test
         shell: bash
         run: |
+          set -euo pipefail
           node <<'NODE'
           (async () => {
             try {
@@ -81,6 +95,7 @@ jobs:
         id: python-import-test
         shell: bash
         run: |
+          set -euo pipefail
           if [ -f requirements.txt ]; then
             set -e
             while IFS= read -r pkg || [ -n "$pkg" ]; do
@@ -101,5 +116,6 @@ jobs:
         id: outdated-audit
         shell: bash
         run: |
+          set -euo pipefail
           npm list --outdated || true
           npm audit || true

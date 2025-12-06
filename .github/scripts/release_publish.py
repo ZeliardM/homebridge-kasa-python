@@ -74,19 +74,10 @@ def main() -> None:
                 f"package.json version ({current_ver}) does not match expected "
                 f"version from tag ({expected_version})"
             )
-        pub_cmd = "npm publish --access public --provenance"
+        publish_cmd = "npm publish --provenance --access public"
         if npm_tag:
-            pub_cmd += f" --tag {npm_tag}"
-        npm_token = os.environ.get("NPM_TOKEN")
-        try:
-            npmrc_path = os.path.expanduser("~/.npmrc")
-            with open(npmrc_path, "w", encoding="utf-8") as nf:
-                nf.write(f"//registry.npmjs.org/:_authToken={npm_token}\n")
-            os.environ["NODE_AUTH_TOKEN"] = npm_token
-            print(f"[release_publish] Wrote ~/.npmrc from NPM_TOKEN")
-        except Exception as e:
-            print(f"::warning::[release_publish] Failed to write ~/.npmrc from NPM_TOKEN: {e}")
-        common.run(pub_cmd)
+            publish_cmd = f"npm publish --tag {npm_tag} --provenance --access public"
+        common.run(publish_cmd)
         version_out = common.npm_read_version()
         gh_out = os.environ.get("GITHUB_OUTPUT")
         if gh_out:

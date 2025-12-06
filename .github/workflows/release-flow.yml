@@ -78,11 +78,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node 22
+      - name: Setup Node 24
         id: setup-node
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
+
+      - name: Update npm
+        id: update-npm
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
 
       - name: Setup Python 3.12
         id: setup-python
@@ -130,11 +137,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node 22
+      - name: Setup Node 24
         id: setup-node
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
+
+      - name: Update npm
+        id: update-npm
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
 
       - name: Setup Python 3.12
         id: setup-python
