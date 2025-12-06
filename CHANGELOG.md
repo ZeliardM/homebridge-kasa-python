@@ -3,6 +3,7 @@
 
 ### Bug Fixes
 
+- [bug] Fix dependabot auto merge variables [28ef223](https://github.com/ZeliardM/homebridge-kasa-python/commit/28ef2233da495d3a59e009ea96da4eb9d4eb51d7) (@ZeliardM)
 - [bug] Fix dependabot labeling [c431e34](https://github.com/ZeliardM/homebridge-kasa-python/commit/c431e34d4b43d9f767d78f26574c1d6ad551617d) (@ZeliardM)
 - [bug] Fix dependabot auto-merge [ced37b4](https://github.com/ZeliardM/homebridge-kasa-python/commit/ced37b4194e439cb99ae2b30363cda92c06f9d1d) (@ZeliardM)
 - [bug] Fix package-lock.json [5a8c61d](https://github.com/ZeliardM/homebridge-kasa-python/commit/5a8c61d170ee1d21b5293ce2823b83633033d11d) (@ZeliardM)
