@@ -27,7 +27,7 @@ jobs:
     name: Auto-Merge Dependabot Pull Request
     runs-on: ubuntu-latest
     outputs:
-      is_merged: ${{ steps.auto_merge.outputs.is_merged}}
+      is_merged: ${{ steps.merge_output.outputs.is_merged }}
     steps:
       - name: Checkout Actions
         id: checkout

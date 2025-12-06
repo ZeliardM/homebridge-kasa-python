@@ -12,6 +12,7 @@
 ### Other Changes
 
 - [other] Change PR Workflow triggers [d5ab470](https://github.com/ZeliardM/homebridge-kasa-python/commit/d5ab470dfb9108fa4affcab2709f96d6a1142372) (@ZeliardM)
+- npm(deps-dev): bump homebridge from 2.0.0-beta.60 to 2.0.0-beta.64 [#177](https://github.com/ZeliardM/homebridge-kasa-python/pull/177) (@dependabot[bot])
 - npm(deps-dev): bump typescript-eslint from 8.47.0 to 8.48.1 [#175](https://github.com/ZeliardM/homebridge-kasa-python/pull/175) (@dependabot[bot])
 - npm(deps-dev): bump homebridge from 2.0.0-beta.56 to 2.0.0-beta.63 [#174](https://github.com/ZeliardM/homebridge-kasa-python/pull/174) (@dependabot[bot])
 - pip(deps): bump anyio from 4.11.0 to 4.12.0 [#173](https://github.com/ZeliardM/homebridge-kasa-python/pull/173) (@dependabot[bot])
