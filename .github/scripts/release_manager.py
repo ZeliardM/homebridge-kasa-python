@@ -370,9 +370,9 @@ def _insert_entry(
             prs.append(entry)
 
             def _pr_sort_key(line: str) -> int:
-                m = re.search(r"#(\\d+)\\]", line)
+                m = re.search(r"#(\d+)\]", line)
                 if not m:
-                    m = re.search(r"/pull/(\\d+)", line)
+                    m = re.search(r"/pull/(\d+)", line)
                 return int(m.group(1)) if m else 10**9
 
             prs = sorted(prs, key=_pr_sort_key, reverse=True)
