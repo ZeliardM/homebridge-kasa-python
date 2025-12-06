@@ -19,6 +19,7 @@
 ### Other Changes
 
 - [other] Change PR Workflow triggers [d5ab470](https://github.com/ZeliardM/homebridge-kasa-python/commit/d5ab470dfb9108fa4affcab2709f96d6a1142372) (@ZeliardM)
+- npm(deps-dev): bump homebridge from 2.0.0-beta.60 to 2.0.0-beta.64 [#184](https://github.com/ZeliardM/homebridge-kasa-python/pull/184) (@dependabot[bot])
 - npm(deps-dev): bump homebridge from 2.0.0-beta.60 to 2.0.0-beta.64 [#183](https://github.com/ZeliardM/homebridge-kasa-python/pull/183) (@dependabot[bot])
 - npm(deps-dev): bump homebridge from 2.0.0-beta.60 to 2.0.0-beta.64 [#182](https://github.com/ZeliardM/homebridge-kasa-python/pull/182) (@dependabot[bot])
 - npm(deps-dev): bump homebridge from 2.0.0-beta.60 to 2.0.0-beta.64 [#181](https://github.com/ZeliardM/homebridge-kasa-python/pull/181) (@dependabot[bot])
