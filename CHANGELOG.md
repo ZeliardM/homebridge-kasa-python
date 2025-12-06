@@ -41,6 +41,7 @@
 - npm(deps-dev): bump typescript-eslint from 8.47.0 to 8.48.1 [#175](https://github.com/ZeliardM/homebridge-kasa-python/pull/175) (@dependabot[bot])
 - npm(deps-dev): bump homebridge from 2.0.0-beta.56 to 2.0.0-beta.63 [#174](https://github.com/ZeliardM/homebridge-kasa-python/pull/174) (@dependabot[bot])
 - pip(deps): bump anyio from 4.11.0 to 4.12.0 [#173](https://github.com/ZeliardM/homebridge-kasa-python/pull/173) (@dependabot[bot])
+- ci(deps): bump actions/labeler from 5 to 6 [#172](https://github.com/ZeliardM/homebridge-kasa-python/pull/172) (@dependabot[bot])
 - npm(deps-dev): bump @eslint/eslintrc from 3.3.1 to 3.3.3 [#169](https://github.com/ZeliardM/homebridge-kasa-python/pull/169) (@dependabot[bot])
 - npm(deps-dev): bump @typescript-eslint/parser from 8.47.0 to 8.48.0 in the typescript-eslint group [#168](https://github.com/ZeliardM/homebridge-kasa-python/pull/168) (@dependabot[bot])
 
