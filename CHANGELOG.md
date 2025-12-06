@@ -3,6 +3,7 @@
 
 ### Bug Fixes
 
+- [bug] Fix package-lock.json [5a8c61d](https://github.com/ZeliardM/homebridge-kasa-python/commit/5a8c61d170ee1d21b5293ce2823b83633033d11d) (@ZeliardM)
 - [bug] Fixes for auto merge PRs and CHANGELOG.md handling [de7aec0](https://github.com/ZeliardM/homebridge-kasa-python/commit/de7aec0a20043dcbf482aeafe30c34e485d09309) (@ZeliardM)
 - [bug] Fix labeler.yml [71bd2b9](https://github.com/ZeliardM/homebridge-kasa-python/commit/71bd2b9f46dbcfb823573ba7703d47019a81c5f8) (@ZeliardM)
 - [bug] Fix labeler.yml and dependabot labeling [c24383b](https://github.com/ZeliardM/homebridge-kasa-python/commit/c24383b81678fce55690f0f47aef9ccbba82de8d) (@ZeliardM)
