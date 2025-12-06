@@ -226,7 +226,7 @@ def git_commit_files(files: Sequence[str], message: str, fast_forward: bool = Fa
         return
     run(["git", "commit", "-m", message], check=False)
     if fast_forward:
-        run(["git", "pull"], check=True)
+        run(["git", "pull", "--ff-only"], check=True)
         run(["git", "push"], check=True)
     else:
         run(["git", "push"], check=False)
