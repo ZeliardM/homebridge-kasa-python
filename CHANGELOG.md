@@ -3,6 +3,7 @@
 
 ### Bug Fixes
 
+- [bug] Correct dependabot PR handling [fe385cc](https://github.com/ZeliardM/homebridge-kasa-python/commit/fe385cc3e5e80752e26e55718b36e00f8101031e) (@ZeliardM)
 - [bug] Fast Forward instead of rebase [f135835](https://github.com/ZeliardM/homebridge-kasa-python/commit/f135835664e8b1e0f117dc587c48860c32cfae33) (@ZeliardM)
 - [bug] Rebase on dependabot CHANGELOG.md update [961c558](https://github.com/ZeliardM/homebridge-kasa-python/commit/961c558f54e6fbaad85b0339e1cec10f886747bb) (@ZeliardM)
 - [bug] Fix dependabot auto merge variables [28ef223](https://github.com/ZeliardM/homebridge-kasa-python/commit/28ef2233da495d3a59e009ea96da4eb9d4eb51d7) (@ZeliardM)
