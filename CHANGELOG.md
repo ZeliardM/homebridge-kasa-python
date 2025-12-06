@@ -1,4 +1,12 @@
 # Changelog
+## [v3.0.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.7)
+
+### Other Changes
+
+- [other] Update README.md and npm publishing [aa57052](https://github.com/ZeliardM/homebridge-kasa-python/commit/aa5705236f10536ac6f2ab12e20545845fd23507) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.0.0-beta.6...v3.0.0-beta.7
+
 ## [v3.0.0-beta.6](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.6) (2025-12-06)
 
 ### Bug Fixes
