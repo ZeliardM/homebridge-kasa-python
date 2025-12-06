@@ -375,7 +375,7 @@ def _insert_entry(
                     m = re.search(r"/pull/(\\d+)", line)
                 return int(m.group(1)) if m else 10**9
 
-            prs = sorted(prs, key=_pr_sort_key)
+            prs = sorted(prs, key=_pr_sort_key, reverse=True)
         if is_housekeeping:
             new_block: list[str] = [cat_header, "", entry, ""]
         else:
