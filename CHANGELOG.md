@@ -3,6 +3,7 @@
 
 ### Bug Fixes
 
+- [bug] Fix release-publish.yml [de8c1a7](https://github.com/ZeliardM/homebridge-kasa-python/commit/de8c1a7935aac2a6d206e7fd3d1cb978dae71535) (@ZeliardM)
 - [bug] Correct PR sorting [6a8a31c](https://github.com/ZeliardM/homebridge-kasa-python/commit/6a8a31c52da51fe9fa9f30b3f861f9b3c00ae4e6) (@ZeliardM)
 - [bug] Correct package.json [9a49cd6](https://github.com/ZeliardM/homebridge-kasa-python/commit/9a49cd64c8efb3e3a513530653cee2097059a356) (@ZeliardM)
 - [bug] Reverse sort pattern for descending instead of ascending [616410f](https://github.com/ZeliardM/homebridge-kasa-python/commit/616410f4b8e432d7963b1e0eb474275c96d10dad) (@ZeliardM)
