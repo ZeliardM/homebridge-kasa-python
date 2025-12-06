@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Discord workflow helpers with three env-driven modes, controlled by CMD:
+Discord workflow helpers with three env-driven modes, controlled by MODE:
 
-CMD=trim
+MODE=trim
   - Reads the GitHub Release event payload (GITHUB_EVENT_PATH)
   - Builds a compact "Event - <event>" field value from the release body:
       * Bold release name or tag on the first line if available
@@ -16,7 +16,7 @@ CMD=trim
   - Writes Actions output key "body" (multiline <<EOF block)
   - Prints the final trimmed value to stdout
 
-CMD=edit-payload
+MODE=edit-payload
   - Reads the Discord webhook payload JSON from env WEBHOOK_PAYLOAD
   - Reads the trimmed event value from env EVENT_VALUE
   - Replaces the first embed field whose name starts with "Event -"
@@ -25,7 +25,7 @@ CMD=edit-payload
   - Writes Actions output key "edited_payload" (multiline <<EOF block)
   - Prints the final JSON to stdout
 
-CMD=post
+MODE=post
   - Posts the payload to the Discord webhook
   - Requires:
       * env WEBHOOK_URL
@@ -243,7 +243,7 @@ def _ensure_event_field(payload: dict, value: str) -> None:
     else:
         fields.append(new_field)
 
-def cmd_trim() -> int:
+def _handle_trim() -> int:
     evt = common.read_event()
     body = _read_release_body(evt)
     name_or_tag = _read_release_name_or_tag(evt)
@@ -256,7 +256,7 @@ def cmd_trim() -> int:
     print(event_value)
     return 0
 
-def cmd_edit_payload() -> int:
+def _handle_edit_payload() -> int:
     event_value = os.environ.get("EVENT_VALUE")
     payload_raw = os.environ.get("WEBHOOK_PAYLOAD")
     try:
@@ -274,9 +274,9 @@ def cmd_edit_payload() -> int:
     print(final_json)
     return 0
 
-def cmd_post() -> int:
-    webhook = os.environ.get("WEBHOOK_URL")
+def _handle_post() -> int:
     edited_payload_raw = os.environ.get("EDITED_PAYLOAD")
+    webhook = os.environ.get("WEBHOOK_URL")
     try:
         edited_payload = json.loads(edited_payload_raw)
     except Exception:
@@ -298,14 +298,14 @@ def cmd_post() -> int:
         return 1
 
 def main() -> int:
-    cmd = os.environ.get("CMD")
-    if cmd == "trim":
-        return cmd_trim()
-    if cmd == "edit-payload":
-        return cmd_edit_payload()
-    if cmd == "post":
-        return cmd_post()
-    print("::error::CMD must be one of: trim, edit-payload, post", file=sys.stderr)
+    mode = os.environ.get("MODE")
+    if mode == "trim":
+        return _handle_trim()
+    if mode == "edit-payload":
+        return _handle_edit_payload()
+    if mode == "post":
+        return _handle_post()
+    print("::error::MODE must be one of: trim, edit-payload, post", file=sys.stderr)
     return 1
 
 if __name__ == "__main__":

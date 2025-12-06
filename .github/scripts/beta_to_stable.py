@@ -42,9 +42,9 @@ def _ensure_stable_not_published(repo: str, token: str, stable_tag: str):
         print(f"::warning::Stable release {stable_tag} exists. Continuing...")
 
 def main():
-    github_token = os.environ.get("GITHUB_TOKEN")
     github_repository = os.environ.get("GITHUB_REPOSITORY")
-    context = Context(github_token=github_token, github_repository=github_repository)
+    github_token = os.environ.get("GITHUB_TOKEN")
+    context = Context(github_repository=github_repository, github_token=github_token)
     beta_tag, stable_tag = _latest_beta(context.github_repository, context.github_token)
     _ensure_stable_not_published(context.github_repository, context.github_token, stable_tag)
     code, pulls = common.github_api(context.github_repository, context.github_token, "/pulls?state=open&base=latest")

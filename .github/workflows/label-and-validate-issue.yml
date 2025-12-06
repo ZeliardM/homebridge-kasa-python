@@ -10,8 +10,8 @@ permissions:
   issues: write
 
 env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   GITHUB_REPOSITORY: ${{ github.repository }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   ISSUE_NUMBER: ${{ github.event.issue.number }}
 
 concurrency:
@@ -46,8 +46,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
           : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+          : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
           : "${ISSUE_NUMBER:?ISSUE_NUMBER is required}"
 
   classify:
@@ -166,13 +166,11 @@ jobs:
           MARK="<!-- COPILOT-STICKY:ISSUE -->"
           OK="${{ steps.validate-issue.outputs.ok }}"
           MSGS_JSON='${{ steps.validate-issue.outputs.messages }}'
-
           if [ -n "$MSGS_JSON" ] && [ "$MSGS_JSON" != "null" ]; then
             VALMSGS="$(printf '%s' "$MSGS_JSON" | jq -r '.[]?')"
           else
             VALMSGS=""
           fi
-
           if [ "$OK" != "true" ]; then
             {
               echo "❌ Issue validation failed."

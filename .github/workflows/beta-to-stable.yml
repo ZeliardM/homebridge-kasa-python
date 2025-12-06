@@ -1,5 +1,5 @@
 ---
-name: Convert Beta to Stable PR
+name: Convert Beta to Stable Pull Request
 
 on:
   workflow_dispatch: {}
@@ -10,8 +10,8 @@ permissions:
   pull-requests: write
 
 env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   GITHUB_REPOSITORY: ${{ github.repository }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   detect-fork:
@@ -41,11 +41,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
           : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+          : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
 
   create-pr:
-    name: Create Stable Release PR
+    name: Create Stable Release Pull Request
     runs-on: ubuntu-latest
     needs: prepare
     if: needs.prepare.result == 'success'
@@ -62,7 +62,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Create Stable Release PR
+      - name: Create Stable Release Pull Request
         id: create-pr
         shell: bash
         run: |

@@ -42,7 +42,7 @@ def run(
         stderr=stderr,
     )
 
-def read_event(path: str | None = None) -> dict[str, Any]:
+def read_event(path: str | None = None) -> dict:
     event_path = path or os.environ.get("GITHUB_EVENT_PATH") or ""
     if not event_path or not os.path.exists(event_path):
         return {}
@@ -58,7 +58,7 @@ def github_api(
     path: str,
     method: str = "GET",
     data: dict | None = None,
-) -> tuple[int, Any]:
+) -> tuple[int, dict]:
     url = f"https://api.github.com/repos/{repo}{path}"
     headers = {
         "Accept": "application/vnd.github+json",
@@ -87,20 +87,18 @@ def github_api(
     except Exception as e:
         return 0, {"message": str(e)}
 
-def gh_get_json(
-    repo: str,
-    token: str,
-    path: str,
-    expected: type = dict,
-    *,
-    default: Any = None,
-) -> Any:
-    code, data = github_api(repo, token, path, method="GET")
-    if code != 200:
-        return default
-    if isinstance(data, expected):
-        return data
-    return default
+def gh_commit_pulls(repo: str, token: str, sha: str) -> list[dict]:
+    url = f"https://api.github.com/repos/{repo}/commits/{sha}/pulls"
+    headers = {
+        "Accept": "application/vnd.github.groot-preview+json",
+        "Authorization": f"Bearer {token}",
+        "User-Agent": f"release-manager (+https://github.com/{repo})",
+    }
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        raw = resp.read().decode()
+        data = json.loads(raw) if raw.strip() else []
+        return data if isinstance(data, list) else []
 
 def gh_list_paginated(
     repo: str,
@@ -124,22 +122,6 @@ def gh_list_paginated(
         page += 1
     return out
 
-def gh_releases(repo: str, token: str, *, max_pages: int = 50) -> list[dict]:
-    return gh_list_paginated(repo, token, "/releases", max_pages=max_pages)
-
-def gh_commit_pulls(repo: str, token: str, sha: str) -> list[dict]:
-    url = f"https://api.github.com/repos/{repo}/commits/{sha}/pulls"
-    headers = {
-        "Accept": "application/vnd.github.groot-preview+json",
-        "Authorization": f"Bearer {token}",
-        "User-Agent": f"release-manager (+https://github.com/{repo})",
-    }
-    req = urllib.request.Request(url, headers=headers, method="GET")
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        raw = resp.read().decode()
-        data = json.loads(raw) if raw.strip() else []
-        return data if isinstance(data, list) else []
-
 def gh_release(
     repo: str,
     token: str,
@@ -160,27 +142,6 @@ def gh_release(
             return None
         return data if isinstance(data, dict) else None
     raise ValueError("release_id or tag is required")
-
-def gh_release_delete(repo: str, token: str, release_id: int) -> bool:
-    code, _ = github_api(repo, token, f"/releases/{release_id}", method="DELETE")
-    return 200 <= code < 300 or code == 204
-
-def gh_release_update(
-    repo: str,
-    token: str,
-    release_id: int,
-    **fields: Any,
-) -> dict | None:
-    code, data = github_api(
-        repo,
-        token,
-        f"/releases/{release_id}",
-        method="PATCH",
-        data=fields or {},
-    )
-    if 200 <= code < 300 and isinstance(data, dict):
-        return data
-    return None
 
 def gh_release_create(
     repo: str,
@@ -209,24 +170,47 @@ def gh_release_create(
     print(f"::warning::Failed to create release {tag}: {code} {data}")
     return None
 
-def git_force_tag(tag: str) -> None:
-    try:
-        run(["git", "fetch", "--tags"], check=False)
-        run(["git", "tag", "-f", tag], check=True)
-        run(["git", "push", "--force", "origin", tag], check=True)
-        print(f"[common] Tag {tag} updated to HEAD")
-    except subprocess.CalledProcessError as e:
-        print(f"::warning::[common] Failed to update tag {tag}: {e}")
+def gh_release_delete(repo: str, token: str, release_id: int) -> bool:
+    code, _ = github_api(repo, token, f"/releases/{release_id}", method="DELETE")
+    return 200 <= code < 300 or code == 204
 
-def git_delete_tag(tag: str) -> None:
-    try:
-        run(["git", "fetch", "--tags", "--force", "origin"], check=False)
-        run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
-    except subprocess.CalledProcessError:
-        print(
-            f"::warning::[common] Failed to delete tag {tag} "
-            f"(it may not exist remotely)"
-        )
+def gh_release_update(
+    repo: str,
+    token: str,
+    release_id: int,
+    **fields: Any,
+) -> dict | None:
+    code, data = github_api(
+        repo,
+        token,
+        f"/releases/{release_id}",
+        method="PATCH",
+        data=fields or {},
+    )
+    if 200 <= code < 300 and isinstance(data, dict):
+        return data
+    return None
+
+def gh_releases(repo: str, token: str, *, max_pages: int = 50) -> list[dict]:
+    return gh_list_paginated(repo, token, "/releases", max_pages=max_pages)
+
+def git_checkout_ref(ref: str, *, create_branch_from: str | None = None) -> None:
+    if create_branch_from:
+        try:
+            run(["git", "checkout", "-B", ref, f"origin/{create_branch_from}"], check=True)
+            return
+        except Exception:
+            pass
+    run(["git", "checkout", ref], check=False)
+
+def git_checkout_tag(tag: str) -> None:
+    run(["git", "fetch", "--tags", "--force", "origin"], check=False)
+    cp = run(
+        ["git", "-c", "advice.detachedHead=false", "checkout", "-f", f"tags/{tag}"],
+        check=False,
+    )
+    if cp.returncode != 0:
+        run(["git", "checkout", "-f", f"refs/tags/{tag}"], check=True)
 
 def git_commit_files(files: Sequence[str], message: str) -> None:
     run(["git", "config", "--local", "user.email", "action@github.com"], check=False)
@@ -243,6 +227,16 @@ def git_commit_files(files: Sequence[str], message: str) -> None:
     run(["git", "commit", "-m", message], check=False)
     run(["git", "push"], check=False)
 
+def git_delete_tag(tag: str) -> None:
+    try:
+        run(["git", "fetch", "--tags", "--force", "origin"], check=False)
+        run(["git", "push", "origin", f":refs/tags/{tag}"], check=False)
+    except subprocess.CalledProcessError:
+        print(
+            f"::warning::[common] Failed to delete tag {tag} "
+            f"(it may not exist remotely)"
+        )
+
 def git_fetch(ref: str | None = None, *, depth: int | None = None) -> None:
     args = ["git", "fetch", "origin"]
     if ref:
@@ -251,26 +245,26 @@ def git_fetch(ref: str | None = None, *, depth: int | None = None) -> None:
         args.append(f"--depth={depth}")
     run(args, check=False)
 
-def git_checkout_ref(ref: str, *, create_branch_from: str | None = None) -> None:
-    if create_branch_from:
-        try:
-            run(["git", "checkout", "-B", ref, f"origin/{create_branch_from}"], check=True)
-            return
-        except Exception:
-            pass
-    run(["git", "checkout", ref], check=False)
+def git_force_tag(tag: str) -> None:
+    try:
+        run(["git", "fetch", "--tags"], check=False)
+        run(["git", "tag", "-f", tag], check=True)
+        run(["git", "push", "--force", "origin", tag], check=True)
+        print(f"[common] Tag {tag} updated to HEAD")
+    except subprocess.CalledProcessError as e:
+        print(f"::warning::[common] Failed to update tag {tag}: {e}")
 
-def git_get_commit_subject(sha: str) -> str:
+def git_get_commit_author_name(sha: str) -> str:
     proc = run(
-        ["git", "show", "-s", "--format=%s", sha],
+        ["git", "show", "-s", "--format=%aN", sha],
         capture=True,
         check=False,
     )
     return proc.stdout.strip() if proc and getattr(proc, "stdout", None) else ""
 
-def git_get_commit_author_name(sha: str) -> str:
+def git_get_commit_subject(sha: str) -> str:
     proc = run(
-        ["git", "show", "-s", "--format=%aN", sha],
+        ["git", "show", "-s", "--format=%s", sha],
         capture=True,
         check=False,
     )
@@ -286,15 +280,6 @@ def git_rev_list_range(before: str, after: str) -> list[str]:
         return []
     return [s for s in proc.stdout.strip().split() if s]
 
-def git_checkout_tag(tag: str) -> None:
-    run(["git", "fetch", "--tags", "--force", "origin"], check=False)
-    cp = run(
-        ["git", "-c", "advice.detachedHead=false", "checkout", "-f", f"tags/{tag}"],
-        check=False,
-    )
-    if cp.returncode != 0:
-        run(["git", "checkout", "-f", f"refs/tags/{tag}"], check=True)
-
 def npm_available() -> bool:
     try:
         run(
@@ -307,17 +292,6 @@ def npm_available() -> bool:
         return True
     except Exception:
         return False
-
-def npm_read_version() -> str:
-    with open("package.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
-    v = data.get("version", "")
-    if not isinstance(v, str) or not v:
-        raise RuntimeError("package.json is missing a valid version")
-    return v
-
-def npm_set_version_no_git_tag(new_ver: str) -> None:
-    run(["npm", "version", new_ver, "--no-git-tag-version"])
 
 def npm_pkg_set_version(new_version_no_v: str) -> bool:
     if not os.path.exists("package.json"):
@@ -335,32 +309,30 @@ def npm_pkg_set_version(new_version_no_v: str) -> bool:
         print(f"[common] npm version alignment failed: {e}")
         return False
 
-def npm_configure_auth_from_env(var: str = "NPM_AUTH_TOKEN") -> None:
-    token = os.environ.get(var) or ""
-    if not token:
-        return
-    try:
-        npmrc_path = os.path.expanduser("~/.npmrc")
-        with open(npmrc_path, "w", encoding="utf-8") as nf:
-            nf.write(f"//registry.npmjs.org/:_authToken={token}\n")
-        os.environ["NODE_AUTH_TOKEN"] = token
-        print(f"[common] Wrote ~/.npmrc from {var}")
-    except Exception as e:
-        print(f"::warning::[common] Failed to write ~/.npmrc from {var}: {e}")
+def npm_read_version() -> str:
+    with open("package.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    v = data.get("version", "")
+    if not isinstance(v, str) or not v:
+        raise RuntimeError("package.json is missing a valid version")
+    return v
+
+def npm_set_version_no_git_tag(new_ver: str) -> None:
+    run(["npm", "version", new_ver, "--no-git-tag-version"])
 
 @dataclass
 class Context:
-    github_token: str
     github_repository: str
-    mode: str = ""
-    pull_request_title: str = ""
-    pull_request_author: str = ""
-    pull_request_number: str = ""
-    base_branch: str = ""
-    pull_request_labels: str = ""
-    before: str = ""
-    after: str = ""
-    tag: str = ""
+    github_token: str
+    head_after: str = ""
+    head_before: str = ""
     is_beta: bool = False
-    target_branch: str = ""
     issue_number: str = ""
+    mode: str = ""
+    pull_request_author: str = ""
+    pull_request_branch: str = ""
+    pull_request_labels: str = ""
+    pull_request_number: str = ""
+    pull_request_title: str = ""
+    tag: str = ""
+    target_branch: str = ""

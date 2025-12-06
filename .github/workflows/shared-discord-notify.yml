@@ -69,8 +69,8 @@ jobs:
         shell: bash
         env:
           CMD: edit-payload
-          WEBHOOK_PAYLOAD: ${{ steps.webhook.outputs.payload }}
           EVENT_VALUE: ${{ steps.release_notes.outputs.body }}
+          WEBHOOK_PAYLOAD: ${{ steps.webhook.outputs.payload }}
         run: |
           set -euo pipefail
           python3 .github/scripts/discord_tools.py
@@ -80,8 +80,8 @@ jobs:
         shell: bash
         env:
           CMD: post
-          WEBHOOK_URL: ${{ secrets.discord_webhook }}
           EDITED_PAYLOAD: ${{ steps.edit_payload.outputs.edited_payload }}
+          WEBHOOK_URL: ${{ secrets.discord_webhook }}
         run: |
           set -euo pipefail
           python3 .github/scripts/discord_tools.py

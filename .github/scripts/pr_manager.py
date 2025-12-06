@@ -47,7 +47,7 @@ CLASSIFICATION = {
 START = "BREAKING_CHANGE_EXPLANATION_START"
 END = "BREAKING_CHANGE_EXPLANATION_END"
 
-def _validate_pr(context: Context) -> dict:
+def _handle_validate(context: Context) -> dict:
     code, pr = common.github_api(context.github_repository, context.github_token, f"/pulls/{context.pull_request_number}")
     if code != 200 or not isinstance(pr, dict):
         return {
@@ -110,11 +110,11 @@ def _validate_pr(context: Context) -> dict:
     return {"ok": ok, "messages": messages}
 
 def main():
-    github_token = os.getenv("GITHUB_TOKEN")
     github_repository = os.getenv("GITHUB_REPOSITORY")
+    github_token = os.getenv("GITHUB_TOKEN")
     pull_request_number = os.getenv("PULL_REQUEST_NUMBER")
     context = Context(github_token=github_token, github_repository=github_repository, pull_request_number=pull_request_number)
-    result = _validate_pr(context)
+    result = _handle_validate(context)
     print(json.dumps(result))
     sys.exit(0)
 

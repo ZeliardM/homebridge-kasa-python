@@ -32,8 +32,8 @@ def _delegate_rollback(context: Context) -> None:
     env = os.environ.copy()
     env["GITHUB_REPOSITORY"] = context.github_repository
     env["GITHUB_TOKEN"] = context.github_token
-    env["TAG"] = context.tag
     env["MODE"] = "rollback"
+    env["TAG"] = context.tag
     if context.target_branch:
         env["TARGET_BRANCH"] = context.target_branch
     try:
@@ -48,13 +48,13 @@ def _delegate_rollback(context: Context) -> None:
 def main() -> None:
     github_repository = os.environ.get("GITHUB_REPOSITORY")
     github_token = os.environ.get("GITHUB_TOKEN")
-    context = Context(github_token=github_token, github_repository=github_repository)
+    context = Context(github_repository=github_repository, github_token=github_token)
     evt = common.read_event()
     tag, expected_version = _resolve_tag_and_expected_version(evt)
     release_info = evt.get("release")
     context.tag = tag
     context.target_branch = release_info.get("target_commitish")
-    dist_tag = os.environ.get("NPM_TAG")
+    npm_tag = os.environ.get("NPM_TAG")
     try:
         print(f"[publish] Resolved tag: {tag}")
         print(f"[publish] Expected version from tag: {expected_version}")
@@ -63,7 +63,7 @@ def main() -> None:
         common.git_checkout_tag(tag)
         current_ver = common.npm_read_version()
         print(f"[publish] package.json version: {current_ver}")
-        print(f"[publish] expected version:     {expected_version}")
+        print(f"[publish] expected version: {expected_version}")
         if current_ver != expected_version:
             print("[publish] package.json version mismatch; updating via npm version --no-git-tag-version")
             common.npm_set_version_no_git_tag(expected_version)
@@ -75,17 +75,17 @@ def main() -> None:
                 f"version from tag ({expected_version})"
             )
         pub_cmd = "npm publish --access public --provenance"
-        if dist_tag:
-            pub_cmd += f" --tag {dist_tag}"
+        if npm_tag:
+            pub_cmd += f" --tag {npm_tag}"
         npm_token = os.environ.get("NPM_TOKEN")
         try:
             npmrc_path = os.path.expanduser("~/.npmrc")
             with open(npmrc_path, "w", encoding="utf-8") as nf:
                 nf.write(f"//registry.npmjs.org/:_authToken={npm_token}\n")
             os.environ["NODE_AUTH_TOKEN"] = npm_token
-            print(f"[release_publish] Wrote ~/.npmrc from NPM_AUTH_TOKEN")
+            print(f"[release_publish] Wrote ~/.npmrc from NPM_TOKEN")
         except Exception as e:
-            print(f"::warning::[release_publish] Failed to write ~/.npmrc from NPM_AUTH_TOKEN: {e}")
+            print(f"::warning::[release_publish] Failed to write ~/.npmrc from NPM_TOKEN: {e}")
         common.run(pub_cmd)
         version_out = common.npm_read_version()
         gh_out = os.environ.get("GITHUB_OUTPUT")

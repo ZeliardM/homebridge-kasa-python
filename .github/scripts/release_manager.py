@@ -382,7 +382,15 @@ def _insert_entry(
             if is_commit:
                 commits.insert(0, entry)
             elif not is_housekeeping:
-                prs.insert(0, entry)
+                prs.append(entry)
+
+                def _pr_sort_key(line: str) -> int:
+                    m = re.search(r"#(\\d+)\\]", line)
+                    if not m:
+                        m = re.search(r"/pull/(\\d+)", line)
+                    return int(m.group(1)) if m else 10**9
+
+                prs = sorted(prs, key=_pr_sort_key)
             if is_housekeeping:
                 new_block: list[str] = [cat_header, "", entry, ""]
             else:
@@ -1101,23 +1109,23 @@ def _handle_finalize(context: Context) -> None:
         print(f"[release-manager] Stable release finalized {v.tag()}")
 
 def _handle_commit_push(context: Context) -> None:
-    before = context.before
-    after = context.after
-    if not after or re.fullmatch(r"0+", after):
+    head_before = context.head_before
+    head_after = context.head_after
+    if not head_after or re.fullmatch(r"0+", head_after):
         print("[release-manager] No actionable commit SHA provided; exiting.")
         return
     common.git_fetch("HEAD")
-    shas = common.git_rev_list_range(before, after)
+    shas = common.git_rev_list_range(head_before, head_after)
     if not shas:
         print(
-            f"[release-manager] No commits found in range {before}..{after}; "
-            f"falling back to single commit {after}"
+            f"[release-manager] No commits found in range {head_before}..{head_after}; "
+            f"falling back to single commit {head_after}"
         )
-        shas = [after]
+        shas = [head_after]
     else:
         print(
             f"[release-manager] Processing {len(shas)} commit(s) "
-            f"from range {before}..{after}"
+            f"from range {head_before}..{head_after}"
         )
     content = _read_changelog()
     final_target_version: Version | None = None
@@ -1225,7 +1233,7 @@ def _handle_commit_push(context: Context) -> None:
 
 def _handle_pr_merge(context: Context) -> None:
     labels = _load_labels(context.pull_request_labels)
-    if context.base_branch == "latest" and "stable-conversion" in labels:
+    if context.pull_request_branch == "latest" and "stable-conversion" in labels:
         m = re.search(r"v\d+\.\d+\.\d+", context.pull_request_title or "")
         if not m:
             print(
@@ -1267,7 +1275,7 @@ def _handle_pr_merge(context: Context) -> None:
             f"{target_stable.tag()} targeted to latest; included betas: {included}"
         )
         return
-    if context.base_branch != "beta":
+    if context.pull_request_branch != "beta":
         print("[release-manager] PR base not beta, ignoring.")
         return
     content = _read_changelog()
@@ -1316,15 +1324,15 @@ def main() -> None:
         github_token=github_token, github_repository=github_repository, mode=mode
     )
     if mode == "pr-merge":
-        context.pull_request_title = os.environ.get("PR_TITLE")
-        context.pull_request_author = os.environ.get("PR_AUTHOR")
-        context.pull_request_number = os.environ.get("PR_NUMBER")
-        context.base_branch = os.environ.get("BASE_BRANCH")
-        context.pull_request_labels = os.environ.get("PR_LABELS")
+        context.pull_request_author = os.environ.get("PULL_REQUEST_AUTHOR")
+        context.pull_request_branch = os.environ.get("PULL_REQUEST_BRANCH")
+        context.pull_request_labels = os.environ.get("PULL_REQUEST_LABELS")
+        context.pull_request_number = os.environ.get("PULL_REQUEST_NUMBER")
+        context.pull_request_title = os.environ.get("PULL_REQUEST_TITLE")
         _handle_pr_merge(context)
     elif mode == "commit-push":
-        context.before = os.environ.get("BEFORE")
-        context.after = os.environ.get("AFTER")
+        context.head_before = os.environ.get("HEAD_BEFORE")
+        context.head_after = os.environ.get("HEAD_AFTER")
         _handle_commit_push(context)
     elif mode == "finalize":
         context.tag = os.environ.get("TAG")

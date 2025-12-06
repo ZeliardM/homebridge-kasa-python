@@ -10,8 +10,8 @@ permissions:
   id-token: write
 
 env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   GITHUB_REPOSITORY: ${{ github.repository }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   detect-fork:
@@ -40,8 +40,8 @@ jobs:
         id: validate
         shell: bash
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
@@ -83,9 +83,9 @@ jobs:
         id: finalize-release
         shell: bash
         env:
-          TAG: ${{ github.event.release.tag_name }}
           IS_BETA: ${{ github.event.release.prerelease == true }}
           MODE: finalize
+          TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
           python .github/scripts/release_manager.py
@@ -132,8 +132,8 @@ jobs:
         id: publish
         shell: bash
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TAG: ${{ github.event.release.prerelease && 'beta' || '' }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           python3 .github/scripts/release_publish.py
