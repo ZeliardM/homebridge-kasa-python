@@ -3,6 +3,8 @@
 
 ### Bug Fixes
 
+- [bug] Correct package.json [9a49cd6](https://github.com/ZeliardM/homebridge-kasa-python/commit/9a49cd64c8efb3e3a513530653cee2097059a356) (@ZeliardM)
+- [bug] Reverse sort pattern for descending instead of ascending [616410f](https://github.com/ZeliardM/homebridge-kasa-python/commit/616410f4b8e432d7963b1e0eb474275c96d10dad) (@ZeliardM)
 - [bug] Fix _insert_entry logic for CHANGELOG.md [17c1242](https://github.com/ZeliardM/homebridge-kasa-python/commit/17c12420583b7ba8ed9d3aa037d0fda8060819e0) (@ZeliardM)
 - [bug] Fix package.json [7ec8d40](https://github.com/ZeliardM/homebridge-kasa-python/commit/7ec8d40673e7f80ee2bfbfda2b173ecb4f5191e4) (@ZeliardM)
 - [bug] Return to rebase instead of fast-forward [e943a65](https://github.com/ZeliardM/homebridge-kasa-python/commit/e943a6592838d9fa19ad19dbf5cdf06c7597dc54) (@ZeliardM)
