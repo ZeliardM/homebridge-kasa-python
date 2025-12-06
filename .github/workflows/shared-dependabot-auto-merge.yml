@@ -133,7 +133,11 @@ jobs:
         run: |
           set -euo pipefail
           labels_json="$(gh api repos/"$GITHUB_REPOSITORY"/issues/"$PULL_REQUEST_NUMBER"/labels --jq '.[].name' | jq -R . | jq -s .)"
-          echo "labels=$labels_json" >> "$GITHUB_OUTPUT"
+          {
+            echo 'labels<<EOF'
+            echo "$labels_json"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Serialize Labels
         id: labels
