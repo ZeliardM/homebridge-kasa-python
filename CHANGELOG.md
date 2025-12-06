@@ -1,5 +1,5 @@
 # Changelog
-## [v3.0.0-beta.5](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.5)
+## [v3.0.0-beta.5](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.5) (2025-12-06)
 
 ### Bug Fixes
 
@@ -25,6 +25,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v3.0.0-beta.5 [beta-release] (@github-actions)
 - [other] Correct package.json and CHANGELOG.md [33a11d4](https://github.com/ZeliardM/homebridge-kasa-python/commit/33a11d47e97dddb54de5eeb9326231dd947c69cb) (@ZeliardM)
 - [other] Change PR Workflow triggers [d5ab470](https://github.com/ZeliardM/homebridge-kasa-python/commit/d5ab470dfb9108fa4affcab2709f96d6a1142372) (@ZeliardM)
 - npm(deps-dev): bump homebridge from 2.0.0-beta.60 to 2.0.0-beta.64 [#188](https://github.com/ZeliardM/homebridge-kasa-python/pull/188) (@dependabot[bot])
