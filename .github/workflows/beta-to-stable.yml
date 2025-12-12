@@ -1,29 +1,83 @@
-name: Convert Beta to Stable PR
+---
+name: Convert Beta to Stable Pull Request
 
 on:
   workflow_dispatch: {}
 
 permissions:
   contents: read
-  pull-requests: write
   issues: write
+  pull-requests: write
+
+env:
+  GITHUB_REPOSITORY: ${{ github.repository }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  create-pr:
+  detect-fork:
+    name: Detect Fork
     runs-on: ubuntu-latest
+    outputs:
+      is_fork: ${{ steps.detect-fork-context.outputs.is_fork }}
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout Actions
+        id: checkout
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
+      - name: Detect Fork Context
+        id: detect-fork-context
+        uses: ./.github/actions/detect-fork
+
+  prepare:
+    name: Validate Environment
+    runs-on: ubuntu-latest
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'false'
+    steps:
+      - name: Validate Environment
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+          : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
+
+  create-pr:
+    name: Create Stable Release Pull Request
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.result == 'success'
+    steps:
+      - name: Checkout Actions
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.12
+        id: setup-python
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - name: Create or update beta -> latest PR (auto-detect version from last published beta)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
+      - name: Create Stable Release Pull Request
+        id: create-pr
+        shell: bash
         run: |
           set -euo pipefail
           python3 .github/scripts/beta_to_stable.py
+
+  fork-notice:
+    name: Fork Notice
+    runs-on: ubuntu-latest
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'true'
+    steps:
+      - name: Fork Notice
+        id: fork-notice
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::notice:: This workflow is running in a forked repository. All privileged steps have been skipped."

@@ -1,17 +1,22 @@
+---
 name: Stale
 
 on:
   schedule:
     - cron: '30 1 * * *'
 
-jobs:
-  stale:
-    runs-on: ubuntu-latest
-    permissions:
+permissions:
       issues: write
       pull-requests: write
+
+jobs:
+  stale:
+    name: Stale Issues and Pull Requests
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/stale@v10
+      - name: Stale
+        id: stale
+        uses: actions/stale@v10
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           days-before-issue-stale: 60
@@ -28,8 +33,8 @@ jobs:
           stale-issue-message: |
             This issue is stale after 60 days of inactivity. It will close in 7 days unless updated.
           close-issue-message: |
-            Closing due to inactivity. Reopen if still valid.
+            Closing stale issue due to inactivity. Re-open if still valid.
           stale-pr-message: |
-            This PR is stale after 30 days of inactivity. It will close in 7 days unless updated.
+            This pull request is stale after 30 days of inactivity. It will close in 7 days unless updated.
           close-pr-message: |
-            Closing stale PR. Reopen if you plan to continue.
+            Closing stale pull request due to inactivity. Re-open if still valid.

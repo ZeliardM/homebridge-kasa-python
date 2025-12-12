@@ -1,65 +1,84 @@
+---
 name: Build, Lint, and Test
 
 on:
-  push:
-    branches: [latest, beta]
-  pull_request:
-    branches: [latest, beta]
-  workflow_call:
-    inputs:
-      node_versions:
-        description: JSON array of Node versions
-        required: false
-        type: string
-      python_versions:
-        description: JSON array of Python versions
-        required: false
-        type: string
+  workflow_call: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: build-lint-test-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build_lint_test:
+    name: Build, Lint, and Test
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        node-version: ${{ fromJson(inputs.node_versions || '["20","22","24"]') }}
-        python-version: ${{ fromJson(inputs.python_versions || '["3.11","3.12","3.13"]') }}
+        node-version: ${{ fromJson('["20","22","24"]') }}
+        python-version: ${{ fromJson('["3.11","3.12","3.13"]') }}
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout Actions
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Node ${{ matrix.node-version }}
-        uses: actions/setup-node@v5
+        id: setup-node
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
       - name: Setup Python ${{ matrix.python-version }}
+        id: setup-python
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install Python deps
+      - name: Update npm
+        id: update-npm
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
+
+      - name: Install Python Dependencies
+        id: install-python-deps
+        shell: bash
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Install Node deps
-        run: npm ci
+      - name: Install Node Dependencies
+        id: install-node-deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
 
       - name: Lint
-        run: npm run lint
+        id: lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint
 
       - name: Build
-        run: npm run build
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
 
       - name: Node Import Test
+        id: node-import-test
+        shell: bash
         run: |
+          set -euo pipefail
           node <<'NODE'
           (async () => {
             try {
@@ -72,17 +91,17 @@ jobs:
           })();
           NODE
 
-      - name: Python Imports Test
+      - name: Python Import Test
+        id: python-import-test
+        shell: bash
         run: |
+          set -euo pipefail
           if [ -f requirements.txt ]; then
             set -e
             while IFS= read -r pkg || [ -n "$pkg" ]; do
-              # strip whitespace
               line="$(printf '%s' "$pkg" | sed 's/[[:space:]]//g')"
-              # skip blank or comment lines
               [ -z "$line" ] && continue
               case "$line" in \#*) continue ;; esac
-              # Extract top-level package name, drop extras, normalize dashes
               mod="$(printf '%s' "$line" | cut -d'=' -f1 | sed 's/\[.*\]//' | tr '-' '_' )"
               case "$mod" in
                 python_kasa) mod="kasa" ;;
@@ -93,7 +112,10 @@ jobs:
             echo "Python Imports OK"
           fi
 
-      - name: Outdated / Audit (non-blocking)
+      - name: Outdated / Audit
+        id: outdated-audit
+        shell: bash
         run: |
+          set -euo pipefail
           npm list --outdated || true
           npm audit || true

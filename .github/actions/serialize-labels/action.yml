@@ -1,0 +1,22 @@
+name: Serialize Labels
+description: Writes provided labels JSON to a file and exposes its path as an output
+inputs:
+  labels_json:
+    description: JSON array of label names
+    required: true
+outputs:
+  path:
+    description: Path to the written labels JSON file
+    value: ${{ steps.serialize.outputs.path }}
+runs:
+  using: composite
+  steps:
+    - name: Serialize Labels
+      id: serialize
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p .github
+        echo '${{ inputs.labels_json }}' > .github/labels.json
+        cat .github/labels.json | jq . > /dev/null
+        echo "path=.github/labels.json" >> "$GITHUB_OUTPUT"

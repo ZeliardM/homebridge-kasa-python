@@ -1,0 +1,218 @@
+---
+name: Label & Validate Issues
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  GITHUB_REPOSITORY: ${{ github.repository }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  ISSUE_NUMBER: ${{ github.event.issue.number }}
+
+concurrency:
+  group: label-and-validate-issue-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  detect-fork:
+    name: Detect Fork
+    runs-on: ubuntu-latest
+    outputs:
+      is_fork: ${{ steps.detect-fork-context.outputs.is_fork }}
+    steps:
+      - name: Checkout Actions
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect Fork Context
+        id: detect-fork-context
+        uses: ./.github/actions/detect-fork
+
+  prepare:
+    name: Validate Environment
+    runs-on: ubuntu-latest
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'false'
+    steps:
+      - name: Validate Environment
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+          : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
+          : "${ISSUE_NUMBER:?ISSUE_NUMBER is required}"
+
+  classify:
+    name: Classify Issue
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.result == 'success' && github.actor != 'github-actions[bot]'
+    outputs:
+      applied_label: ${{ steps.classify.outputs.applied_label }}
+      needs_info: ${{ steps.classify.outputs.needs_info }}
+    steps:
+      - name: Checkout Actions
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Ensure jq
+        id: ensure-jq
+        uses: ./.github/actions/ensure-jq
+
+      - name: Classify
+        id: classify
+        shell: bash
+        env:
+          MODE: classify
+        run: |
+          set -euo pipefail
+          RESULT="$(python3 .github/scripts/issue_manager.py)"
+          echo "Raw classification: $RESULT"
+          APPLIED="$(echo "$RESULT" | jq -r '.applied_label // empty')"
+          NEEDS="$(echo "$RESULT" | jq -r '.needs_info // false')"
+          echo "applied_label=$APPLIED" >> "$GITHUB_OUTPUT"
+          echo "needs_info=$NEEDS" >> "$GITHUB_OUTPUT"
+
+  label:
+    name: Clear & Apply Labels
+    runs-on: ubuntu-latest
+    needs: classify
+    if: needs.classify.result == 'success'
+    steps:
+      - name: Checkout Actions
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Clear Labels
+        id: clear-labels
+        uses: ./.github/actions/clear-labels
+        with:
+          number: ${{ env.ISSUE_NUMBER }}
+
+      - name: Apply Label
+        id: apply-label
+        shell: bash
+        run: |
+          set -euo pipefail
+          LABEL="${{ needs.classify.outputs.applied_label }}"
+          if [ -n "$LABEL" ]; then
+            gh issue edit ${{ env.ISSUE_NUMBER }} --add-label "$LABEL" || true
+          fi
+
+      - name: Apply or Remove needs-info Label
+        id: apply-remove-needs-info
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEEDS="${{ needs.classify.outputs.needs_info }}"
+          CURRENT_LABELS="$(gh api repos/"$GITHUB_REPOSITORY"/issues/"$ISSUE_NUMBER"/labels --jq '.[].name' || true)"
+          has_needs_info=false
+          if printf '%s\n' "$CURRENT_LABELS" | grep -qi '^needs-info$'; then
+            has_needs_info=true
+          fi
+          if [ "$NEEDS" = "true" ]; then
+            gh issue edit "$ISSUE_NUMBER" --add-label needs-info || true
+          elif [ "$NEEDS" = "false" ] && [ "$has_needs_info" = "true" ]; then
+            gh issue edit "$ISSUE_NUMBER" --remove-label needs-info || true
+          fi
+
+  validate-issue:
+    name: Validate Issue
+    runs-on: ubuntu-latest
+    needs: label
+    if: needs.label.result == 'success'
+    steps:
+      - name: Checkout Actions
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Ensure jq
+        id: ensure-jq
+        uses: ./.github/actions/ensure-jq
+
+      - name: Validate Issue
+        id: validate-issue
+        shell: bash
+        env:
+          MODE: validate
+        run: |
+          set -euo pipefail
+          RESULT="$(python3 .github/scripts/issue_manager.py)"
+          echo "Raw validation: $RESULT"
+          OK="$(echo "$RESULT" | jq -r '.ok // false')"
+          MSGS="$(echo "$RESULT" | jq -c '.messages // []')"
+          echo "ok=$OK" >> "$GITHUB_OUTPUT"
+          echo "messages=$MSGS" >> "$GITHUB_OUTPUT"
+
+      - name: Build Validation Sticky
+        id: build-validation-sticky
+        shell: bash
+        run: |
+          set -euo pipefail
+          MARK="<!-- COPILOT-STICKY:ISSUE -->"
+          OK="${{ steps.validate-issue.outputs.ok }}"
+          MSGS_JSON='${{ steps.validate-issue.outputs.messages }}'
+          if [ -n "$MSGS_JSON" ] && [ "$MSGS_JSON" != "null" ]; then
+            VALMSGS="$(printf '%s' "$MSGS_JSON" | jq -r '.[]?')"
+          else
+            VALMSGS=""
+          fi
+          if [ "$OK" != "true" ]; then
+            {
+              echo "❌ Issue validation failed."
+              echo
+              if [ -n "$VALMSGS" ]; then
+                echo "Details:"
+                echo '```'
+                printf '%s\n' "$VALMSGS"
+                echo '```'
+                echo
+              fi
+              echo "Please update the issue with the requested information."
+              echo
+              echo "$MARK"
+            } > body.txt
+          else
+            {
+              echo "✅ Issue classified, labeled, and validated successfully!"
+              echo
+              echo "Thank you. This issue has the required information and labels."
+              echo
+              echo "$MARK"
+            } > body.txt
+          fi
+
+      - name: Upsert Validation Sticky
+        id: upsert-validation-sticky
+        uses: ./.github/actions/sticky-comment
+        with:
+          number: ${{ env.ISSUE_NUMBER }}
+          marker: "<!-- COPILOT-STICKY:ISSUE -->"
+          body_file: body.txt
+
+  fork-notice:
+    name: Fork Notice
+    runs-on: ubuntu-latest
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'true'
+    steps:
+      - name: Fork Notice
+        id: fork-notice
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::notice:: This workflow is running in a forked repository. All privileged steps have been skipped."

@@ -1,0 +1,270 @@
+---
+name: Label & Validate Pull Requests
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  GITHUB_REPOSITORY: ${{ github.repository }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+
+concurrency:
+  group: label-and-validate-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  detect-fork:
+    name: Detect Fork
+    runs-on: ubuntu-latest
+    outputs:
+      is_fork: ${{ steps.detect-fork-context.outputs.is_fork }}
+    steps:
+      - name: Checkout Actions
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect Fork Context
+        id: detect-fork-context
+        uses: ./.github/actions/detect-fork
+
+  prepare:
+    name: Validate Environment
+    runs-on: ubuntu-latest
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'false'
+    steps:
+      - name: Validate Environment
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+          : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
+          : "${PULL_REQUEST_BASE_SHA:?PULL_REQUEST_BASE_SHA is required}"
+          : "${PULL_REQUEST_NUMBER:?PULL_REQUEST_NUMBER is required}"
+
+  retarget-base:
+    name: Retarget Pull Request Base to Beta
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.result == 'success' && github.actor != 'github-actions[bot]'
+    steps:
+      - name: Checkout Actions
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.PULL_REQUEST_BASE_SHA }}
+          fetch-depth: 0
+
+      - name: Retarget Pull Request
+        id: retarget-pr
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="$(gh -R "$GITHUB_REPOSITORY" pr view "$PULL_REQUEST_NUMBER" --json baseRefName --jq .baseRefName || echo '')"
+          HEAD="$(gh -R "$GITHUB_REPOSITORY" pr view "$PULL_REQUEST_NUMBER" --json headRefName --jq .headRefName || echo '')"
+          LABELS="$(gh -R "$GITHUB_REPOSITORY" pr view "$PULL_REQUEST_NUMBER" --json labels --jq '.labels[].name' || true)"
+          is_stable_conversion=false
+          if [ "$BASE" = "latest" ] && [ "$HEAD" = "beta" ]; then
+            if printf '%s\n' "$LABELS" | grep -qi '^stable-conversion$'; then
+              is_stable_conversion=true
+            fi
+          fi
+          if [ "$BASE" = "beta" ]; then
+            echo "Base is already 'beta'; no retargeting needed."
+            exit 0
+          fi
+          if [ "$is_stable_conversion" = "true" ]; then
+            echo "Stable conversion PR detected; keeping base '$BASE'."
+            exit 0
+          fi
+          if gh -R "$GITHUB_REPOSITORY" pr edit "$PULL_REQUEST_NUMBER" --base beta; then
+            echo "Retargeted PR #$PULL_REQUEST_NUMBER base to 'beta'."
+          else
+            echo "::warning::Failed to retarget base to beta for PR #$PULL_REQUEST_NUMBER (base was '$BASE')."
+          fi
+
+  label:
+    name: Clear & Apply Labels
+    runs-on: ubuntu-latest
+    needs: retarget-base
+    if: needs.retarget-base.result == 'success'
+    steps:
+      - name: Checkout Actions
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.PULL_REQUEST_BASE_SHA }}
+          fetch-depth: 0
+
+      - name: Clear All Labels
+        id: clear-labels
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'stable-conversion') }}
+        uses: ./.github/actions/clear-labels
+        with:
+          number: ${{ env.PULL_REQUEST_NUMBER }}
+
+      - name: Apply Labels
+        id: apply-labels
+        uses: actions/labeler@v6
+        with:
+          repo-token: ${{ env.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+
+      - name: Fetch Dependabot Metadata
+        id: metadata
+        if: github.actor == 'dependabot[bot]'
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ env.GITHUB_TOKEN }}"
+
+      - name: Apply Dependabot Labels
+        id: apply-dependabot-labels
+        if: steps.metadata.outcome == 'success'
+        shell: bash
+        env:
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+        run: |
+          set -euo pipefail
+          echo "Dependabot Pull Request detected; update-type=${UPDATE_TYPE}"
+          case "$UPDATE_TYPE" in
+            version-update:semver-major)
+              labels=("dependency-major")
+              ;;
+            version-update:semver-minor)
+              labels=("dependency-minor")
+              ;;
+            version-update:semver-patch)
+              labels=("dependency-patch")
+              ;;
+            ""|null)
+              # Lockfile / unknown cases
+              labels=("dependency-lockfile")
+              ;;
+            *)
+              labels=()
+              ;;
+          esac
+          case "$UPDATE_TYPE" in
+            version-update:semver-minor|version-update:semver-patch|""|null)
+              labels+=("auto-merge")
+              ;;
+          esac
+          if [ "${#labels[@]}" -eq 0 ]; then
+            echo "No extra labels to apply for this Dependabot update-type."
+            exit 0
+          fi
+          printf 'Applying labels: %s\n' "${labels[*]}"
+          args=(--method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/$GITHUB_REPOSITORY/issues/$PULL_REQUEST_NUMBER/labels")
+          for lbl in "${labels[@]}"; do
+            args+=("-f" "labels[]=$lbl")
+          done
+          gh api "${args[@]}"
+
+  validate-pr:
+    name: Validate Pull Request
+    runs-on: ubuntu-latest
+    needs: label
+    if: needs.label.result == 'success'
+    outputs:
+      ok: ${{ steps.validate-pr.outputs.ok }}
+    steps:
+      - name: Checkout Actions
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.PULL_REQUEST_BASE_SHA }}
+          fetch-depth: 0
+
+      - name: Ensure jq
+        id: ensure-jq
+        uses: ./.github/actions/ensure-jq
+
+      - name: Validate Pull Request
+        id: validate-pr
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESULT="$(python3 .github/scripts/pr_manager.py)"
+          echo "Raw validation: $RESULT"
+          OK="$(echo "$RESULT" | jq -r '.ok // false')"
+          MSGS="$(echo "$RESULT" | jq -c '.messages // []')"
+          echo "ok=$OK" >> "$GITHUB_OUTPUT"
+          echo "messages=$MSGS" >> "$GITHUB_OUTPUT"
+
+      - name: Build Validation Sticky
+        id: build-validation-sticky
+        shell: bash
+        run: |
+          set -euo pipefail
+          MARK="<!-- COPILOT-STICKY:PULL-REQUEST -->"
+          OK="${{ steps.validate-pr.outputs.ok }}"
+          MSGS_JSON='${{ steps.validate-pr.outputs.messages }}'
+          if [ -n "$MSGS_JSON" ] && [ "$MSGS_JSON" != "null" ]; then
+            VALMSGS="$(printf '%s' "$MSGS_JSON" | jq -r '.[]?')"
+          else
+            VALMSGS=""
+          fi
+          if [ "$OK" != "true" ]; then
+            {
+              echo "❌ Pull Request validation failed."
+              echo
+              if [ -n "$VALMSGS" ]; then
+                echo "Details:"
+                echo '```'
+                printf '%s\n' "$VALMSGS"
+                echo '```'
+                echo
+              fi
+              echo "Please update the pull request with the requested information."
+              echo
+              echo "$MARK"
+            } > body.txt
+          else
+            {
+              echo "✅ Pull Request classified, labeled, and validated successfully!"
+              echo
+              echo "Thank you. This Pull Request has the required information and labels."
+              echo
+              echo "$MARK"
+            } > body.txt
+          fi
+
+      - name: Upsert Validation Sticky
+        id: upsert-validation-sticky
+        uses: ./.github/actions/sticky-comment
+        with:
+          number: ${{ github.event.pull_request.number }}
+          marker: "<!-- COPILOT-STICKY:PULL-REQUEST -->"
+          body_file: body.txt
+
+  dependabot-auto-merge:
+    name: Dependabot Auto-Merge
+    needs: validate-pr
+    if: needs.validate-pr.result == 'success' && needs.validate-pr.outputs.ok == 'true' && github.actor == 'dependabot[bot]'
+    uses: ./.github/workflows/shared-dependabot-auto-merge.yml
+
+  fork-notice:
+    name: Fork Notice
+    runs-on: ubuntu-latest
+    needs: detect-fork
+    if: needs.detect-fork.outputs.is_fork == 'true'
+    steps:
+      - name: Fork Notice
+        id: fork-notice
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::notice:: This workflow is running in a forked repository. All privileged steps have been skipped."

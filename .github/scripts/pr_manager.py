@@ -1,15 +1,26 @@
 #!/usr/bin/env python3
 """
-PR Validation:
-- Base branch must be 'beta'
-- EXCEPTION: allow base 'latest' for stable-conversion PRs to promote beta -> latest:
-    - head ref must be 'beta'
-    - label 'stable-conversion' must be present, OR the PR author/actor is github-actions[bot]
+Single-script PR handler.
+
+Responsible ONLY for semantic validation of the PR. All environment checks,
+fork handling, retargeting, and labeling are done in the workflow.
+
+Rules:
+- Skip validation for draft PRs.
+- Base branch must be 'beta', except for stable-conversion PRs:
+    * base == 'latest'
+    * head == 'beta'
+    * AND label 'stable-conversion'
 - Needs at least one classification label:
     bug, fix, enhancement, feature, breaking-change, docs, dependency, internal, workflow
-- If breaking-change: require markers with >= MIN_EXPL_CHARS explanation bounded by:
-    BREAKING_CHANGE_EXPLANATION_START ... BREAKING_CHANGE_EXPLANATION_END
-- Skip for draft PRs
+- If breaking-change label:
+    * Require markers:
+        BREAKING_CHANGE_EXPLANATION_START
+        ...explanation...
+        BREAKING_CHANGE_EXPLANATION_END
+    * Explanation must be at least 60 characters.
+
+Returns messages used by the workflow to build a sticky comment
 """
 import json
 import os
@@ -20,68 +31,92 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import common
 
+from common import Context
+
 CLASSIFICATION = {
-    "bug", "fix", "enhancement", "feature", "breaking-change", "docs", "dependency", "internal", "workflow",
+    "bug",
+    "fix",
+    "enhancement",
+    "feature",
+    "breaking-change",
+    "docs",
+    "dependency",
+    "internal",
+    "workflow",
 }
 START = "BREAKING_CHANGE_EXPLANATION_START"
 END = "BREAKING_CHANGE_EXPLANATION_END"
-MIN_EXPL_CHARS = 60
 
-def _give(payload, code=0):
-    print(json.dumps(payload))
-    sys.exit(code)
-
-def main():
-    actor = os.getenv("GITHUB_ACTOR", "")
-    event_path = os.getenv("GITHUB_EVENT_PATH")
-    if not event_path or not os.path.isfile(event_path):
-        _give({"ok": False, "code": "internal", "message": "Missing GITHUB_EVENT_PATH"}, 1)
-    try:
-        with open(event_path, "r", encoding="utf-8") as f:
-            event = json.load(f)
-    except Exception as e:
-        _give({"ok": False, "code": "internal", "message": f"Unable to parse event: {e}"}, 1)
-    pr = event.get("pull_request")
-    if not pr:
-        _give({"ok": False, "code": "internal", "message": "Not a pull_request event"}, 1)
+def _handle_validate(context: Context) -> dict:
+    code, pr = common.github_api(context.github_repository, context.github_token, f"/pulls/{context.pull_request_number}")
+    if code != 200 or not isinstance(pr, dict):
+        return {
+            "ok": False,
+            "messages": [f"Unable to fetch PR #{context.pull_request_number} (status {code})."],
+        }
     if pr.get("draft") is True:
-        _give({"ok": True}, 0)
-    base = (pr.get("base") or {}).get("ref", "")
-    head_ref = (pr.get("head") or {}).get("ref", "")
-    author_login = ((pr.get("user") or {}).get("login") or "")
-    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or ""
-    repo_full = os.getenv("GITHUB_REPOSITORY", "")
-    pr_number = pr.get("number")
+        return {"ok": False, "messages": [f"PR #{context.pull_request_number} is a draft; skipping validation."]}
+    base = (pr.get("base") or {}).get("ref", "") or ""
+    head_ref = (pr.get("head") or {}).get("ref", "") or ""
     body = pr.get("body") or ""
-    labels = [((l.get("name") or "").lower()) for l in pr.get("labels", [])]
-    if token and repo_full and pr_number:
-        code, data = common.github_api(repo_full, token, f"/issues/{pr_number}/labels")
-        if code == 200 and isinstance(data, list):
-            labels = [((l.get("name") or "").lower()) for l in data]
+    labels: list[str] = []
+    label_code, data = common.github_api(context.github_repository, context.github_token, f"/issues/{context.pull_request_number}/labels")
+    if label_code == 200 and isinstance(data, list):
+        labels = [((l.get("name") or "").lower()) for l in data]
+    if not labels:
+        labels = [((l.get("name") or "").lower()) for l in pr.get("labels", [])]
+    ok = True
+    messages: list[str] = []
     is_stable_conversion = (
         base == "latest"
         and head_ref == "beta"
-        and ("stable-conversion" in labels or author_login == "github-actions[bot]" or actor == "github-actions[bot]")
+        and "stable-conversion" in labels
     )
     if not (base == "beta" or is_stable_conversion):
-        _give({"ok": False, "code": "bad_base", "message": f'Invalid base branch "{base}". Must be "beta".'}, 1)
+        ok = False
+        messages.append(
+            f'Invalid base branch "{base}". '
+            'Pull requests must target "beta", except for stable-conversion PRs '
+            '(beta -> latest with the "stable-conversion" label).'
+        )
     if not any(l in CLASSIFICATION for l in labels):
-        need = ", ".join(sorted(CLASSIFICATION))
-        curr = labels or []
-        curr_str = ", ".join(curr)
-        _give({"ok": False, "code": "missing_label",
-               "message": f"No classification label found. Need one of: {need}. Current: {curr_str}"}, 1)
+        needed = ", ".join(sorted(CLASSIFICATION))
+        current = ", ".join(sorted(set(labels))) if labels else "<none>"
+        ok = False
+        messages.append(
+            "Missing classification label. "
+            f"Required: one of [{needed}]. Current labels: {current}."
+        )
     if "breaking-change" in labels:
         s = body.find(START)
         e = body.find(END)
         if s == -1 or e == -1 or e <= s:
-            _give({"ok": False, "code": "breaking_markers",
-                   "message": f'breaking-change label requires markers:\n{START}\n...explanation...\n{END}'}, 1)
-        expl = (body[s + len(START):e]).strip()
-        if len(expl) < MIN_EXPL_CHARS:
-            _give({"ok": False, "code": "breaking_short",
-                   "message": f"Breaking change explanation too short ({len(expl)} chars). Provide rationale + migration steps (min {MIN_EXPL_CHARS})."}, 1)
-    _give({"ok": True}, 0)
+            ok = False
+            messages.append(
+                "The `breaking-change` label requires explanation markers:\n"
+                f"{START}\n"
+                "...detailed explanation and migration steps...\n"
+                f"{END}"
+            )
+        else:
+            expl = (body[s + len(START) : e]).strip()
+            if len(expl) < 60:
+                ok = False
+                messages.append(
+                    f"Breaking change explanation too short ({len(expl)} characters). "
+                    f"Provide rationale and migration steps (minimum 60 characters) "
+                    f"between {START} and {END}."
+                )
+    return {"ok": ok, "messages": messages}
+
+def main():
+    github_repository = os.getenv("GITHUB_REPOSITORY")
+    github_token = os.getenv("GITHUB_TOKEN")
+    pull_request_number = os.getenv("PULL_REQUEST_NUMBER")
+    context = Context(github_token=github_token, github_repository=github_repository, pull_request_number=pull_request_number)
+    result = _handle_validate(context)
+    print(json.dumps(result))
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()

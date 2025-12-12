@@ -1,0 +1,19 @@
+name: Detect Fork Context
+description: Output Fork Detection
+outputs:
+  is_fork:
+    description: True if the Repository is a Fork, false if it is the Main Repository
+    value: ${{ steps.detect-fork-context.outputs.is_fork }}
+runs:
+  using: composite
+  steps:
+    - name: Detect Fork Context
+      id: detect-fork-context
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${GITHUB_REPOSITORY}" != "ZeliardM/homebridge-kasa-python" ]; then
+          echo "is_fork=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "is_fork=false" >> "$GITHUB_OUTPUT"
+        fi
