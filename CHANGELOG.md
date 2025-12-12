@@ -1,5 +1,5 @@
 # Changelog
-## [v3.0.0-beta.9](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.9)
+## [v3.0.0-beta.9](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.9) (2025-12-12)
 
 ### Bug Fixes
 
@@ -7,6 +7,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v3.0.0-beta.9 [beta-release] (@github-actions)
 - [other] Correct CHANGELOG.md [85e90c6](https://github.com/ZeliardM/homebridge-kasa-python/commit/85e90c6640ea0958f89e7954c06bee60160b9643) (@ZeliardM)
 - [other] Update Workflows [f55620b](https://github.com/ZeliardM/homebridge-kasa-python/commit/f55620b85f2895a58238e7d1682a51fdd4328799) (@ZeliardM)
 - [other] Correct dependencies and CHANGELOG.md [072e1dc](https://github.com/ZeliardM/homebridge-kasa-python/commit/072e1dc5e9239bc054a90df5f196d4833c4bb417) (@ZeliardM)
