@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.0.0-beta.9](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.9)
 
+### Bug Fixes
+
+- [bug] Fix branch handling when auto-merging dependabot PRs [3dea0a2](https://github.com/ZeliardM/homebridge-kasa-python/commit/3dea0a2cef38446f4265dbd4e2a0b778b1c6188c) (@ZeliardM)
+
 ### Other Changes
 
 - [other] Correct dependencies and CHANGELOG.md [072e1dc](https://github.com/ZeliardM/homebridge-kasa-python/commit/072e1dc5e9239bc054a90df5f196d4833c4bb417) (@ZeliardM)
