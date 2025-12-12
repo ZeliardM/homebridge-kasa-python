@@ -1285,18 +1285,10 @@ def _handle_pr_merge(context: Context) -> None:
         reason=reason,
     )
     _write_changelog(content)
-    commit_message = f"Update CHANGELOG.md for beta PR #{context.pull_request_number}"
-    if context.pull_request_author == "dependabot[bot]":
-        common.git_commit_files(
-            [CHANGELOG_FILE],
-            commit_message,
-            True,
-        )
-    else:
-        common.git_commit_files(
-            [CHANGELOG_FILE],
-            commit_message,
-        )
+    common.git_commit_files(
+        [CHANGELOG_FILE],
+        f"Update CHANGELOG.md for beta PR #{context.pull_request_number}",
+    )
     _ensure_repo_node_version(target_version, context=f"beta PR #{context.pull_request_number}")
     body = _build_beta_body(target_version, content)
     _upsert_release(

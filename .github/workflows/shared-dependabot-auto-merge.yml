@@ -152,11 +152,47 @@ jobs:
         with:
           labels_json: ${{ steps.fetch-labels.outputs.labels }}
 
-      - name: Update CHANGELOG.md and Draft Release
+      - name: Sync Local beta, Update CHANGELOG.md, and Create/Update Release
+        id: sync-update-release
         shell: bash
         env:
           MODE: pr-merge
           PULL_REQUEST_LABELS: ${{ steps.labels.outputs.path }}
         run: |
           set -euo pipefail
-          python .github/scripts/release_manager.py
+          MAX_ATTEMPTS=${MAX_ATTEMPTS:-5}
+          BASE_SLEEP=${BASE_SLEEP:-5}
+          JITTER=${JITTER:-10}
+          attempt=1
+          echo "::notice::Starting sync+release_manager loop (max ${MAX_ATTEMPTS} attempts)"
+          while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+            echo "::notice::Attempt ${attempt} of ${MAX_ATTEMPTS}"
+            echo "::notice::Syncing local beta -> origin/beta"
+            git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+            if ! git fetch origin beta --depth=1; then
+              echo "::warning::git fetch failed on attempt ${attempt}"
+              FETCH_OK=false
+            else
+              FETCH_OK=true
+            fi
+            if [ "$FETCH_OK" = "true" ]; then
+              git checkout -B beta origin/beta || true
+              git reset --hard origin/beta || true
+              git clean -fd || true
+            fi
+            echo "::notice::Running release_manager.py (MODE=${MODE})"
+            if python .github/scripts/release_manager.py; then
+              echo "::notice::release_manager.py succeeded on attempt ${attempt}"
+              exit 0
+            else
+              echo "::warning::release_manager.py failed on attempt ${attempt}"
+            fi
+            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+              sleep_sec=$(( BASE_SLEEP * attempt + (RANDOM % JITTER) ))
+              echo "::notice::Retrying in ${sleep_sec}s (including jitter) ..."
+              sleep "${sleep_sec}"
+            fi
+            attempt=$(( attempt + 1 ))
+          done
+          echo "::error::All ${MAX_ATTEMPTS} attempts to sync+update CHANGELOG failed. Manual intervention required."
+          exit 1
