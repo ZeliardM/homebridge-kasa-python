@@ -11,6 +11,7 @@
 - [other] Correct dependencies and CHANGELOG.md [072e1dc](https://github.com/ZeliardM/homebridge-kasa-python/commit/072e1dc5e9239bc054a90df5f196d4833c4bb417) (@ZeliardM)
 - [other] Update workflows [39f8073](https://github.com/ZeliardM/homebridge-kasa-python/commit/39f8073a07e04f0171bc819f9092203c56a5ad95) (@ZeliardM)
 - npm(deps-dev): bump eslint from 9.39.1 to 9.39.2 in the eslint group [#198](https://github.com/ZeliardM/homebridge-kasa-python/pull/198) (@dependabot[bot])
+- npm(deps-dev): bump @typescript-eslint/parser from 8.48.1 to 8.49.0 in the typescript-eslint group [#197](https://github.com/ZeliardM/homebridge-kasa-python/pull/197) (@dependabot[bot])
 - npm(deps-dev): bump @typescript-eslint/parser from 8.48.1 to 8.49.0 in the typescript-eslint group [#196](https://github.com/ZeliardM/homebridge-kasa-python/pull/196) (@dependabot[bot])
 - npm(deps-dev): bump @typescript-eslint/parser from 8.48.1 to 8.49.0 in the typescript-eslint group [#195](https://github.com/ZeliardM/homebridge-kasa-python/pull/195) (@dependabot[bot])
 
