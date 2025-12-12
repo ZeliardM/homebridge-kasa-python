@@ -4,6 +4,7 @@
 ### Other Changes
 
 - [other] Update workflows [39f8073](https://github.com/ZeliardM/homebridge-kasa-python/commit/39f8073a07e04f0171bc819f9092203c56a5ad95) (@ZeliardM)
+- npm(deps-dev): bump @typescript-eslint/parser from 8.48.1 to 8.49.0 in the typescript-eslint group [#195](https://github.com/ZeliardM/homebridge-kasa-python/pull/195) (@dependabot[bot])
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.0.0-beta.8...v3.0.0-beta.9
 
