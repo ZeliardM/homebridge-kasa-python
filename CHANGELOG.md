@@ -1,4 +1,12 @@
 # Changelog
+## [v3.0.0-beta.8](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.8)
+
+### Bug Fixes
+
+- [bug] Sort children before preforming device actions [7cbf3dd](https://github.com/ZeliardM/homebridge-kasa-python/commit/7cbf3dd98fe2951462ef005b15f0ee75e523cc3c) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.0.0-beta.7...v3.0.0-beta.8
+
 ## [v3.0.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.7) (2025-12-06)
 
 ### Other Changes
