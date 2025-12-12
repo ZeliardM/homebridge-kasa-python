@@ -7,6 +7,7 @@
 
 ### Other Changes
 
+- [other] Correct CHANGELOG.md [85e90c6](https://github.com/ZeliardM/homebridge-kasa-python/commit/85e90c6640ea0958f89e7954c06bee60160b9643) (@ZeliardM)
 - [other] Update Workflows [f55620b](https://github.com/ZeliardM/homebridge-kasa-python/commit/f55620b85f2895a58238e7d1682a51fdd4328799) (@ZeliardM)
 - [other] Correct dependencies and CHANGELOG.md [072e1dc](https://github.com/ZeliardM/homebridge-kasa-python/commit/072e1dc5e9239bc054a90df5f196d4833c4bb417) (@ZeliardM)
 - [other] Update workflows [39f8073](https://github.com/ZeliardM/homebridge-kasa-python/commit/39f8073a07e04f0171bc819f9092203c56a5ad95) (@ZeliardM)
