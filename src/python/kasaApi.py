@@ -347,7 +347,11 @@ async def perform_device_action(
     child_num: Optional[int] = None,
 ) -> dict[str, Any]:
     try:
-        target = device.children[child_num] if child_num is not None else device
+        if child_num is not None and device.children:
+            sorted_children = sorted(device.children, key=lambda c: _extract_child_suffix_index(c.device_id))
+            target = sorted_children[child_num]
+        else:
+            target = device
         log(f"Performing action={action} on feature={feature}", alias=target.alias)
         light = target.modules.get(Module.Light)
         fan = target.modules.get(Module.Fan)
