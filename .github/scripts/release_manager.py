@@ -19,6 +19,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 
 from dataclasses import dataclass
 
@@ -1000,6 +1001,17 @@ def _clean_finalize_lines(text: str, tag: str) -> str:
     )
     return "\n".join([l for l in text.splitlines() if not hk_re.match(l)]).strip()
 
+def _write_labels_temp(labels: list[str]) -> str:
+    try:
+        tf = tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8", suffix=".json")
+        json.dump(labels, tf)
+        tf.flush()
+        tf.close()
+        return tf.name
+    except Exception as e:
+        print(f"[release-manager] Warning: unable to write temp labels file: {e}")
+        return ""
+
 def _handle_rollback(context: Context) -> None:
     print("::warning::npm publish failed; beginning rollback sequence...")
     tag = context.tag
@@ -1114,9 +1126,10 @@ def _handle_commit_push(context: Context) -> None:
         )
     content = _read_changelog()
     final_target_version: Version | None = None
-    added_any = False
+    added_manual_any = False
     first_sha7: str | None = None
     last_sha7: str | None = None
+    processed_prs: set[int] = set()
     for sha in shas:
         sha7 = sha[:7]
         try:
@@ -1129,10 +1142,61 @@ def _handle_commit_push(context: Context) -> None:
             pulls = []
         if pulls:
             pr_nums = ", ".join(str(p.get("number")) for p in pulls)
-            print(
-                f"[release-manager] Commit {sha7} is part of PR(s) {pr_nums}; "
-                f"skipping manual changelog entry."
-            )
+            processed_this_sha = False
+            for p in pulls:
+                pr_num = p.get("number")
+                if not pr_num:
+                    continue
+                try:
+                    pr_num_int = int(pr_num)
+                except Exception:
+                    continue
+                if pr_num_int in processed_prs:
+                    print(f"[release-manager] PR #{pr_num_int} already processed; skipping for commit {sha7}.")
+                    continue
+                code, pr = common.github_api(context.github_repository, context.github_token, f"/pulls/{pr_num_int}")
+                if code != 200 or not isinstance(pr, dict):
+                    pr = p if isinstance(p, dict) else {}
+                pr_user = (pr.get("user") or {}).get("login") or ""
+                if "dependabot" in str(pr_user).lower() and pr.get("merged") is True:
+                    print(f"[release-manager] Commit {sha7} is part of Dependabot PR #{pr_num_int}; delegating to PR merge handler.")
+                    label_code, label_data = common.github_api(context.github_repository, context.github_token, f"/issues/{pr_num_int}/labels")
+                    if label_code == 200 and isinstance(label_data, list):
+                        labels_list = [((l.get("name") or "").lower()) for l in label_data]
+                    else:
+                        labels_list = [((l.get("name") or "").lower()) for l in pr.get("labels", []) if isinstance(l, dict)]
+                    labels_path = _write_labels_temp(labels_list)
+                    try:
+                        pr_context = Context(
+                            github_repository=context.github_repository,
+                            github_token=context.github_token,
+                            mode="pr-merge",
+                        )
+                        pr_context.pull_request_author = pr_user
+                        pr_context.pull_request_branch = (pr.get("base") or {}).get("ref", "") or ""
+                        pr_context.pull_request_number = str(pr_num_int)
+                        pr_context.pull_request_title = pr.get("title") or ""
+                        pr_context.pull_request_labels = labels_path
+                        _handle_pr_merge(pr_context)
+                        processed_prs.add(pr_num_int)
+                        content = _read_changelog()
+                        _, last_beta = _latest_versions(content)
+                        final_target_version = last_beta or final_target_version
+                        if first_sha7 is None:
+                            first_sha7 = sha7
+                        last_sha7 = sha7
+                        processed_this_sha = True
+                        break
+                    finally:
+                        if labels_path and os.path.exists(labels_path):
+                            try:
+                                os.unlink(labels_path)
+                            except Exception:
+                                pass
+            if processed_this_sha:
+                print(f"[release-manager] Commit {sha7} handled via Dependabot PR; skipping manual commit handling.")
+                continue
+            print(f"[release-manager] Commit {sha7} is part of PR(s) {pr_nums}; skipping manual changelog entry.")
             continue
         subject = common.git_get_commit_subject(sha) or sha
         display = subject or sha
@@ -1176,7 +1240,7 @@ def _handle_commit_push(context: Context) -> None:
             reason=reason,
         )
         final_target_version = target_version
-        added_any = True
+        added_manual_any = True
         if first_sha7 is None:
             first_sha7 = sha7
         last_sha7 = sha7
@@ -1184,7 +1248,7 @@ def _handle_commit_push(context: Context) -> None:
             f"[release-manager] Staged manual commit {sha7} into beta draft "
             f"{target_version.tag()} ({category})."
         )
-    if not added_any or final_target_version is None:
+    if not added_manual_any or final_target_version is None:
         print("[release-manager] No manual commits required changelog entries; exiting.")
         return
     _write_changelog(content)
