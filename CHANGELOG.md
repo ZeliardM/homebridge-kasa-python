@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.0.0-beta.10](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.10)
 
+### Bug Fixes
+
+- [bug] Handle manually merged dependabot PR commits correctly [2e175f4](https://github.com/ZeliardM/homebridge-kasa-python/commit/2e175f40fac72af916b7cc28b49578c16352a12c) (@ZeliardM)
+
 ### Other Changes
 
 - npm(deps-dev): bump typescript-eslint from 8.48.1 to 8.49.0 [#193](https://github.com/ZeliardM/homebridge-kasa-python/pull/193) (@dependabot[bot])
