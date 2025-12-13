@@ -1,5 +1,5 @@
 # Changelog
-## [v3.0.0-beta.10](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.10)
+## [v3.0.0-beta.10](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.10) (2025-12-13)
 
 ### Bug Fixes
 
@@ -7,6 +7,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v3.0.0-beta.10 [beta-release] (@github-actions)
 - npm(deps-dev): bump @types/node from 24.10.1 to 25.0.1 [#199](https://github.com/ZeliardM/homebridge-kasa-python/pull/199) (@dependabot[bot])
 - npm(deps-dev): bump typescript-eslint from 8.48.1 to 8.49.0 [#193](https://github.com/ZeliardM/homebridge-kasa-python/pull/193) (@dependabot[bot])
 - npm(deps-dev): bump @types/node from 24.10.1 to 25.0.1 [#192](https://github.com/ZeliardM/homebridge-kasa-python/pull/192) (@dependabot[bot])
