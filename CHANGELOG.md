@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- npm(deps-dev): bump typescript-eslint from 8.49.0 to 8.50.0 [#203](https://github.com/ZeliardM/homebridge-kasa-python/pull/203) (@dependabot[bot])
 - npm(deps-dev): bump @typescript-eslint/parser from 8.49.0 to 8.50.0 in the typescript-eslint group [#202](https://github.com/ZeliardM/homebridge-kasa-python/pull/202) (@dependabot[bot])
 - pip(deps): bump tzdata from 2025.2 to 2025.3 [#201](https://github.com/ZeliardM/homebridge-kasa-python/pull/201) (@dependabot[bot])
 
