@@ -1,4 +1,12 @@
 # Changelog
+## [v3.0.0-beta.11](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.11)
+
+### Other Changes
+
+- pip(deps): bump tzdata from 2025.2 to 2025.3 [#201](https://github.com/ZeliardM/homebridge-kasa-python/pull/201) (@dependabot[bot])
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.0.0-beta.10...v3.0.0-beta.11
+
 ## [v3.0.0-beta.10](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.10) (2025-12-13)
 
 ### Bug Fixes
