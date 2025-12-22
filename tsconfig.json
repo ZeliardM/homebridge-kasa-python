@@ -16,7 +16,8 @@
     "sourceMap": true,
     "strict": true,
     "target": "ES2022",
-    "types": ["node"]
+    "types": ["node"],
+    "skipLibCheck": true
   },
   "include": [
     "eslint.config.mjs",
