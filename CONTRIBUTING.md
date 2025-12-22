@@ -4,7 +4,7 @@ Thank you for contributing to homebridge-kasa-python!
 
 ## Forked PRs and Workflow Limitations
 
-> **Note:** If you open a PR or issue in your own fork, GitHub Actions **will not have access to repository secrets** and privileged automation (labeling, validation, sticky comments) will be **skipped**.  
+> **Note:** If you open a PR or issue in your own fork, GitHub Actions **will not have access to repository secrets** and privileged automation (labeling, validation, sticky comments) will be **skipped**.
 > Once you open a PR or issue against the main repository (`ZeliardM/homebridge-kasa-python`), all workflows and automation will run as expected.
 
 - If you see notices about "skipped steps due to fork context" or missing secrets, this is expected.
@@ -58,7 +58,7 @@ Thank you for contributing to homebridge-kasa-python!
 - docs / dependency
 
 ## Security / Quality
-- CodeQL runs weekly and on PRs.
+- CodeQL runs on PRs.
 - Dependabot weekly updates target beta.
 
 ## Questions
