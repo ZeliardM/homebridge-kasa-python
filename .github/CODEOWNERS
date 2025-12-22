@@ -1,8 +1,8 @@
 # Default owner for everything
-*                                   @ZeliardM
+*                                    @ZeliardM
 
 # Core source and configuration
-/src/                               @ZeliardM
+/src/                                @ZeliardM
 /config.schema.json                  @ZeliardM
 /package.json                        @ZeliardM
 /requirements.txt                    @ZeliardM
@@ -11,9 +11,13 @@
 /CONTRIBUTING.md                     @ZeliardM
 
 # GitHub configuration and automation
-/.github/workflows/                  @ZeliardM
-/.github/scripts/                    @ZeliardM
+/.github/acions/                     @ZeliardM
 /.github/ISSUE_TEMPLATE/             @ZeliardM
-/.github/labeler.yml                 @ZeliardM
-/.github/dependabot.yml              @ZeliardM
+/.github/scripts/                    @ZeliardM
+/.github/workflows/                  @ZeliardM
+/.github/CODEOWNERS                  @ZeliardM
 /.github/copilot-instructions.md     @ZeliardM
+/.github/dependabot.yml              @ZeliardM
+/.github/labeler.yml                 @ZeliardM
+/.github/labels-reference.md         @ZeliardM
+/.github/pull_request_template.md    @ZeliardM

@@ -24,11 +24,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Python 3.12
+      - name: Setup Python 3.13
         id: setup-python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install Python requests
         id: install_requests
