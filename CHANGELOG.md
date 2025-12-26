@@ -6,6 +6,7 @@
 - Update tsconfig.json [42b0a56](https://github.com/ZeliardM/homebridge-kasa-python/commit/42b0a56f326bb5f03fd925addc1c3b9d5425ec35) (@ZeliardM)
 - Update CODEOWNERS and Workflow Python Versions [542c9e9](https://github.com/ZeliardM/homebridge-kasa-python/commit/542c9e90d1d8215857338c15b8268743a17ed2b1) (@ZeliardM)
 - Update CONTRIBUTING.md [1d8adc8](https://github.com/ZeliardM/homebridge-kasa-python/commit/1d8adc80973861b53eede4ea02692ea05622f795) (@ZeliardM)
+- npm(deps-dev): bump typescript-eslint from 8.50.0 to 8.50.1 [#208](https://github.com/ZeliardM/homebridge-kasa-python/pull/208) (@dependabot[bot])
 - pip(deps): bump uvicorn from 0.38.0 to 0.40.0 [#205](https://github.com/ZeliardM/homebridge-kasa-python/pull/205) (@dependabot[bot])
 - npm(deps-dev): bump @types/node from 25.0.1 to 25.0.3 [#204](https://github.com/ZeliardM/homebridge-kasa-python/pull/204) (@dependabot[bot])
 - npm(deps-dev): bump typescript-eslint from 8.49.0 to 8.50.0 [#203](https://github.com/ZeliardM/homebridge-kasa-python/pull/203) (@dependabot[bot])
