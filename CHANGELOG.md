@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- [other] General code clean-up [0465acd](https://github.com/ZeliardM/homebridge-kasa-python/commit/0465acdf8192d930edf54cbc3567ad89c400fa49) (@ZeliardM)
 - Update tsconfig.json [42b0a56](https://github.com/ZeliardM/homebridge-kasa-python/commit/42b0a56f326bb5f03fd925addc1c3b9d5425ec35) (@ZeliardM)
 - Update CODEOWNERS and Workflow Python Versions [542c9e9](https://github.com/ZeliardM/homebridge-kasa-python/commit/542c9e90d1d8215857338c15b8268743a17ed2b1) (@ZeliardM)
 - Update CONTRIBUTING.md [1d8adc8](https://github.com/ZeliardM/homebridge-kasa-python/commit/1d8adc80973861b53eede4ea02692ea05622f795) (@ZeliardM)
