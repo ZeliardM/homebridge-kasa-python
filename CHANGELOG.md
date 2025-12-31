@@ -1,8 +1,9 @@
 # Changelog
-## [v3.0.0-beta.11](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.11)
+## [v3.0.0-beta.11](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0-beta.11) (2025-12-31)
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v3.0.0-beta.11 [beta-release] (@github-actions)
 - [other] Import clean-up and organization [decd1cf](https://github.com/ZeliardM/homebridge-kasa-python/commit/decd1cf7fbcd04e23473c457dfb85bb740343156) (@ZeliardM)
 - [other] General code clean-up [0465acd](https://github.com/ZeliardM/homebridge-kasa-python/commit/0465acdf8192d930edf54cbc3567ad89c400fa49) (@ZeliardM)
 - Update tsconfig.json [42b0a56](https://github.com/ZeliardM/homebridge-kasa-python/commit/42b0a56f326bb5f03fd925addc1c3b9d5425ec35) (@ZeliardM)
