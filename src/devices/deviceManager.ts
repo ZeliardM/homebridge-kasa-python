@@ -1,12 +1,14 @@
 import type { CharacteristicValue, Logger, PlatformConfig } from 'homebridge';
+
 import axios from 'axios';
+import EventSource from 'eventsource';
 import path from 'node:path';
+import { EventEmitter } from 'events';
 import { promises as fs } from 'node:fs';
+
 import KasaPythonPlatform from '../platform.js';
 import { parseConfig } from '../config.js';
 import type { ConfigDevice, FeatureInfo, HSV, KasaDevice, SysInfo } from './deviceTypes.js';
-import { EventEmitter } from 'events';
-import { EventSource } from 'eventsource';
 
 export const deviceEventEmitter = new EventEmitter();
 

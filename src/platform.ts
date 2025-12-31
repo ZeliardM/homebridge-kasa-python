@@ -15,26 +15,28 @@ import { EventEmitter } from 'node:events';
 import { fileURLToPath } from 'node:url';
 
 import create from './devices/create.js';
-import DeviceManager, { deviceEventEmitter } from './devices/deviceManager.js';
+import DeviceManager from './devices/deviceManager.js';
 import HomeKitDevice from './devices/baseDevice.js';
 import PythonChecker from './python/pythonChecker.js';
 import { parseConfig } from './config.js';
-import { createEnergyCharacteristics } from './energyCharacteristics.js';
-import { TaskQueue } from './taskQueue.js';
-import { deferAndCombine, runCommand } from './utils.js';
+import { deviceEventEmitter } from './devices/deviceManager.js';
+import { createEnergyCharacteristics } from './devices/energyCharacteristics.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
+import { TaskQueue } from './taskQueue.js';
 import {
   checkForUpgrade,
+  deferAndCombine,
   getAvailablePort,
   isObjectLike,
   loadPackageConfig,
   lookup,
   lookupCharacteristicNameByUUID,
+  runCommand,
   satisfiesVersion,
   waitForServer,
 } from './utils.js';
 import type { KasaPythonConfig } from './config.js';
-import type { EnergyCharacteristics } from './energyCharacteristics.js';
+import type { EnergyCharacteristics } from './devices/energyCharacteristics.js';
 import type { KasaDevice } from './devices/deviceTypes.js';
 
 export type KasaPythonAccessoryContext = {
@@ -48,8 +50,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public readonly Characteristic: typeof Characteristic;
-  public readonly energyCharacteristics: EnergyCharacteristics | undefined;
   public readonly configuredAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
+  public readonly energyCharacteristics: EnergyCharacteristics | undefined;
   public readonly offlineAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
   public readonly Service: typeof Service;
   public readonly storagePath: string;
@@ -62,6 +64,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public port: number = 0;
   public taskQueue: TaskQueue;
   private readonly homekitDevicesById: Map<string, HomeKitDevice> = new Map();
+  private deviceDiscoveredHandler?: (device: KasaDevice) => Promise<void>;
   private hideHomeKitMatter: boolean = true;
   private isUpgrade: boolean = false;
   private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
@@ -76,13 +79,12 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       this.energyCharacteristics = createEnergyCharacteristics(this.api.hap);
     }
     this.periodicDeviceDiscoveryEmitter = new EventEmitter();
-    this.taskQueue = new TaskQueue(this.log);
+    this.taskQueue = new TaskQueue(this.log, () => this.isShuttingDown);
 
+    this.periodicDeviceDiscoveryEmitter.setMaxListeners(255);
     this.setupDeviceEventEmitter('firstDiscovery');
 
-    this.platformInitialization = this.initializePlatform().catch((error) => {
-      this.log.error('Platform initialization failed:', error);
-    });
+    this.platformInitialization = this.initializePlatform();
 
     this.api.on('didFinishLaunching', async () => {
       this.log.debug('KasaPython Platform finished launching');
@@ -115,34 +117,33 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   private setupDeviceEventEmitter(mode: string, discoveredDeviceIds?: Set<string>): void {
-    deviceEventEmitter.removeAllListeners('deviceDiscovered');
+    if (this.deviceDiscoveredHandler) {
+      deviceEventEmitter.off('deviceDiscovered', this.deviceDiscoveredHandler);
+    }
     this.log.debug(`Setting up device event emitter: ${mode}`);
     if (mode === 'periodicDiscovery' && discoveredDeviceIds) {
-      deviceEventEmitter.on('deviceDiscovered', async (device: KasaDevice) => {
+      this.deviceDiscoveredHandler = async (device: KasaDevice) => {
         this.log.debug(`Device discovered during periodic discovery: ${device.sys_info.device_id}`);
         discoveredDeviceIds.add(device.sys_info.device_id);
         this.log.debug(`Added device ID to discoveredDeviceIds: ${device.sys_info.device_id}`);
         await this.processDevice(device);
-      });
+      };
     } else {
-      deviceEventEmitter.on('deviceDiscovered', async (device: KasaDevice) => {
+      this.deviceDiscoveredHandler = async (device: KasaDevice) => {
         this.log.debug(`Device discovered during initial discovery: ${device.sys_info.device_id}`);
         await this.processDevice(device);
-      });
+      };
     }
+    deviceEventEmitter.on('deviceDiscovered', this.deviceDiscoveredHandler);
   }
 
   async initializePlatform(): Promise<void> {
-    try {
-      packageConfig = await loadPackageConfig(this.log);
-      this.logInitializationDetails();
-      await this.verifyEnvironment();
-      this.isUpgrade = await checkForUpgrade(packageConfig, this.storagePath, this.log);
-      if (this.isUpgrade) {
-        this.log.info('Plugin version changed, virtual python environment will be recreated.');
-      }
-    } catch (error) {
-      this.log.error('Error during platform initialization:', error);
+    packageConfig = await loadPackageConfig(this.log);
+    this.logInitializationDetails();
+    await this.verifyEnvironment();
+    this.isUpgrade = await checkForUpgrade(packageConfig, this.storagePath, this.log);
+    if (this.isUpgrade) {
+      this.log.info('Plugin version changed, virtual python environment will be recreated.');
     }
   }
 
@@ -224,9 +225,13 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     };
 
     const deferredDiscoveryTask = deferAndCombine(discoveryTask, this.config.advancedOptions.waitTimeUpdate);
-    setInterval(async () => {
-      this.taskQueue.addTask(deferredDiscoveryTask);
-      await deferredDiscoveryTask();
+
+    setInterval(() => {
+      try {
+        this.taskQueue.addTask(deferredDiscoveryTask);
+      } catch (err) {
+        this.log.error('Error scheduling periodic device discovery:', err);
+      }
     }, this.config.discoveryOptions.discoveryPollingInterval);
 
     this.log.debug('Periodic device discovery setup completed');

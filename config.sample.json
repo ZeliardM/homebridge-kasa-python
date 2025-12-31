@@ -1,50 +1,50 @@
 {
-    "bridge": {
-      "name": "Homebridge",
-      "username": "11:22:33:AA:BB:CC",
-      "port": 51999,
-      "pin": "001-02-003"
-    },
-    "description": "This is an example configuration file.",
-    "platforms": [
-      {
-        "platform": "KasaPython",
-        "name": "KasaPython",
-        "enableCredentials": true,
-        "username": "Username",
-        "password": "Password",
-        "enableEnergyMonitoring": true,
-        "hideHomeKitMatter": true,
-        "pollingInterval": 5,
-        "discoveryPollingInterval": 300,
-        "offlineInterval": 7,
-        "waitTimeUpdate": 100,
-        "pythonPath": "/usr/bin/python3",
-        "advancedPythonLogging": false,
-        "logEnergyMonitoring": false,
-        "additionalBroadcasts": [
-          "192.168.1.255",
-          "192.168.2.255"
-        ],
-        "manualDevices": [
-          {
-            "host": "192.168.1.100",
-            "alias": "Living Room Plug"
-          },
-          {
-            "host": "192.168.2.100",
-            "alias": "Bedroom Power Strip"
-          }
-        ],
-        "excludeMacAddresses": [
-          "AA:BB:CC:11:22:33",
-          "CC:BB:AA:33:22:11"
-        ],
-        "includeMacAddresses": [
-          "AA:BB:CC:44:55:66",
-          "CC:BB:AA:66:55:44"
-        ]
-      }
-    ],
-    "accessories": []
+  "bridge": {
+    "name": "Homebridge",
+    "username": "11:22:33:AA:BB:CC",
+    "port": 51999,
+    "pin": "001-02-003"
+  },
+  "description": "This is an example configuration file.",
+  "platforms": [
+    {
+      "platform": "KasaPython",
+      "name": "KasaPython",
+      "enableCredentials": true,
+      "username": "Username",
+      "password": "Password",
+      "enableEnergyMonitoring": true,
+      "hideHomeKitMatter": true,
+      "pollingInterval": 5,
+      "discoveryPollingInterval": 300,
+      "offlineInterval": 7,
+      "waitTimeUpdate": 100,
+      "pythonPath": "/usr/bin/python3",
+      "advancedPythonLogging": false,
+      "logEnergyMonitoring": false,
+      "additionalBroadcasts": [
+        "192.168.1.255",
+        "192.168.2.255"
+      ],
+      "manualDevices": [
+        {
+          "host": "192.168.1.100",
+          "alias": "Living Room Plug"
+        },
+        {
+          "host": "192.168.2.100",
+          "alias": "Bedroom Power Strip"
+        }
+      ],
+      "excludeMacAddresses": [
+        "AA:BB:CC:11:22:33",
+        "CC:BB:AA:33:22:11"
+      ],
+      "includeMacAddresses": [
+        "AA:BB:CC:44:55:66",
+        "CC:BB:AA:66:55:44"
+      ]
+    }
+  ],
+  "accessories": []
 }

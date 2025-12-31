@@ -14,7 +14,7 @@ import type {
 import { EventEmitter } from 'node:events';
 
 import DeviceManager from './deviceManager.js';
-import AccessoryInformation from '../accessoryInformation.js';
+import accessoryInformation from './accessoryInformation.js';
 import { deferAndCombine, prefixLogger } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
 import type {
@@ -83,7 +83,7 @@ export default abstract class HomeKitDevice {
       accessory = existingAccessory;
       this.updateAccessory(accessory);
     }
-    const info = AccessoryInformation(this.platform.api.hap)(accessory, this);
+    const info = accessoryInformation(this.platform.api.hap)(accessory, this);
     if (!info) {
       this.log.error('Could not retrieve default AccessoryInformation');
     }

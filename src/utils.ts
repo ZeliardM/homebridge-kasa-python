@@ -13,8 +13,48 @@ import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 import path from 'node:path';
 
+export async function checkForUpgrade(
+  packageConfig: { name: string; version: string; engines: { node: string } },
+  storagePath: string,
+  logger: Logging,
+): Promise<boolean> {
+  const versionDir = path.join(storagePath, 'kasa-python');
+  const versionFilePath = path.join(versionDir, 'kasa-python-version.json');
+  let storedVersion = '';
+
+  logger.debug('Checking for upgrade at path:', versionFilePath);
+
+  try {
+    await fs.access(versionFilePath);
+    const versionData = await fs.readFile(versionFilePath, 'utf8');
+    storedVersion = JSON.parse(versionData).version;
+    logger.debug('Stored version:', storedVersion);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      logger.info('Version file does not exist, treating as new install or version change.');
+    } else {
+      logger.error('Error reading version file:', error);
+    }
+  }
+
+  if (storedVersion !== packageConfig.version) {
+    try {
+      logger.debug('Updating version file to new version:', packageConfig.version);
+      await fs.mkdir(versionDir, { recursive: true });
+      await fs.writeFile(versionFilePath, JSON.stringify({ version: packageConfig.version }), 'utf8');
+      logger.info(`Version file updated to version ${packageConfig.version}`);
+    } catch (error) {
+      logger.error('Error writing version file:', error);
+    }
+    return true;
+  }
+
+  logger.debug('No upgrade needed, version is up to date.');
+  return false;
+}
+
 export function deferAndCombine<T, U>(
-  fn: (requestCount: number) => Promise<T>,
+  fn: ((requestCount: number) => Promise<T>) | (() => Promise<T>),
   timeout: number,
   runNowFn?: (arg: U) => void,
 ): (arg?: U) => Promise<T> {
@@ -24,10 +64,18 @@ export function deferAndCombine<T, U>(
   const processRequests = () => {
     const currentRequests = requests;
     requests = [];
-    fn(currentRequests.length)
+    let result: Promise<T>;
+    if (fn.length === 0) {
+      result = (fn as () => Promise<T>)();
+    } else {
+      result = (fn as (requestCount: number) => Promise<T>)(currentRequests.length);
+    }
+    result
       .then(value => currentRequests.forEach(req => req.resolve(value)))
       .catch(error => currentRequests.forEach(req => req.reject(error)))
-      .finally(() => timer = null);
+      .finally(() => {
+        timer = null;
+      });
   };
 
   return (arg?: U) => {
@@ -53,6 +101,21 @@ export function delay(ms: number): Promise<void> {
 
 export function isObjectLike(candidate: unknown): candidate is Record<string, unknown> {
   return typeof candidate === 'object' && candidate !== null || typeof candidate === 'function';
+}
+
+export async function loadPackageConfig(logger: Logging): Promise<{ name: string; version: string; engines: { node: string } }> {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const packageConfigPath = path.join(__dirname, '..', 'package.json');
+  const log: Logger = prefixLogger(logger, '[Package Config]');
+  log.debug('Loading package configuration from:', packageConfigPath);
+
+  try {
+    const packageConfigData = await fs.readFile(packageConfigPath, 'utf8');
+    return JSON.parse(packageConfigData);
+  } catch (error) {
+    log.error(`Error reading package.json: ${error}`);
+    throw error;
+  }
 }
 
 export function lookup<T>(
@@ -199,21 +262,6 @@ export async function runCommand(
   return [stdout, stderr, exitCode];
 }
 
-export async function loadPackageConfig(logger: Logging): Promise<{ name: string; version: string; engines: { node: string } }> {
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const packageConfigPath = path.join(__dirname, '..', 'package.json');
-  const log: Logger = prefixLogger(logger, '[Package Config]');
-  log.debug('Loading package configuration from:', packageConfigPath);
-
-  try {
-    const packageConfigData = await fs.readFile(packageConfigPath, 'utf8');
-    return JSON.parse(packageConfigData);
-  } catch (error) {
-    log.error(`Error reading package.json: ${error}`);
-    throw error;
-  }
-}
-
 export function satisfiesVersion(currentVersion: string, requiredVersion: string): boolean {
   const versions = requiredVersion.split('||').map(v => v.trim());
 
@@ -235,46 +283,6 @@ export function satisfiesVersion(currentVersion: string, requiredVersion: string
     }
     return currentPatch >= requiredPatch;
   });
-}
-
-export async function checkForUpgrade(
-  packageConfig: { name: string; version: string; engines: { node: string } },
-  storagePath: string,
-  logger: Logging,
-): Promise<boolean> {
-  const versionDir = path.join(storagePath, 'kasa-python');
-  const versionFilePath = path.join(versionDir, 'kasa-python-version.json');
-  let storedVersion = '';
-
-  logger.debug('Checking for upgrade at path:', versionFilePath);
-
-  try {
-    await fs.access(versionFilePath);
-    const versionData = await fs.readFile(versionFilePath, 'utf8');
-    storedVersion = JSON.parse(versionData).version;
-    logger.debug('Stored version:', storedVersion);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      logger.info('Version file does not exist, treating as new install or version change.');
-    } else {
-      logger.error('Error reading version file:', error);
-    }
-  }
-
-  if (storedVersion !== packageConfig.version) {
-    try {
-      logger.debug('Updating version file to new version:', packageConfig.version);
-      await fs.mkdir(versionDir, { recursive: true });
-      await fs.writeFile(versionFilePath, JSON.stringify({ version: packageConfig.version }), 'utf8');
-      logger.info(`Version file updated to version ${packageConfig.version}`);
-    } catch (error) {
-      logger.error('Error writing version file:', error);
-    }
-    return true;
-  }
-
-  logger.debug('No upgrade needed, version is up to date.');
-  return false;
 }
 
 export async function waitForServer(url: string, log: Logging, timeout: number = 30000, interval: number = 1000): Promise<void> {

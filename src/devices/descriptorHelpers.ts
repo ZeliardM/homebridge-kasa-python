@@ -1,7 +1,7 @@
 import type { Characteristic, CharacteristicValue, WithUUID } from 'homebridge';
 
 import type { CharacteristicDescriptor, DescriptorContext, Energy } from './deviceTypes.js';
-import type { EnergyCharacteristics } from '../energyCharacteristics.js';
+import type { EnergyCharacteristics } from './energyCharacteristics.js';
 
 export function buildOnDescriptor(
   C: typeof Characteristic,
