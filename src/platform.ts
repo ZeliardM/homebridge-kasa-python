@@ -169,16 +169,16 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       if (
         this.api.versionGreaterOrEqual &&
         !(
-          this.api.versionGreaterOrEqual('1.11.0') ||
+          this.api.versionGreaterOrEqual('1.8.0') ||
           this.api.versionGreaterOrEqual('2.0.0')
         )
       ) {
         throw new Error(
-          `homebridge-kasa-python requires Homebridge ^1.11.0 || ^2.0.0-beta.0. Currently running: ${this.api.serverVersion}`,
+          `homebridge-kasa-python requires Homebridge ^1.8.0 || ^2.0.0-beta.0. Currently running: ${this.api.serverVersion}`,
         );
       } else {
         this.log.debug(
-          `Homebridge version ${this.api.serverVersion} satisfies the requirement ^1.11.0 || ^2.0.0-beta.0`,
+          `Homebridge version ${this.api.serverVersion} satisfies the requirement ^1.8.0 || ^2.0.0-beta.0`,
         );
       }
     } catch (error) {
