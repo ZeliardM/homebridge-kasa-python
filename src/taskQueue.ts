@@ -5,12 +5,18 @@ export class TaskQueue {
   private running: boolean = false;
   private log: Logging;
   private resolveEmptyQueue: (() => void) | null = null;
+  private isShuttingDownRef: () => boolean;
 
-  constructor(log: Logging) {
+  constructor(log: Logging, isShuttingDownRef: () => boolean) {
     this.log = log;
+    this.isShuttingDownRef = isShuttingDownRef;
   }
 
   public addTask(task: () => Promise<void>): void {
+    if (this.isShuttingDownRef && this.isShuttingDownRef()) {
+      this.log.warn('TaskQueue: Attempted to add a task after shutdown started. Task rejected.');
+      return;
+    }
     this.queue.push(task);
     this.processQueue();
   }

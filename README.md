@@ -11,21 +11,21 @@
 </span>
 
 <p align="center">
-  <a href="https://github.com/ZeliardM/homebridge-kasa-python/blob/latest/LICENSE"><img src="https://badgen.net/npm/license/homebridge-kasa-python" alt="mit license"></a>
-  <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/latest"><img src="https://badgen.net/npm/v/homebridge-kasa-python/latest?label=npm@latest" alt="latest npm version"></a>
-  <a href="https://pypi.org/project/python-kasa/"><img src="https://badgen.net/badge/Python@latest/3.11,%203.12,%203.13" alt="latest PyPI pyversions"></a>
-  <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/beta"><img src="https://badgen.net/npm/v/homebridge-kasa-python/beta?label=npm@beta&color=cyan" alt="beta npm version"></a>
-  <a href="https://pypi.org/project/python-kasa/"><img src="https://badgen.net/badge/Python@beta/3.11,%203.12,%203.13?color=cyan" alt="beta PyPI pyversions"></a>
-  <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/latest"><img src="https://badgen.net/npm/dt/homebridge-kasa-python" alt="npm downloads total"></a>
-  <a href="https://www.paypal.me/ZeliardM/USD/"><img src="https://badgen.net/badge/donate/paypal?color=orange" alt="donate"></a>
-  <a href="https://github.com/sponsors/ZeliardM"><img src="https://badgen.net/badge/donate/github?color=orange" alt="donate"></a>
-  <a href="https://github.com/homebridge/homebridge/wiki/Verified-Plugins"><img src="https://badgen.net/badge/homebridge/verified?color=purple" alt="homebridge verified"></a>
+  <a href="https://github.com/ZeliardM/homebridge-kasa-python/blob/latest/LICENSE"><img src="https://img.shields.io/npm/l/homebridge-kasa-python?color=yellow" alt="mit license"></a>
+  <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/latest"><img src="https://img.shields.io/npm/v/homebridge-kasa-python/latest?label=npm%40latest&color=blue" alt="latest npm version"></a>
+  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40latest-3.11%2C%203.12%2C%203.13-blue" alt="latest PyPI pyversions"></a>
+  <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/beta"><img src="https://img.shields.io/npm/v/homebridge-kasa-python/beta?label=npm%40beta&color=red" alt="beta npm version"></a>
+  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40latest-3.11%2C%203.12%2C%203.13-red" alt="beta PyPI pyversions"></a>
+  <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/latest"><img src="https://img.shields.io/npm/dt/homebridge-kasa-python?color=brightgreen" alt="npm downloads total"></a>
+  <a href="https://www.paypal.me/ZeliardM/USD/"><img src="https://img.shields.io/badge/donate-paypal-orange" alt="donate paypal"></a>
+  <a href="https://github.com/sponsors/ZeliardM"><img src="https://img.shields.io/badge/donate-github-orange" alt="donate github"></a>
+  <a href="https://github.com/homebridge/homebridge/wiki/Verified-Plugins"><img src="https://img.shields.io/badge/homebridge-verified-blueviolet" alt="homebridge verified"></a>
 </p>
 
 <div align="center">
 
 > ## IMPORTANT!!!
->With v2.7.0, Support for anything less than Python v3.11 will be dropped.
+>Python Supported Versions: 3.11, 3.12, and 3.13.
 
 </div>
 

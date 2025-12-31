@@ -15,25 +15,29 @@ import { EventEmitter } from 'node:events';
 import { fileURLToPath } from 'node:url';
 
 import create from './devices/create.js';
-import DeviceManager, { deviceEventEmitter } from './devices/deviceManager.js';
-import HomeKitDevice from './devices/index.js';
+import DeviceManager from './devices/deviceManager.js';
+import HomeKitDevice from './devices/baseDevice.js';
 import PythonChecker from './python/pythonChecker.js';
 import { parseConfig } from './config.js';
-import { TaskQueue } from './taskQueue.js';
-import { deferAndCombine, runCommand } from './utils.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
+import { TaskQueue } from './taskQueue.js';
 import {
   checkForUpgrade,
+  deferAndCombine,
   getAvailablePort,
   isObjectLike,
   loadPackageConfig,
   lookup,
   lookupCharacteristicNameByUUID,
+  runCommand,
   satisfiesVersion,
   waitForServer,
 } from './utils.js';
+import { deviceEventEmitter } from './devices/deviceManager.js';
+import { createEnergyCharacteristics } from './devices/energyCharacteristics.js';
 import type { KasaPythonConfig } from './config.js';
-import type { KasaDevice } from './devices/kasaDevices.js';
+import type { KasaDevice } from './devices/deviceTypes.js';
+import type { EnergyCharacteristics } from './devices/energyCharacteristics.js';
 
 export type KasaPythonAccessoryContext = {
   deviceId?: string;
@@ -47,6 +51,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public readonly Characteristic: typeof Characteristic;
   public readonly configuredAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
+  public readonly energyCharacteristics: EnergyCharacteristics | undefined;
   public readonly offlineAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
   public readonly Service: typeof Service;
   public readonly storagePath: string;
@@ -59,6 +64,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public port: number = 0;
   public taskQueue: TaskQueue;
   private readonly homekitDevicesById: Map<string, HomeKitDevice> = new Map();
+  private deviceDiscoveredHandler?: (device: KasaDevice) => Promise<void>;
   private hideHomeKitMatter: boolean = true;
   private isUpgrade: boolean = false;
   private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
@@ -69,14 +75,16 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.Characteristic = this.api.hap.Characteristic;
     this.storagePath = this.api.user.storagePath();
     this.config = parseConfig(config);
+    if (this.config.enableEnergyMonitoring) {
+      this.energyCharacteristics = createEnergyCharacteristics(this.api.hap);
+    }
     this.periodicDeviceDiscoveryEmitter = new EventEmitter();
-    this.taskQueue = new TaskQueue(this.log);
+    this.taskQueue = new TaskQueue(this.log, () => this.isShuttingDown);
 
+    this.periodicDeviceDiscoveryEmitter.setMaxListeners(255);
     this.setupDeviceEventEmitter('firstDiscovery');
 
-    this.platformInitialization = this.initializePlatform().catch((error) => {
-      this.log.error('Platform initialization failed:', error);
-    });
+    this.platformInitialization = this.initializePlatform();
 
     this.api.on('didFinishLaunching', async () => {
       this.log.debug('KasaPython Platform finished launching');
@@ -108,35 +116,34 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     });
   }
 
-  private setupDeviceEventEmitter(name: string, discoveredDeviceIds?: Set<string>): void {
-    deviceEventEmitter.removeAllListeners('deviceDiscovered');
-    this.log.debug(`Setting up device event emitter: ${name}`);
-    if (name === 'periodicDiscovery' && discoveredDeviceIds) {
-      deviceEventEmitter.on('deviceDiscovered', async (device: KasaDevice) => {
+  private setupDeviceEventEmitter(mode: string, discoveredDeviceIds?: Set<string>): void {
+    if (this.deviceDiscoveredHandler) {
+      deviceEventEmitter.off('deviceDiscovered', this.deviceDiscoveredHandler);
+    }
+    this.log.debug(`Setting up device event emitter: ${mode}`);
+    if (mode === 'periodicDiscovery' && discoveredDeviceIds) {
+      this.deviceDiscoveredHandler = async (device: KasaDevice) => {
         this.log.debug(`Device discovered during periodic discovery: ${device.sys_info.device_id}`);
         discoveredDeviceIds.add(device.sys_info.device_id);
         this.log.debug(`Added device ID to discoveredDeviceIds: ${device.sys_info.device_id}`);
         await this.processDevice(device);
-      });
+      };
     } else {
-      deviceEventEmitter.on('deviceDiscovered', async (device: KasaDevice) => {
+      this.deviceDiscoveredHandler = async (device: KasaDevice) => {
         this.log.debug(`Device discovered during initial discovery: ${device.sys_info.device_id}`);
         await this.processDevice(device);
-      });
+      };
     }
+    deviceEventEmitter.on('deviceDiscovered', this.deviceDiscoveredHandler);
   }
 
   async initializePlatform(): Promise<void> {
-    try {
-      packageConfig = await loadPackageConfig(this.log);
-      this.logInitializationDetails();
-      await this.verifyEnvironment();
-      this.isUpgrade = await checkForUpgrade(packageConfig, this.storagePath, this.log);
-      if (this.isUpgrade) {
-        this.log.info('Plugin version changed, virtual python environment will be recreated.');
-      }
-    } catch (error) {
-      this.log.error('Error during platform initialization:', error);
+    packageConfig = await loadPackageConfig(this.log);
+    this.logInitializationDetails();
+    await this.verifyEnvironment();
+    this.isUpgrade = await checkForUpgrade(packageConfig, this.storagePath, this.log);
+    if (this.isUpgrade) {
+      this.log.info('Plugin version changed, virtual python environment will be recreated.');
     }
   }
 
@@ -167,11 +174,11 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         )
       ) {
         throw new Error(
-          `homebridge-kasa-python requires Homebridge ^1.11.0 || ^2.0. Currently running: ${this.api.serverVersion}`,
+          `homebridge-kasa-python requires Homebridge ^1.11.0 || ^2.0.0-beta.0. Currently running: ${this.api.serverVersion}`,
         );
       } else {
         this.log.debug(
-          `Homebridge version ${this.api.serverVersion} satisfies the requirement ^1.11.0 || ^2.0.0`,
+          `Homebridge version ${this.api.serverVersion} satisfies the requirement ^1.11.0 || ^2.0.0-beta.0`,
         );
       }
     } catch (error) {
@@ -212,9 +219,21 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private setupPeriodicDiscovery(discoveredDeviceIds: Set<string>): void {
     this.log.debug('Setting up periodic device discovery');
     this.setupDeviceEventEmitter('periodicDiscovery', discoveredDeviceIds);
-    setInterval(async () => {
+
+    const discoveryTask = async () => {
       await this.periodicDeviceDiscovery(discoveredDeviceIds);
+    };
+
+    const deferredDiscoveryTask = deferAndCombine(discoveryTask, this.config.advancedOptions.waitTimeUpdate);
+
+    setInterval(() => {
+      try {
+        this.taskQueue.addTask(deferredDiscoveryTask);
+      } catch (err) {
+        this.log.error('Error scheduling periodic device discovery:', err);
+      }
     }, this.config.discoveryOptions.discoveryPollingInterval);
+
     this.log.debug('Periodic device discovery setup completed');
   }
 
@@ -241,23 +260,18 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.periodicDeviceDiscovering = true;
     discoveredDeviceIds.clear();
     this.log.debug('Cleared discoveredDeviceIds set before discovery.');
-    const task = async () => {
-      try {
-        if (this.deviceManager) {
-          await this.deviceManager.discoverDevices();
-        }
-      } catch (error) {
-        this.log.error('Error during periodic device discovery:', error);
-      } finally {
-        this.handleOfflineDevices(discoveredDeviceIds);
-        this.periodicDeviceDiscovering = false;
-        this.periodicDeviceDiscoveryEmitter.emit('periodicDeviceDiscoveryComplete');
-        this.log.debug('Finished periodic device discovery');
+    try {
+      if (this.deviceManager) {
+        await this.deviceManager.discoverDevices();
       }
-    };
-    const deferAndCombinedTask = deferAndCombine(task, this.config.advancedOptions.waitTimeUpdate);
-    this.taskQueue.addTask(deferAndCombinedTask);
-    await deferAndCombinedTask();
+    } catch (error) {
+      this.log.error('Error during periodic device discovery:', error);
+    } finally {
+      this.handleOfflineDevices(discoveredDeviceIds);
+      this.periodicDeviceDiscovering = false;
+      this.periodicDeviceDiscoveryEmitter.emit('periodicDeviceDiscoveryComplete');
+      this.log.debug('Finished periodic device discovery');
+    }
   }
 
   private async processDevice(device: KasaDevice): Promise<void> {
@@ -266,9 +280,9 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       const now = new Date();
       device.last_seen = now;
       device.offline = false;
-      const platformAccessory = this.findPlatformAccessory(device.sys_info.device_id);
-      if (platformAccessory) {
-        await this.updateExistingDevice(platformAccessory, device, now);
+      const accessory = this.findPlatformAccessory(device.sys_info.device_id);
+      if (accessory) {
+        await this.updateExistingDevice(accessory, device, now);
       } else {
         await this.addNewDevice(device);
       }
@@ -321,12 +335,12 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   private async updateExistingDevice(
-    platformAccessory: PlatformAccessory<KasaPythonAccessoryContext>,
+    accessory: PlatformAccessory<KasaPythonAccessoryContext>,
     device: KasaDevice,
     now: Date,
   ): Promise<void> {
     this.log.debug(`Device [${device.sys_info.device_id}] is already configured, updating status.`);
-    this.updateAccessoryStatus(platformAccessory, now, false);
+    this.updateAccessoryStatus(accessory, now, false);
     const existingDevice = this.homekitDevicesById.get(device.sys_info.device_id);
     if (existingDevice) {
       if (!existingDevice.isUpdating) {
@@ -436,8 +450,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   }
 
   getServiceName(service: { UUID: string }): string | undefined {
-    const serviceName = lookup(this.api.hap.Service, (thisKeyValue, value) =>
-      isObjectLike(thisKeyValue) && 'UUID' in thisKeyValue && thisKeyValue.UUID === value, service.UUID);
+    const serviceName = lookup(this.api.hap.Service, (objectProp, value) =>
+      isObjectLike(objectProp) && 'UUID' in objectProp && objectProp.UUID === value, service.UUID);
     return serviceName;
   }
 
@@ -448,63 +462,63 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     return name ?? displayName ?? lookupName;
   }
 
-  registerPlatformAccessory(platformAccessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
-    this.log.debug('Registering platform platformAccessory:', platformAccessory.displayName);
+  registerPlatformAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
+    this.log.debug('Registering platform accessory:', accessory.displayName);
 
-    if (!this.configuredAccessories.has(platformAccessory.UUID)) {
-      this.log.debug(`Platform Accessory ${platformAccessory.displayName} is not in configuredAccessories, adding it.`);
-      this.configuredAccessories.set(platformAccessory.UUID, platformAccessory);
+    if (!this.configuredAccessories.has(accessory.UUID)) {
+      this.log.debug(`Platform Accessory ${accessory.displayName} is not in configuredAccessories, adding it.`);
+      this.configuredAccessories.set(accessory.UUID, accessory);
     } else {
-      this.log.debug(`Platform Accessory ${platformAccessory.displayName} is already in configuredAccessories.`);
+      this.log.debug(`Platform Accessory ${accessory.displayName} is already in configuredAccessories.`);
     }
 
-    this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [platformAccessory]);
-    this.log.debug(`Platform Accessory ${platformAccessory.displayName} registered with Homebridge.`);
+    this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+    this.log.debug(`Platform Accessory ${accessory.displayName} registered with Homebridge.`);
   }
 
-  configureAccessory(platformAccessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
-    this.log.debug(`Configuring Platform Accessory: [${platformAccessory.displayName}] UUID: ${platformAccessory.UUID}`);
+  configureAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
+    this.log.debug(`Configuring Platform Accessory: [${accessory.displayName}] UUID: ${accessory.UUID}`);
 
-    if (!platformAccessory.context.lastSeen && !platformAccessory.context.offline) {
-      this.log.debug(`Setting initial lastSeen and offline status for Platform Accessory: [${platformAccessory.displayName}]`);
-      platformAccessory.context.lastSeen = new Date();
-      platformAccessory.context.offline = false;
+    if (!accessory.context.lastSeen && !accessory.context.offline) {
+      this.log.debug(`Setting initial lastSeen and offline status for Platform Accessory: [${accessory.displayName}]`);
+      accessory.context.lastSeen = new Date();
+      accessory.context.offline = false;
     }
 
-    if (platformAccessory.context.lastSeen) {
+    if (accessory.context.lastSeen) {
       const now = new Date();
-      const timeSinceLastSeen = now.getTime() - new Date(platformAccessory.context.lastSeen).getTime();
+      const timeSinceLastSeen = now.getTime() - new Date(accessory.context.lastSeen).getTime();
       const offlineInterval = this.config.discoveryOptions.offlineInterval;
 
-      this.log.debug(`Platform Accessory [${platformAccessory.displayName}] last seen ${timeSinceLastSeen}ms ago, ` +
-        `offline interval is ${offlineInterval}ms, offline status: ${platformAccessory.context.offline}`);
+      this.log.debug(`Platform Accessory [${accessory.displayName}] last seen ${timeSinceLastSeen}ms ago, ` +
+        `offline interval is ${offlineInterval}ms, offline status: ${accessory.context.offline}`);
 
-      if (timeSinceLastSeen > offlineInterval && platformAccessory.context.offline === true) {
+      if (timeSinceLastSeen > offlineInterval && accessory.context.offline === true) {
         this.log.info(
-          `Platform Accessory [${platformAccessory.displayName}] is offline and outside the offline interval, ` +
+          `Platform Accessory [${accessory.displayName}] is offline and outside the offline interval, ` +
           'moving to offlineAccessories',
         );
-        this.configuredAccessories.delete(platformAccessory.UUID);
-        this.offlineAccessories.set(platformAccessory.UUID, platformAccessory);
+        this.configuredAccessories.delete(accessory.UUID);
+        this.offlineAccessories.set(accessory.UUID, accessory);
         return;
-      } else if (timeSinceLastSeen < offlineInterval && platformAccessory.context.offline === true) {
-        this.log.debug(`Platform Accessory [${platformAccessory.displayName}] is offline and within offline interval.`);
-      } else if (platformAccessory.context.offline === false) {
-        this.log.debug(`Platform Accessory [${platformAccessory.displayName}] is online, updating lastSeen time.`);
-        this.updateAccessoryStatus(platformAccessory, now, false);
+      } else if (timeSinceLastSeen < offlineInterval && accessory.context.offline === true) {
+        this.log.debug(`Platform Accessory [${accessory.displayName}] is offline and within offline interval.`);
+      } else if (accessory.context.offline === false) {
+        this.log.debug(`Platform Accessory [${accessory.displayName}] is online, updating lastSeen time.`);
+        this.updateAccessoryStatus(accessory, now, false);
       }
     }
 
-    if (!this.configuredAccessories.has(platformAccessory.UUID)) {
+    if (!this.configuredAccessories.has(accessory.UUID)) {
       this.log.debug(
-        `Platform Accessory [${platformAccessory.displayName}] with UUID [${platformAccessory.UUID}] ` +
+        `Platform Accessory [${accessory.displayName}] with UUID [${accessory.UUID}] ` +
         'is not in configuredAccessories, adding it.',
       );
-      this.configuredAccessories.set(platformAccessory.UUID, platformAccessory);
+      this.configuredAccessories.set(accessory.UUID, accessory);
     } else {
       this.log.debug(
-        `Platform Accessory [${platformAccessory.displayName}] with UUID ` +
-        `[${platformAccessory.UUID}] is already in configuredAccessories.`,
+        `Platform Accessory [${accessory.displayName}] with UUID ` +
+        `[${accessory.UUID}] is already in configuredAccessories.`,
       );
     }
   }

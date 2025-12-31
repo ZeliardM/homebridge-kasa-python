@@ -1,67 +1,58 @@
-import HomeKitDevice from './index.js';
+import HomeKitDevice from './baseDevice.js';
 import HomeKitDeviceLightBulb from './homekitLightBulb.js';
 import HomeKitDevicePlug from './homekitPlug.js';
 import HomeKitDevicePowerStrip from './homekitPowerStrip.js';
 import HomeKitDeviceSwitch from './homekitSwitch.js';
 import HomeKitDeviceSwitchWithChildren from './homekitSwitchWithChildren.js';
-import { LightBulbs, Plugs, PowerStrips, Switches } from './kasaDevices.js';
+import { LightBulbs, Plugs, PowerStrips, Switches } from './deviceTypes.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { KasaDevice, LightBulb, Plug, PowerStrip, Switch } from './kasaDevices.js';
+import type { KasaDevice } from './deviceTypes.js';
 
-function isLightBulb(device: KasaDevice): device is LightBulb {
+function isLightBulb(device: KasaDevice) {
   return LightBulbs.includes(device.sys_info.model);
 }
-
-function isPlug(device: KasaDevice): device is Plug {
+function isPlug(device: KasaDevice) {
   return Plugs.includes(device.sys_info.model);
 }
-
-function isPowerStrip(device: KasaDevice): device is PowerStrip {
+function isPowerStrip(device: KasaDevice) {
   return PowerStrips.includes(device.sys_info.model);
 }
-
-function isSwitch(device: KasaDevice): device is Switch {
+function isSwitch(device: KasaDevice) {
   return Switches.includes(device.sys_info.model);
 }
 
-export default async function create(
+export default async function createDevice(
   platform: KasaPythonPlatform,
   kasaDevice: KasaDevice,
 ): Promise<HomeKitDevice | undefined> {
-  let homeKitDevice: HomeKitDevice | undefined;
+  let instance: HomeKitDevice;
 
   if (isLightBulb(kasaDevice)) {
-    const lightBulb = kasaDevice as LightBulb;
-    platform.log.debug('HomeKit device is a LightBulb:', lightBulb.sys_info.model);
-    homeKitDevice = new HomeKitDeviceLightBulb(platform, lightBulb);
+    platform.log.debug('Device classified as LightBulb:', kasaDevice.sys_info.model);
+    instance = new HomeKitDeviceLightBulb(platform, kasaDevice);
   } else if (isPlug(kasaDevice)) {
-    const plug = kasaDevice as Plug;
-    platform.log.debug('HomeKit device is a Plug:', plug.sys_info.model);
-    homeKitDevice = new HomeKitDevicePlug(platform, plug);
+    platform.log.debug('Device classified as Plug:', kasaDevice.sys_info.model);
+    instance = new HomeKitDevicePlug(platform, kasaDevice);
   } else if (isPowerStrip(kasaDevice)) {
-    const powerStrip = kasaDevice as PowerStrip;
-    platform.log.debug('HomeKit device is a PowerStrip:', powerStrip.sys_info.model);
-    homeKitDevice = new HomeKitDevicePowerStrip(platform, powerStrip);
+    platform.log.debug('Device classified as PowerStrip:', kasaDevice.sys_info.model);
+    instance = new HomeKitDevicePowerStrip(platform, kasaDevice);
   } else if (isSwitch(kasaDevice)) {
-    const switchDevice = kasaDevice as Switch;
-    platform.log.debug('HomeKit device is a Switch:', switchDevice.sys_info.model);
-    if (switchDevice.sys_info.child_num > 0) {
-      homeKitDevice = new HomeKitDeviceSwitchWithChildren(platform, switchDevice);
+    platform.log.debug('Device classified as Switch:', kasaDevice.sys_info.model);
+    if (kasaDevice.sys_info.child_num > 0) {
+      instance = new HomeKitDeviceSwitchWithChildren(platform, kasaDevice);
     } else {
-      homeKitDevice = new HomeKitDeviceSwitch(platform, switchDevice);
+      instance = new HomeKitDeviceSwitch(platform, kasaDevice);
     }
   } else {
-    platform.log.error('Unknown device type:', kasaDevice);
+    platform.log.error('Unknown device type; skipping:', kasaDevice.sys_info.model);
     return undefined;
   }
-  if (homeKitDevice) {
-    try {
-      await homeKitDevice.initialize();
-    } catch (error) {
-      platform.log.error(`Error initializing device [${kasaDevice.sys_info.device_id}]:`, error);
-      return undefined;
-    }
-  }
 
-  return homeKitDevice;
+  try {
+    await instance.initialize();
+  } catch (error) {
+    platform.log.error(`Error initializing device [${kasaDevice.sys_info.device_id}]:`, error);
+    return undefined;
+  }
+  return instance;
 }
