@@ -1,6 +1,6 @@
 # Changelog
 
-## [v3.0.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0)
+## [v3.0.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.0) (2025-12-31)
 
 ### Breaking Changes
 
@@ -62,9 +62,23 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for release v3.0.0 [release] (@github-actions)
 - [other] Manually update CHANGELOG.md [8d00f81](https://github.com/ZeliardM/homebridge-kasa-python/commit/8d00f81027068543acd00b246e164620267398d5) (@ZeliardM)
 - [other] Manually update CHANGELOG.md [bd62843](https://github.com/ZeliardM/homebridge-kasa-python/commit/bd62843cfe2f7f8770538f8eaa02d1b34f66e9d9) (@ZeliardM)
 - [other] Manually add missing manual commit [d6e0f43](https://github.com/ZeliardM/homebridge-kasa-python/commit/d6e0f43206d5a09e684d25abfa041b8ad1636993) (@ZeliardM)
+- [other] Clean Up Workflow Syntax [8fa1768](https://github.com/ZeliardM/homebridge-kasa-python/commit/8fa17685fb5568b9e825768cf6e3ef66d85ce02e) (@ZeliardM)
+- [other] Correct package.json and CHANGELOG.md [33a11d4](https://github.com/ZeliardM/homebridge-kasa-python/commit/33a11d47e97dddb54de5eeb9326231dd947c69cb) (@ZeliardM)
+- [other] Change PR Workflow triggers [d5ab470](https://github.com/ZeliardM/homebridge-kasa-python/commit/d5ab470dfb9108fa4affcab2709f96d6a1142372) (@ZeliardM)
+- [other] Update README.md and npm publishing [aa57052](https://github.com/ZeliardM/homebridge-kasa-python/commit/aa5705236f10536ac6f2ab12e20545845fd23507) (@ZeliardM)
+- [other] Correct CHANGELOG.md [85e90c6](https://github.com/ZeliardM/homebridge-kasa-python/commit/85e90c6640ea0958f89e7954c06bee60160b9643) (@ZeliardM)
+- [other] Update Workflows [f55620b](https://github.com/ZeliardM/homebridge-kasa-python/commit/f55620b85f2895a58238e7d1682a51fdd4328799) (@ZeliardM)
+- [other] Correct dependencies and CHANGELOG.md [072e1dc](https://github.com/ZeliardM/homebridge-kasa-python/commit/072e1dc5e9239bc054a90df5f196d4833c4bb417) (@ZeliardM)
+- [other] Update workflows [39f8073](https://github.com/ZeliardM/homebridge-kasa-python/commit/39f8073a07e04f0171bc819f9092203c56a5ad95) (@ZeliardM)
+- [other] Import clean-up and organization [decd1cf](https://github.com/ZeliardM/homebridge-kasa-python/commit/decd1cf7fbcd04e23473c457dfb85bb740343156) (@ZeliardM)
+- [other] General code clean-up [0465acd](https://github.com/ZeliardM/homebridge-kasa-python/commit/0465acdf8192d930edf54cbc3567ad89c400fa49) (@ZeliardM)
+- Update tsconfig.json [42b0a56](https://github.com/ZeliardM/homebridge-kasa-python/commit/42b0a56f326bb5f03fd925addc1c3b9d5425ec35) (@ZeliardM)
+- Update CODEOWNERS and Workflow Python Versions [542c9e9](https://github.com/ZeliardM/homebridge-kasa-python/commit/542c9e90d1d8215857338c15b8268743a17ed2b1) (@ZeliardM)
+- Update CONTRIBUTING.md [1d8adc8](https://github.com/ZeliardM/homebridge-kasa-python/commit/1d8adc80973861b53eede4ea02692ea05622f795) (@ZeliardM)
 - npm(deps-dev): bump homebridge from 2.0.0-beta.55 to 2.0.0-beta.56 [#167](https://github.com/ZeliardM/homebridge-kasa-python/pull/167) (@dependabot[bot])
 - npm(deps): bump eventsource from 4.0.0 to 4.1.0 [#166](https://github.com/ZeliardM/homebridge-kasa-python/pull/166) (@dependabot[bot])
 - npm(deps-dev): bump homebridge from 2.0.0-beta.50 to 2.0.0-beta.53 [#161](https://github.com/ZeliardM/homebridge-kasa-python/pull/161) (@dependabot[bot])
@@ -103,9 +117,6 @@
 - npm(deps): bump the typescript-eslint group with 2 updates [#121](https://github.com/ZeliardM/homebridge-kasa-python/pull/121) (@dependabot[bot])
 - pip(deps): bump anyio from 4.10.0 to 4.11.0 [#120](https://github.com/ZeliardM/homebridge-kasa-python/pull/120) (@dependabot[bot])
 - pip(deps): bump uvicorn from 0.36.0 to 0.37.0 [#119](https://github.com/ZeliardM/homebridge-kasa-python/pull/119) (@dependabot[bot])
-- [other] Clean Up Workflow Syntax [8fa1768](https://github.com/ZeliardM/homebridge-kasa-python/commit/8fa17685fb5568b9e825768cf6e3ef66d85ce02e) (@ZeliardM)
-- [other] Correct package.json and CHANGELOG.md [33a11d4](https://github.com/ZeliardM/homebridge-kasa-python/commit/33a11d47e97dddb54de5eeb9326231dd947c69cb) (@ZeliardM)
-- [other] Change PR Workflow triggers [d5ab470](https://github.com/ZeliardM/homebridge-kasa-python/commit/d5ab470dfb9108fa4affcab2709f96d6a1142372) (@ZeliardM)
 - npm(deps-dev): bump homebridge from 2.0.0-beta.60 to 2.0.0-beta.64 [#188](https://github.com/ZeliardM/homebridge-kasa-python/pull/188) (@dependabot[bot])
 - npm(deps-dev): bump homebridge from 2.0.0-beta.60 to 2.0.0-beta.64 [#187](https://github.com/ZeliardM/homebridge-kasa-python/pull/187) (@dependabot[bot])
 - npm(deps-dev): bump homebridge from 2.0.0-beta.60 to 2.0.0-beta.64 [#186](https://github.com/ZeliardM/homebridge-kasa-python/pull/186) (@dependabot[bot])
@@ -124,11 +135,6 @@
 - ci(deps): bump actions/labeler from 5 to 6 [#172](https://github.com/ZeliardM/homebridge-kasa-python/pull/172) (@dependabot[bot])
 - npm(deps-dev): bump @eslint/eslintrc from 3.3.1 to 3.3.3 [#169](https://github.com/ZeliardM/homebridge-kasa-python/pull/169) (@dependabot[bot])
 - npm(deps-dev): bump @typescript-eslint/parser from 8.47.0 to 8.48.0 in the typescript-eslint group [#168](https://github.com/ZeliardM/homebridge-kasa-python/pull/168) (@dependabot[bot])
-- [other] Update README.md and npm publishing [aa57052](https://github.com/ZeliardM/homebridge-kasa-python/commit/aa5705236f10536ac6f2ab12e20545845fd23507) (@ZeliardM)
-- [other] Correct CHANGELOG.md [85e90c6](https://github.com/ZeliardM/homebridge-kasa-python/commit/85e90c6640ea0958f89e7954c06bee60160b9643) (@ZeliardM)
-- [other] Update Workflows [f55620b](https://github.com/ZeliardM/homebridge-kasa-python/commit/f55620b85f2895a58238e7d1682a51fdd4328799) (@ZeliardM)
-- [other] Correct dependencies and CHANGELOG.md [072e1dc](https://github.com/ZeliardM/homebridge-kasa-python/commit/072e1dc5e9239bc054a90df5f196d4833c4bb417) (@ZeliardM)
-- [other] Update workflows [39f8073](https://github.com/ZeliardM/homebridge-kasa-python/commit/39f8073a07e04f0171bc819f9092203c56a5ad95) (@ZeliardM)
 - npm(deps-dev): bump eslint from 9.39.1 to 9.39.2 in the eslint group [#198](https://github.com/ZeliardM/homebridge-kasa-python/pull/198) (@dependabot[bot])
 - npm(deps-dev): bump @typescript-eslint/parser from 8.48.1 to 8.49.0 in the typescript-eslint group [#197](https://github.com/ZeliardM/homebridge-kasa-python/pull/197) (@dependabot[bot])
 - npm(deps-dev): bump @typescript-eslint/parser from 8.48.1 to 8.49.0 in the typescript-eslint group [#196](https://github.com/ZeliardM/homebridge-kasa-python/pull/196) (@dependabot[bot])
@@ -136,11 +142,6 @@
 - npm(deps-dev): bump @types/node from 24.10.1 to 25.0.1 [#199](https://github.com/ZeliardM/homebridge-kasa-python/pull/199) (@dependabot[bot])
 - npm(deps-dev): bump typescript-eslint from 8.48.1 to 8.49.0 [#193](https://github.com/ZeliardM/homebridge-kasa-python/pull/193) (@dependabot[bot])
 - npm(deps-dev): bump @types/node from 24.10.1 to 25.0.1 [#192](https://github.com/ZeliardM/homebridge-kasa-python/pull/192) (@dependabot[bot])
-- [other] Import clean-up and organization [decd1cf](https://github.com/ZeliardM/homebridge-kasa-python/commit/decd1cf7fbcd04e23473c457dfb85bb740343156) (@ZeliardM)
-- [other] General code clean-up [0465acd](https://github.com/ZeliardM/homebridge-kasa-python/commit/0465acdf8192d930edf54cbc3567ad89c400fa49) (@ZeliardM)
-- Update tsconfig.json [42b0a56](https://github.com/ZeliardM/homebridge-kasa-python/commit/42b0a56f326bb5f03fd925addc1c3b9d5425ec35) (@ZeliardM)
-- Update CODEOWNERS and Workflow Python Versions [542c9e9](https://github.com/ZeliardM/homebridge-kasa-python/commit/542c9e90d1d8215857338c15b8268743a17ed2b1) (@ZeliardM)
-- Update CONTRIBUTING.md [1d8adc8](https://github.com/ZeliardM/homebridge-kasa-python/commit/1d8adc80973861b53eede4ea02692ea05622f795) (@ZeliardM)
 - npm(deps-dev): bump typescript-eslint from 8.50.0 to 8.50.1 [#208](https://github.com/ZeliardM/homebridge-kasa-python/pull/208) (@dependabot[bot])
 - pip(deps): bump uvicorn from 0.38.0 to 0.40.0 [#205](https://github.com/ZeliardM/homebridge-kasa-python/pull/205) (@dependabot[bot])
 - npm(deps-dev): bump @types/node from 25.0.1 to 25.0.3 [#204](https://github.com/ZeliardM/homebridge-kasa-python/pull/204) (@dependabot[bot])
