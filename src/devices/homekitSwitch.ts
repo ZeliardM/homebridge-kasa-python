@@ -2,11 +2,11 @@ import { Categories } from 'homebridge';
 
 import HomeKitDevice from './baseDevice.js';
 import {
-  buildOnDescriptor,
   buildBrightnessDescriptor,
+  buildOnDescriptor,
 } from './descriptorHelpers.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { Switch, CharacteristicDescriptor } from './deviceTypes.js';
+import type { CharacteristicDescriptor, Switch } from './deviceTypes.js';
 
 export default class HomeKitDeviceSwitch extends HomeKitDevice {
   private hasBrightness: boolean;

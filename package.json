@@ -13,7 +13,7 @@
     "url": "https://github.com/ZeliardM/homebridge-kasa-python/issues"
   },
   "engines": {
-    "homebridge": "^1.11.0 || ^2.0.0-beta.0",
+    "homebridge": "^1.8.0 || ^2.0.0-beta.0",
     "node": "^20 || ^22 || ^24",
     "python": "^3.11 || ^3.12 || ^3.13"
   },

@@ -19,8 +19,6 @@ import DeviceManager from './devices/deviceManager.js';
 import HomeKitDevice from './devices/baseDevice.js';
 import PythonChecker from './python/pythonChecker.js';
 import { parseConfig } from './config.js';
-import { deviceEventEmitter } from './devices/deviceManager.js';
-import { createEnergyCharacteristics } from './devices/energyCharacteristics.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { TaskQueue } from './taskQueue.js';
 import {
@@ -35,9 +33,11 @@ import {
   satisfiesVersion,
   waitForServer,
 } from './utils.js';
+import { deviceEventEmitter } from './devices/deviceManager.js';
+import { createEnergyCharacteristics } from './devices/energyCharacteristics.js';
 import type { KasaPythonConfig } from './config.js';
-import type { EnergyCharacteristics } from './devices/energyCharacteristics.js';
 import type { KasaDevice } from './devices/deviceTypes.js';
+import type { EnergyCharacteristics } from './devices/energyCharacteristics.js';
 
 export type KasaPythonAccessoryContext = {
   deviceId?: string;

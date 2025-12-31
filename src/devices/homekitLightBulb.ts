@@ -2,13 +2,13 @@ import { Categories } from 'homebridge';
 
 import HomeKitDevice from './baseDevice.js';
 import {
-  buildOnDescriptor,
   buildBrightnessDescriptor,
   buildColorTemperatureDescriptor,
   buildHSVDescriptors,
+  buildOnDescriptor,
 } from './descriptorHelpers.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { LightBulb, CharacteristicDescriptor, DescriptorContext } from './deviceTypes.js';
+import type { CharacteristicDescriptor, DescriptorContext, LightBulb } from './deviceTypes.js';
 
 export default class HomeKitDeviceLightBulb extends HomeKitDevice {
   private hasBrightness: boolean;

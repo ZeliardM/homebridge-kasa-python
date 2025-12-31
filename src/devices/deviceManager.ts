@@ -1,9 +1,9 @@
 import type { CharacteristicValue, Logger, PlatformConfig } from 'homebridge';
 
 import axios from 'axios';
-import EventSource from 'eventsource';
 import path from 'node:path';
-import { EventEmitter } from 'events';
+import { EventSource } from 'eventsource';
+import { EventEmitter } from 'node:events';
 import { promises as fs } from 'node:fs';
 
 import KasaPythonPlatform from '../platform.js';

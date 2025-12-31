@@ -1,9 +1,9 @@
-import type { Service, CharacteristicValue, WithUUID } from 'homebridge';
+import type { CharacteristicValue, Service, WithUUID } from 'homebridge';
 
 import HomeKitDevice from './baseDevice.js';
 import type {
-  ChildDevice,
   CharacteristicDescriptor,
+  ChildDevice,
   DescriptorContext,
   SysInfo,
 } from './deviceTypes.js';

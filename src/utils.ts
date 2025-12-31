@@ -6,12 +6,12 @@ import type {
 } from 'homebridge';
 
 import axios from 'axios';
+import net from 'node:net';
+import path from 'node:path';
 import { ChildProcessWithoutNullStreams, spawn, SpawnOptionsWithoutStdio } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import net from 'node:net';
-import path from 'node:path';
 
 export async function checkForUpgrade(
   packageConfig: { name: string; version: string; engines: { node: string } },

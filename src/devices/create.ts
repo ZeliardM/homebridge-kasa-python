@@ -1,13 +1,12 @@
 import HomeKitDevice from './baseDevice.js';
-import { LightBulbs, Plugs, PowerStrips, Switches } from './deviceTypes.js';
 import HomeKitDeviceLightBulb from './homekitLightBulb.js';
 import HomeKitDevicePlug from './homekitPlug.js';
 import HomeKitDevicePowerStrip from './homekitPowerStrip.js';
 import HomeKitDeviceSwitch from './homekitSwitch.js';
 import HomeKitDeviceSwitchWithChildren from './homekitSwitchWithChildren.js';
-
-import type { KasaDevice } from './deviceTypes.js';
+import { LightBulbs, Plugs, PowerStrips, Switches } from './deviceTypes.js';
 import type KasaPythonPlatform from '../platform.js';
+import type { KasaDevice } from './deviceTypes.js';
 
 function isLightBulb(device: KasaDevice) {
   return LightBulbs.includes(device.sys_info.model);

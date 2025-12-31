@@ -3,7 +3,6 @@ import json
 import os
 import re
 import sys
-from typing import Any, Optional
 
 from kasa import (
     AuthenticationError,
@@ -15,6 +14,7 @@ from kasa import (
     Module,
     UnsupportedDeviceError,
 )
+from typing import Any, Optional
 from quart import Quart, jsonify, request, Response
 
 app = Quart(__name__)

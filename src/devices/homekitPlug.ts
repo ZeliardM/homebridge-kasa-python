@@ -2,12 +2,12 @@ import { Categories } from 'homebridge';
 
 import HomeKitDevice from './baseDevice.js';
 import {
+  buildEnergyDescriptors,
   buildOnDescriptor,
   buildOutletInUseDescriptor,
-  buildEnergyDescriptors,
 } from './descriptorHelpers.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { Plug, CharacteristicDescriptor } from './deviceTypes.js';
+import type { CharacteristicDescriptor, Plug } from './deviceTypes.js';
 
 export default class HomeKitDevicePlug extends HomeKitDevice {
   private hasEnergy: boolean;

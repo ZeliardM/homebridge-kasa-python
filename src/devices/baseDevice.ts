@@ -13,8 +13,8 @@ import type {
 
 import { EventEmitter } from 'node:events';
 
-import DeviceManager from './deviceManager.js';
 import accessoryInformation from './accessoryInformation.js';
+import DeviceManager from './deviceManager.js';
 import { deferAndCombine, prefixLogger } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
 import type {

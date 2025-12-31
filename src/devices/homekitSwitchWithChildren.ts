@@ -2,13 +2,13 @@ import { Categories } from 'homebridge';
 
 import HomeKitParentDevice from './baseParent.js';
 import {
-  buildOnDescriptor,
   buildBrightnessDescriptor,
   buildFanActiveDescriptor,
   buildFanRotationDescriptor,
+  buildOnDescriptor,
 } from './descriptorHelpers.js';
 import type KasaPythonPlatform from '../platform.js';
-import type { ChildDevice, Switch, CharacteristicDescriptor } from './deviceTypes.js';
+import type { CharacteristicDescriptor, ChildDevice, Switch } from './deviceTypes.js';
 
 export default class HomeKitDeviceSwitchWithChildren extends HomeKitParentDevice {
   constructor(

@@ -5,8 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type KasaPythonPlatform from '../platform.js';
 import { delay, prefixLogger, runCommand } from '../utils.js';
+import type KasaPythonPlatform from '../platform.js';
 
 const __dirname: string = path.dirname(fileURLToPath(import.meta.url));
 const SUPPORTED_PYTHON_VERSIONS: string[] = ['3.11', '3.12', '3.13'];
