@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.0.1-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.1-beta.0)
 
+### Bug Fixes
+
+- [bug] Fix manual commit handling after stable releases [7cff362](https://github.com/ZeliardM/homebridge-kasa-python/commit/7cff362ef9738aeb4a511f64bf34c5f9a0841060) (@ZeliardM)
+
 ### Other Changes
 
 - [other] Fix version checks [c788e8c](https://github.com/ZeliardM/homebridge-kasa-python/commit/c788e8cd6ef8a95c21b26396355aa3de5d91bd03) (@ZeliardM)
