@@ -1200,11 +1200,12 @@ def _handle_commit_push(context: Context) -> None:
             continue
         subject = common.git_get_commit_subject(sha) or sha
         display = subject or sha
-        if isinstance(subject, str) and re.match(
-            r"^\s*Merge branch\b", subject, re.IGNORECASE
+        if isinstance(subject, str) and (
+            re.match(r"^\s*Merge branch\b", subject, re.IGNORECASE)
+            or re.search(r"(?:Finalize stable release|Align package versions|Update CHANGELOG.md)", subject, re.IGNORECASE)
         ):
             print(
-                f"[release-manager] Skipping merge-branch commit {sha7}: "
+                f"[release-manager] Skipping housekeeping commit {sha7}: "
                 f"'{subject}'"
             )
             continue
@@ -1227,6 +1228,10 @@ def _handle_commit_push(context: Context) -> None:
             author_display = None
         if not author_display:
             author_display = common.git_get_commit_author_name(sha) or None
+        automation_users = {"@actions-user"}
+        if author_display and author_display.lower() in automation_users:
+            print(f"[release-manager] Skipping automated commit {sha7} by {author_display}.")
+            continue
         entry = _build_commit_entry(
             display, sha, context.github_repository, author_display or "unknown"
         )
