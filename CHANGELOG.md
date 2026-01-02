@@ -1,4 +1,12 @@
 # Changelog
+## [v3.0.1-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.1-beta.1)
+
+### Other Changes
+
+- npm(deps-dev): bump @typescript-eslint/parser from 8.50.1 to 8.51.0 in the typescript-eslint group [#211](https://github.com/ZeliardM/homebridge-kasa-python/pull/211) (@dependabot[bot])
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.0.1-beta.0...v3.0.1-beta.1
+
 ## [v3.0.1-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.0.1-beta.0) (2026-01-01)
 
 ### Bug Fixes
