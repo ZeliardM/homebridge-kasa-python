@@ -64,7 +64,7 @@
     "nodemon": "^3.1.11",
     "rimraf": "^6.1.2",
     "ts-node": "^10.9.2",
-    "typescript-eslint": "^8.50.1"
+    "typescript-eslint": "^8.51.0"
   },
   "homepage": "https://github.com/ZeliardM/homebridge-kasa-python#readme",
   "funding": [
