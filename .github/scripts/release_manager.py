@@ -643,9 +643,9 @@ def _escalate_beta_draft(
     target_version: Version,
     *,
     reason: str,
-) -> str:
+) -> tuple[str, str]:
     if existing_unpublished.tag() == target_version.tag():
-        return content
+        return content, existing_unpublished.tag()
     if f"## [{existing_unpublished.tag()}]" in content:
         content = _rename_version_section(
             content, existing_unpublished.tag(), target_version.tag()
@@ -659,7 +659,7 @@ def _escalate_beta_draft(
         f"[release-manager] Escalated draft {old_tag} -> {target_version.tag()} "
         f"({reason})."
     )
-    return content
+    return content, old_tag
 
 def _create_beta_entry(
     context: Context,
@@ -676,16 +676,19 @@ def _create_beta_entry(
         latest_stable,
         labels,
     )
+    compare_from = None
     if replace and existing_unpublished:
-        content = _escalate_beta_draft(
+        content, old_tag = _escalate_beta_draft(
             context,
             content,
             existing_unpublished,
             target_version,
             reason=reason,
         )
+        compare_from = old_tag
         latest_stable, _ = _latest_versions(content)
-    compare_from = _beta_compare_from(target_version, latest_stable)
+    if compare_from is None:
+        compare_from = _beta_compare_from(target_version, latest_stable)
     if f"## [{target_version.tag()}]" in content:
         section_block = _find_section_block(content, target_version.tag())
         if "**Full Changelog**" in section_block:
