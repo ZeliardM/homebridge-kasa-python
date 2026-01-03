@@ -653,13 +653,7 @@ def _escalate_beta_draft(
     old_tag = existing_unpublished.tag()
     old_rel = common.gh_release(context.github_repository, context.github_token, tag=old_tag)
     if old_rel and old_rel.get("id"):
-        common.gh_release_update(
-            context.github_repository,
-            context.github_token,
-            int(old_rel["id"]),
-            tag_name=target_version.tag(),
-            name=target_version.tag(),
-        )
+        common.gh_release_delete(context.github_repository, context.github_token, int(old_rel["id"]))
     common.git_delete_tag(old_tag)
     print(
         f"[release-manager] Escalated draft {old_tag} -> {target_version.tag()} "
