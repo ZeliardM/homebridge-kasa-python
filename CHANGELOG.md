@@ -5,6 +5,10 @@
 
 - [feature] Fix dependabot, update dependencies, and update python handling [5ea0c01](https://github.com/ZeliardM/homebridge-kasa-python/commit/5ea0c017e0b3d03c491443e03b9251a9cafeaac7) (@ZeliardM)
 
+### Bug Fixes
+
+- [bug] Remove old draft release on escalated migration [dae02ca](https://github.com/ZeliardM/homebridge-kasa-python/commit/dae02ca19a1ac01c6a877b83576fb707f63d4fc7) (@ZeliardM)
+
 ### Other Changes
 
 - npm(deps-dev): bump typescript-eslint from 8.50.1 to 8.51.0 [#214](https://github.com/ZeliardM/homebridge-kasa-python/pull/214) (@dependabot[bot])
