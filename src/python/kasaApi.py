@@ -8,14 +8,14 @@ from kasa import (
     AuthenticationError,
     Credentials,
     Device,
-    DeviceType,
     DeviceConfig,
+    DeviceType,
     Discover,
     Module,
     UnsupportedDeviceError,
 )
-from typing import Any, Optional
-from quart import Quart, jsonify, request, Response
+from quart import jsonify, request, Response, Quart
+from typing import Any
 
 app = Quart(__name__)
 
@@ -56,7 +56,7 @@ def _level_to_percent(level: int) -> int:
     mapping = {0: 0, 1: 25, 2: 50, 3: 75, 4: 100}
     return mapping[level]
 
-def log(message: str, level: str = "INFO", host: Optional[str] = None, alias: Optional[str] = None):
+def log(message: str, level: str = "INFO", host: str | None = None, alias: str | None = None):
     context = []
     if host:
         context.append(f"host={host}")
@@ -173,12 +173,12 @@ def custom_serializer(device: Device) -> dict[str, Any]:
     return {"sys_info": sys_info, "feature_info": feature_info}
 
 async def discover_devices(
-    username: Optional[str] = None,
-    password: Optional[str] = None,
-    additional_broadcasts: Optional[list[str]] = None,
-    manual_devices: Optional[list[str]] = None,
-    exclude_mac_addresses: Optional[list[str]] = None,
-    include_mac_addresses: Optional[list[str]] = None,
+    username: str | None = None,
+    password: str | None = None,
+    additional_broadcasts: list[str] | None = None,
+    manual_devices: list[str] | None = None,
+    exclude_mac_addresses: list[str] | None = None,
+    include_mac_addresses: list[str] | None = None,
 ) -> None:
     broadcasts = ["255.255.255.255"] + (additional_broadcasts or [])
     credentials = Credentials(username, password) if username and password else None
@@ -202,7 +202,7 @@ async def discover_devices(
             log(f"Device discovery: {e}", level="ERROR", host=device.host, alias=device.alias)
             await safe_disconnect(device)
 
-    async def process_device(device: Device) -> Optional[dict[str, Any]]:
+    async def process_device(device: Device) -> dict[str, Any] | None:
         log("Processing device", host=device.host, alias=device.alias)
         if include_mac_addresses and device.mac not in include_mac_addresses:
             log("Excluding device due to MAC address inclusion", host=device.host, alias=device.alias)
@@ -326,7 +326,7 @@ async def control_device(
     feature: str,
     action: str,
     value: Any,
-    child_num: Optional[int] = None,
+    child_num: int | None = None,
 ) -> dict[str, Any]:
     log("Controlling device", host=host)
     try:
@@ -344,7 +344,7 @@ async def perform_device_action(
     feature: str,
     action: str,
     value: Any,
-    child_num: Optional[int] = None,
+    child_num: int | None = None,
 ) -> dict[str, Any]:
     try:
         if child_num is not None and device.children:
@@ -483,14 +483,14 @@ async def control_device_route():
 async def health_check():
     return jsonify({"status": "healthy"}), 200
 
-async def safe_disconnect(device: Optional[Device]):
+async def safe_disconnect(device: Device | None):
     if device:
         try:
             await device.disconnect()
         except Exception as e:
             log(f"Disconnecting device: {e}", level="ERROR", host=device.host, alias=device.alias)
 
-async def handle_device_error(host: str, error: Optional[Exception] = None) -> dict[str, Any]:
+async def handle_device_error(host: str, error: Exception | None = None) -> dict[str, Any]:
     log(f"Handling device: {error}", level="ERROR", host=host)
     try:
         device_config_dict = device_config_cache.get(host)

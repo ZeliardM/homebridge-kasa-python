@@ -13,7 +13,6 @@ env:
   GITHUB_REPOSITORY: ${{ github.repository }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   PULL_REQUEST_AUTHOR: ${{ github.event.pull_request.user.login }}
-  PULL_REQUEST_BRANCH: ${{ github.event.pull_request.base.ref }}
   PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
   PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
   PULL_REQUEST_URL: ${{ github.event.pull_request.html_url }}
@@ -160,6 +159,7 @@ jobs:
           PULL_REQUEST_LABELS: ${{ steps.labels.outputs.path }}
         run: |
           set -euo pipefail
+          export PULL_REQUEST_BRANCH="$(gh pr view "$PULL_REQUEST_NUMBER" --json baseRefName --jq .baseRefName)"
           MAX_ATTEMPTS=${MAX_ATTEMPTS:-5}
           BASE_SLEEP=${BASE_SLEEP:-5}
           JITTER=${JITTER:-10}
