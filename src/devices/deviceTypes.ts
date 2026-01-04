@@ -105,7 +105,7 @@ export interface ConfigDevice {
 
 export const Plugs = [
   'EP10', 'EP25', 'HS100', 'HS103', 'HS105', 'HS110', 'KP100', 'KP105', 'KP115', 'KP125', 'KP125M',
-  'KP401', 'P100', 'P110', 'P110M', 'P115', 'P125M', 'P135', 'TP15',
+  'KP401', 'P100', 'P105', 'P110', 'P110M', 'P115', 'P125M', 'P135', 'TP15',
 ];
 export const PowerStrips = [
   'EP40', 'EP40M', 'HS107', 'HS300', 'KP200', 'KP303', 'KP400', 'P210M', 'P300', 'P304M', 'P306', 'P400M', 'TP25',
