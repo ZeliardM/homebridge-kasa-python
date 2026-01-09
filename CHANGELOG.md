@@ -4,6 +4,7 @@
 ### Other Changes
 
 - npm(deps-dev): bump typescript-eslint from 8.51.0 to 8.52.0 [#219](https://github.com/ZeliardM/homebridge-kasa-python/pull/219) (@dependabot[bot])
+- pip(deps): bump anyio from 4.12.0 to 4.12.1 [#218](https://github.com/ZeliardM/homebridge-kasa-python/pull/218) (@dependabot[bot])
 - npm(deps-dev): bump @stylistic/eslint-plugin from 5.6.1 to 5.7.0 in the stylistic group [#217](https://github.com/ZeliardM/homebridge-kasa-python/pull/217) (@dependabot[bot])
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.1.0-beta.1...v3.1.0-beta.2
