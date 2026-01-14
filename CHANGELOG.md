@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.1.0-beta.2](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.2)
 
+### Featured Changes
+
+- [feature] Update Supported Devices [fff7066](https://github.com/ZeliardM/homebridge-kasa-python/commit/fff70667d47dd9e9940fe9ee4828ea8bed4be08d) (@ZeliardM)
+
 ### Other Changes
 
 - npm(deps-dev): bump typescript-eslint from 8.51.0 to 8.52.0 [#219](https://github.com/ZeliardM/homebridge-kasa-python/pull/219) (@dependabot[bot])
