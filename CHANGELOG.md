@@ -6,6 +6,10 @@
 - [feature] Update Supported Devices [a02a7ce](https://github.com/ZeliardM/homebridge-kasa-python/commit/a02a7ce2ad5827f1e9fb36e222378357e86b1539) (@ZeliardM)
 - [feature] Update Supported Devices [fff7066](https://github.com/ZeliardM/homebridge-kasa-python/commit/fff70667d47dd9e9940fe9ee4828ea8bed4be08d) (@ZeliardM)
 
+### Bug Fixes
+
+- [bug] Fix credentials missing [7d0112f](https://github.com/ZeliardM/homebridge-kasa-python/commit/7d0112ff387aebecf62aa66d6b88fe00bb57dd6f) (@ZeliardM)
+
 ### Other Changes
 
 - npm(deps-dev): bump typescript-eslint from 8.51.0 to 8.52.0 [#219](https://github.com/ZeliardM/homebridge-kasa-python/pull/219) (@dependabot[bot])
