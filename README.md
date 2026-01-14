@@ -230,6 +230,8 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0.0 (US) / Firmware: 1.1.3
   - Hardware: 1.0.0 (US) / Firmware: 1.3.7
   - Hardware: 1.0.0 (US) / Firmware: 1.4.0
+- **P105**
+  - Hardware: 1.0 (US) / Firmware: 1.2.5
 - **P110**
   - Hardware: 1.0 (AU) / Firmware: 1.3.1
   - Hardware: 1.0 (EU) / Firmware: 1.0.7
@@ -288,6 +290,7 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
 ### Bulbs
 
 - **L430C**
+  - Hardware: 1.0 (EU) / Firmware: 1.0.4
 - **L430P**
   - Hardware: 1.0 (EU) / Firmware: 1.0.9
 - **L510B**
