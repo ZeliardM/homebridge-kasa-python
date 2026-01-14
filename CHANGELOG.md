@@ -3,6 +3,7 @@
 
 ### Featured Changes
 
+- [feature] Update Supported Devices [a02a7ce](https://github.com/ZeliardM/homebridge-kasa-python/commit/a02a7ce2ad5827f1e9fb36e222378357e86b1539) (@ZeliardM)
 - [feature] Update Supported Devices [fff7066](https://github.com/ZeliardM/homebridge-kasa-python/commit/fff70667d47dd9e9940fe9ee4828ea8bed4be08d) (@ZeliardM)
 
 ### Other Changes
