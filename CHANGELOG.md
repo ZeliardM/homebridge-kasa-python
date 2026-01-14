@@ -1,5 +1,5 @@
 # Changelog
-## [v3.1.0-beta.2](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.2)
+## [v3.1.0-beta.2](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.2) (2026-01-14)
 
 ### Featured Changes
 
@@ -12,6 +12,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v3.1.0-beta.2 [beta-release] (@github-actions)
 - npm(deps-dev): bump typescript-eslint from 8.51.0 to 8.52.0 [#219](https://github.com/ZeliardM/homebridge-kasa-python/pull/219) (@dependabot[bot])
 - pip(deps): bump anyio from 4.12.0 to 4.12.1 [#218](https://github.com/ZeliardM/homebridge-kasa-python/pull/218) (@dependabot[bot])
 - npm(deps-dev): bump @stylistic/eslint-plugin from 5.6.1 to 5.7.0 in the stylistic group [#217](https://github.com/ZeliardM/homebridge-kasa-python/pull/217) (@dependabot[bot])
