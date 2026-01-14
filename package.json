@@ -54,15 +54,15 @@
     "requirements.txt"
   ],
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
+    "@eslint/js": "^9.39.2",
     "@stylistic/eslint-plugin": "^5.7.0",
-    "@types/node": "^25.0.3",
+    "@types/node": "^25.0.8",
     "eslint": "^9.39.2",
     "homebridge": "^2.0.0-beta.68",
     "nodemon": "^3.1.11",
     "rimraf": "^6.1.2",
     "ts-node": "^10.9.2",
-    "typescript-eslint": "^8.52.0"
+    "typescript-eslint": "^8.53.0"
   },
   "homepage": "https://github.com/ZeliardM/homebridge-kasa-python#readme",
   "funding": [
