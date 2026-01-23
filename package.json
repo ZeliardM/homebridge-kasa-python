@@ -58,7 +58,7 @@
     "@stylistic/eslint-plugin": "^5.7.1",
     "@types/node": "^25.0.10",
     "eslint": "^9.39.2",
-    "homebridge": "^2.0.0-beta.68",
+    "homebridge": "^2.0.0-beta.69",
     "nodemon": "^3.1.11",
     "rimraf": "^6.1.2",
     "ts-node": "^10.9.2",
