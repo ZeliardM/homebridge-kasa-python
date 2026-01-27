@@ -410,14 +410,14 @@ async def handle_fan_speed_level(target: Device, action: str, value: int):
 async def handle_hsv(target: Device, action: str, feature: str, value: dict):
     log(f"Handling HSV: action={action}, feature={feature}, value={value}", alias=target.alias)
     light = target.modules.get(Module.Light)
-    hsv = light.hsv
-    h = value.get("hue", hsv[0])
-    s = value.get("saturation", hsv[1])
-    v = hsv[2]
-    hsv[0] = max(0, min(h, 360))
-    hsv[1] = max(0, min(s, 100))
-    hsv[2] = max(0, min(v, 100))
-    await getattr(light, action)(*hsv)
+    current_hsv = light.hsv
+    h = value.get("hue", current_hsv[0])
+    s = value.get("saturation", current_hsv[1])
+    v = current_hsv[2]
+    new_h = max(0, min(h, 360))
+    new_s = max(0, min(s, 100))
+    new_v = max(0, min(v, 100))
+    await getattr(light, action)(new_h, new_s, new_v)
 
 @app.route('/discover', methods=['POST'])
 async def discover_route():
