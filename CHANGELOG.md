@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.1.0-beta.3](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.3)
 
+### Bug Fixes
+
+- [bug] Fix HSV value changes [466035f](https://github.com/ZeliardM/homebridge-kasa-python/commit/466035fce599444b82ceaadbc7f1fe633cf05954) (@ZeliardM)
+
 ### Other Changes
 
 - npm(deps-dev): bump @types/node from 25.0.9 to 25.0.10 [#228](https://github.com/ZeliardM/homebridge-kasa-python/pull/228) (@dependabot[bot])
