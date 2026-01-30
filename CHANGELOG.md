@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- npm(deps-dev): bump typescript-eslint from 8.53.1 to 8.54.0 [#232](https://github.com/ZeliardM/homebridge-kasa-python/pull/232) (@dependabot[bot])
 - npm(deps-dev): bump @types/node from 25.0.10 to 25.1.0 [#230](https://github.com/ZeliardM/homebridge-kasa-python/pull/230) (@dependabot[bot])
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.1.0-beta.3...v3.1.0-beta.4
