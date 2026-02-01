@@ -377,9 +377,13 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     lastSeen: Date,
     offline: boolean,
   ): void {
+    const offlineStatusChanged = accessory.context.offline !== offline;
     accessory.context.lastSeen = lastSeen;
     accessory.context.offline = offline;
-    this.api.updatePlatformAccessories([accessory]);
+
+    if (offlineStatusChanged) {
+      this.api.updatePlatformAccessories([accessory]);
+    }
   }
 
   private async checkPython(isUpgrade: boolean): Promise<void> {

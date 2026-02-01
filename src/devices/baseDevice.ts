@@ -91,12 +91,26 @@ export default abstract class HomeKitDevice {
   }
 
   private updateAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
-    accessory.displayName = this.name;
+    const currentDisplayName = accessory.displayName;
+    const deviceName = this.name;
+    let displayNameChanged = false;
+
+    if (
+      (!currentDisplayName || currentDisplayName === deviceName)
+      && currentDisplayName !== deviceName
+    ) {
+      accessory.displayName = deviceName;
+      displayNameChanged = true;
+    }
+
     accessory.context.deviceId = this.id;
     accessory.context.lastSeen = this.kasaDevice.last_seen;
     accessory.context.offline = this.kasaDevice.offline;
     this.platform.configuredAccessories.set(accessory.UUID, accessory);
-    this.platform.api.updatePlatformAccessories([accessory]);
+
+    if (displayNameChanged) {
+      this.platform.api.updatePlatformAccessories([accessory]);
+    }
   }
 
   get id(): string {
