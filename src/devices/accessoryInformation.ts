@@ -18,7 +18,7 @@ export default function accessoryInformation(
     const currentName = nameCharacteristic.value as string ?? '';
     const deviceName = homekitDevice.name ?? '';
 
-    if (!currentName || currentName === deviceName) {
+    if (!currentName) {
       infoService.setCharacteristic(Characteristic.Name, deviceName as CharacteristicValue);
     }
     if ((manufacturerCharacteristic.value as string ?? '') !== (homekitDevice.manufacturer ?? '')) {
