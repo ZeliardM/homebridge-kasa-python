@@ -438,7 +438,7 @@ export default abstract class HomeKitDevice {
     const isEnergyCharacteristic = this.isEnergyMonitoringCharacteristic(characteristic);
     if (force || needsInit || previousValue !== nextValue) {
       if (label) {
-        if (!isEnergyCharacteristic || this.platform.config.advancedOptions.logEnergyMonitoring) {
+        if (!isEnergyCharacteristic || (isEnergyCharacteristic && this.platform.config.advancedOptions.logEnergyMonitoring)) {
           this.log.debug(`[${alias}] Updating ${label}: ${previousValue} → ${nextValue}`);
         }
       }
@@ -459,7 +459,7 @@ export default abstract class HomeKitDevice {
     value: Nullable<CharacteristicValue> | Error | HapStatusError,
   ): void {
     const isEnergyCharacteristic = this.isEnergyMonitoringCharacteristic(characteristic);
-    if (!isEnergyCharacteristic || this.platform.config.advancedOptions.logEnergyMonitoring) {
+    if (!isEnergyCharacteristic || (isEnergyCharacteristic && this.platform.config.advancedOptions.logEnergyMonitoring)) {
       this.log.info(`Updating ${this.platform.lsc(service, characteristic)} on ${deviceAlias} to ${value}`);
     }
     characteristic.updateValue(value);
