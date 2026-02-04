@@ -435,9 +435,12 @@ export default abstract class HomeKitDevice {
     force = false,
   ): void {
     const needsInit = characteristic.value === undefined || characteristic.value === null;
+    const isEnergyCharacteristic = this.isEnergyMonitoringCharacteristic(characteristic);
     if (force || needsInit || previousValue !== nextValue) {
       if (label) {
-        this.log.debug(`[${alias}] Updating ${label}: ${previousValue} → ${nextValue}`);
+        if (!isEnergyCharacteristic || (isEnergyCharacteristic && this.platform.config.advancedOptions.logEnergyMonitoring)) {
+          this.log.debug(`[${alias}] Updating ${label}: ${previousValue} → ${nextValue}`);
+        }
       }
       this.updateValue(service, characteristic, alias, nextValue as unknown as Nullable<CharacteristicValue>);
     }
@@ -455,8 +458,24 @@ export default abstract class HomeKitDevice {
     deviceAlias: string,
     value: Nullable<CharacteristicValue> | Error | HapStatusError,
   ): void {
-    this.log.info(`Updating ${this.platform.lsc(service, characteristic)} on ${deviceAlias} to ${value}`);
+    const isEnergyCharacteristic = this.isEnergyMonitoringCharacteristic(characteristic);
+    if (!isEnergyCharacteristic || (isEnergyCharacteristic && this.platform.config.advancedOptions.logEnergyMonitoring)) {
+      this.log.info(`Updating ${this.platform.lsc(service, characteristic)} on ${deviceAlias} to ${value}`);
+    }
     characteristic.updateValue(value);
+  }
+
+  private isEnergyMonitoringCharacteristic(characteristic: Characteristic): boolean {
+    if (!this.platform.energyCharacteristics) {
+      return false;
+    }
+    const uuid = characteristic.UUID;
+    return (
+      uuid === this.platform.energyCharacteristics.Volts.UUID ||
+      uuid === this.platform.energyCharacteristics.Amperes.UUID ||
+      uuid === this.platform.energyCharacteristics.Watts.UUID ||
+      uuid === this.platform.energyCharacteristics.KiloWattHours.UUID
+    );
   }
 
   public abstract initialize(): Promise<void>;
