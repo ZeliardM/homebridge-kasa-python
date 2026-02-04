@@ -643,9 +643,9 @@ def _escalate_beta_draft(
     target_version: Version,
     *,
     reason: str,
-) -> str:
+) -> tuple[str, str]:
     if existing_unpublished.tag() == target_version.tag():
-        return content
+        return content, existing_unpublished.tag()
     if f"## [{existing_unpublished.tag()}]" in content:
         content = _rename_version_section(
             content, existing_unpublished.tag(), target_version.tag()
@@ -653,19 +653,13 @@ def _escalate_beta_draft(
     old_tag = existing_unpublished.tag()
     old_rel = common.gh_release(context.github_repository, context.github_token, tag=old_tag)
     if old_rel and old_rel.get("id"):
-        common.gh_release_update(
-            context.github_repository,
-            context.github_token,
-            int(old_rel["id"]),
-            tag_name=target_version.tag(),
-            name=target_version.tag(),
-        )
+        common.gh_release_delete(context.github_repository, context.github_token, int(old_rel["id"]))
     common.git_delete_tag(old_tag)
     print(
         f"[release-manager] Escalated draft {old_tag} -> {target_version.tag()} "
         f"({reason})."
     )
-    return content
+    return content, old_tag
 
 def _create_beta_entry(
     context: Context,
@@ -682,16 +676,19 @@ def _create_beta_entry(
         latest_stable,
         labels,
     )
+    compare_from = None
     if replace and existing_unpublished:
-        content = _escalate_beta_draft(
+        content, old_tag = _escalate_beta_draft(
             context,
             content,
             existing_unpublished,
             target_version,
             reason=reason,
         )
+        compare_from = old_tag
         latest_stable, _ = _latest_versions(content)
-    compare_from = _beta_compare_from(target_version, latest_stable)
+    if compare_from is None:
+        compare_from = _beta_compare_from(target_version, latest_stable)
     if f"## [{target_version.tag()}]" in content:
         section_block = _find_section_block(content, target_version.tag())
         if "**Full Changelog**" in section_block:
@@ -1200,11 +1197,12 @@ def _handle_commit_push(context: Context) -> None:
             continue
         subject = common.git_get_commit_subject(sha) or sha
         display = subject or sha
-        if isinstance(subject, str) and re.match(
-            r"^\s*Merge branch\b", subject, re.IGNORECASE
+        if isinstance(subject, str) and (
+            re.match(r"^\s*Merge branch\b", subject, re.IGNORECASE)
+            or re.search(r"(?:Finalize stable release|Align package versions|Update CHANGELOG.md)", subject, re.IGNORECASE)
         ):
             print(
-                f"[release-manager] Skipping merge-branch commit {sha7}: "
+                f"[release-manager] Skipping housekeeping commit {sha7}: "
                 f"'{subject}'"
             )
             continue
@@ -1227,6 +1225,10 @@ def _handle_commit_push(context: Context) -> None:
             author_display = None
         if not author_display:
             author_display = common.git_get_commit_author_name(sha) or None
+        automation_users = {"@actions-user"}
+        if author_display and author_display.lower() in automation_users:
+            print(f"[release-manager] Skipping automated commit {sha7} by {author_display}.")
+            continue
         entry = _build_commit_entry(
             display, sha, context.github_repository, author_display or "unknown"
         )

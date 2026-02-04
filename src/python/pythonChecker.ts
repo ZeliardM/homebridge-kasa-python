@@ -40,11 +40,11 @@ class PythonChecker {
     this.venvConfigPath = path.join(this.venvPath, 'pyvenv.cfg');
   }
 
-  public async allInOne(isUpgrade: boolean): Promise<void> {
+  public async allInOne(): Promise<void> {
     this.log.debug('Starting python environment check...');
     this.ensurePluginDir();
     await this.ensurePythonVersion();
-    await this.ensureVenvCreated(isUpgrade);
+    await this.ensureVenvCreated();
     await this.ensureVenvUsesCorrectPythonHome();
     await this.ensureVenvPipUpToDate();
     await this.ensureVenvRequirementsSatisfied();
@@ -153,9 +153,9 @@ class PythonChecker {
     this.log.debug(`Selected Python executable: ${this.pythonExecutable}`);
   }
 
-  private async ensureVenvCreated(isUpgrade: boolean): Promise<void> {
+  private async ensureVenvCreated(): Promise<void> {
     this.log.debug('Ensuring virtual environment is created');
-    if (isUpgrade || !this.isVenvCreated()) {
+    if (!this.isVenvCreated()) {
       await this.createVenv();
     } else {
       this.log.debug('Virtual environment already exists');
@@ -175,7 +175,7 @@ class PythonChecker {
     const [stdout] = await runCommand(
       this.log,
       this.pythonExecutable,
-      ['-m', 'venv', this.venvPath, '--clear', '--upgrade-deps'],
+      ['-m', 'venv', this.venvPath, '--clear'],
       undefined,
       !this.advancedPythonLogging,
       !this.advancedPythonLogging,

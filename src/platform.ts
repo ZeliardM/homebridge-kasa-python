@@ -14,15 +14,14 @@ import { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { fileURLToPath } from 'node:url';
 
+import HomeKitDevice from './devices/baseDevice.js';
 import create from './devices/create.js';
 import DeviceManager from './devices/deviceManager.js';
-import HomeKitDevice from './devices/baseDevice.js';
 import PythonChecker from './python/pythonChecker.js';
 import { parseConfig } from './config.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { TaskQueue } from './taskQueue.js';
 import {
-  checkForUpgrade,
   deferAndCombine,
   getAvailablePort,
   isObjectLike,
@@ -66,7 +65,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private readonly homekitDevicesById: Map<string, HomeKitDevice> = new Map();
   private deviceDiscoveredHandler?: (device: KasaDevice) => Promise<void>;
   private hideHomeKitMatter: boolean = true;
-  private isUpgrade: boolean = false;
   private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
   private platformInitialization: Promise<void>;
 
@@ -141,10 +139,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     packageConfig = await loadPackageConfig(this.log);
     this.logInitializationDetails();
     await this.verifyEnvironment();
-    this.isUpgrade = await checkForUpgrade(packageConfig, this.storagePath, this.log);
-    if (this.isUpgrade) {
-      this.log.info('Plugin version changed, virtual python environment will be recreated.');
-    }
   }
 
   private logInitializationDetails(): void {
@@ -169,16 +163,16 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       if (
         this.api.versionGreaterOrEqual &&
         !(
-          this.api.versionGreaterOrEqual('1.11.0') ||
+          this.api.versionGreaterOrEqual('1.8.0') ||
           this.api.versionGreaterOrEqual('2.0.0')
         )
       ) {
         throw new Error(
-          `homebridge-kasa-python requires Homebridge ^1.11.0 || ^2.0.0-beta.0. Currently running: ${this.api.serverVersion}`,
+          `homebridge-kasa-python requires Homebridge ^1.8.0 || ^2.0.0-beta.0. Currently running: ${this.api.serverVersion}`,
         );
       } else {
         this.log.debug(
-          `Homebridge version ${this.api.serverVersion} satisfies the requirement ^1.11.0 || ^2.0.0-beta.0`,
+          `Homebridge version ${this.api.serverVersion} satisfies the requirement ^1.8.0 || ^2.0.0-beta.0`,
         );
       }
     } catch (error) {
@@ -192,7 +186,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
 
     try {
       this.log.debug('Checking Python environment');
-      await this.checkPython(this.isUpgrade);
+      await this.checkPython();
 
       this.log.debug('Getting available port');
       this.port = await getAvailablePort();
@@ -382,10 +376,10 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.api.updatePlatformAccessories([accessory]);
   }
 
-  private async checkPython(isUpgrade: boolean): Promise<void> {
+  private async checkPython(): Promise<void> {
     try {
-      this.log.debug(`Running PythonChecker with isUpgrade: ${isUpgrade}`);
-      await new PythonChecker(this).allInOne(isUpgrade);
+      this.log.debug('Running PythonChecker');
+      await new PythonChecker(this).allInOne();
     } catch (error) {
       this.log.error('Error checking python environment:', error);
       throw error;
