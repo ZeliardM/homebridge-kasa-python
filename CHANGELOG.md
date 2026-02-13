@@ -4,6 +4,7 @@
 ### Other Changes
 
 - npm(deps-dev): bump typescript-eslint from 8.54.0 to 8.55.0 [#244](https://github.com/ZeliardM/homebridge-kasa-python/pull/244) (@dependabot[bot])
+- npm(deps-dev): bump @types/node from 25.2.1 to 25.2.3 [#242](https://github.com/ZeliardM/homebridge-kasa-python/pull/242) (@dependabot[bot])
 - npm(deps-dev): bump @stylistic/eslint-plugin from 5.7.1 to 5.8.0 in the stylistic group [#241](https://github.com/ZeliardM/homebridge-kasa-python/pull/241) (@dependabot[bot])
 - npm(deps-dev): bump @types/node from 25.1.0 to 25.2.1 [#238](https://github.com/ZeliardM/homebridge-kasa-python/pull/238) (@dependabot[bot])
 - npm(deps-dev): bump typescript-eslint from 8.53.1 to 8.54.0 [#232](https://github.com/ZeliardM/homebridge-kasa-python/pull/232) (@dependabot[bot])
