@@ -54,10 +54,10 @@
     "requirements.txt"
   ],
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
+    "@eslint/js": "^10.0.1",
     "@stylistic/eslint-plugin": "^5.8.0",
     "@types/node": "^25.2.3",
-    "eslint": "^9.39.2",
+    "eslint": "^10.0.0",
     "homebridge": "^2.0.0-beta.69",
     "nodemon": "^3.1.11",
     "rimraf": "^6.1.2",
