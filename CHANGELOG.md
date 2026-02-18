@@ -7,6 +7,7 @@
 
 ### Other Changes
 
+- [other] Add missing CHANGELOG.md entries [70c4b86](https://github.com/ZeliardM/homebridge-kasa-python/commit/70c4b86150f0f407df6f4f2212a33a8076871a22) (@ZeliardM)
 - npm(deps-dev): bump typescript-eslint from 8.54.0 to 8.55.0 [#244](https://github.com/ZeliardM/homebridge-kasa-python/pull/244) (@dependabot[bot])
 - npm(deps): bump axios from 1.13.4 to 1.13.5 [#243](https://github.com/ZeliardM/homebridge-kasa-python/pull/243) (@dependabot[bot])
 - npm(deps-dev): bump @types/node from 25.2.1 to 25.2.3 [#242](https://github.com/ZeliardM/homebridge-kasa-python/pull/242) (@dependabot[bot])
