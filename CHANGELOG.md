@@ -7,6 +7,7 @@
 
 ### Other Changes
 
+- [other] Update dependencies and requirements [0406540](https://github.com/ZeliardM/homebridge-kasa-python/commit/04065409e73ef2536468a0d1006d47d6649174d6) (@ZeliardM)
 - [other] Add missing CHANGELOG.md entries [70c4b86](https://github.com/ZeliardM/homebridge-kasa-python/commit/70c4b86150f0f407df6f4f2212a33a8076871a22) (@ZeliardM)
 - npm(deps-dev): bump typescript-eslint from 8.54.0 to 8.55.0 [#244](https://github.com/ZeliardM/homebridge-kasa-python/pull/244) (@dependabot[bot])
 - npm(deps): bump axios from 1.13.4 to 1.13.5 [#243](https://github.com/ZeliardM/homebridge-kasa-python/pull/243) (@dependabot[bot])
