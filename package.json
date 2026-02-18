@@ -54,7 +54,7 @@
     "requirements.txt"
   ],
   "devDependencies": {
-    "@eslint/eslintrc":"3.3.3",
+    "@eslint/eslintrc": "3.3.3",
     "@eslint/js": "^10.0.1",
     "@stylistic/eslint-plugin": "^5.8.0",
     "@types/node": "^25.2.3",
