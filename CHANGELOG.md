@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.1.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.4)
 
+### Bug Fixes
+
+- [bug] Fix workflow handling for dependabot [7f09558](https://github.com/ZeliardM/homebridge-kasa-python/commit/7f09558acb9d2610b2fb16a802b17541a9e76f83) (@ZeliardM)
+
 ### Other Changes
 
 - npm(deps-dev): bump typescript-eslint from 8.54.0 to 8.55.0 [#244](https://github.com/ZeliardM/homebridge-kasa-python/pull/244) (@dependabot[bot])
