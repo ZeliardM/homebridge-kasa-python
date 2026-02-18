@@ -158,7 +158,7 @@ jobs:
           MODE: pr-merge
           PULL_REQUEST_LABELS: ${{ steps.labels.outputs.path }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           export PULL_REQUEST_BRANCH="$(gh pr view "$PULL_REQUEST_NUMBER" --json baseRefName --jq .baseRefName)"
           MAX_ATTEMPTS=${MAX_ATTEMPTS:-5}
           BASE_SLEEP=${BASE_SLEEP:-5}
@@ -181,7 +181,11 @@ jobs:
               git clean -fd || true
             fi
             echo "::notice::Running release_manager.py (MODE=${MODE})"
-            if python .github/scripts/release_manager.py; then
+            set +e
+            python .github/scripts/release_manager.py
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ]; then
               echo "::notice::release_manager.py succeeded on attempt ${attempt}"
               exit 0
             else

@@ -873,6 +873,34 @@ def _load_labels(path: str) -> list[str]:
     print(f"[release-manager] Loaded labels: {labels}")
     return labels
 
+def _pr_in_text(pr_num: int, text: str) -> bool:
+    if not pr_num or not text:
+        return False
+    if f"/pull/{pr_num}" in text:
+        return True
+    return bool(re.search(rf"#\s*{pr_num}\b", text))
+
+def _pr_already_recorded(context: Context, pr_num: int, changelog: str) -> bool:
+    if _pr_in_text(pr_num, changelog):
+        return True
+    try:
+        releases = common.gh_releases(
+            context.github_repository, context.github_token, max_pages=10
+        )
+    except Exception:
+        return False
+    for rel in releases:
+        if not rel or not isinstance(rel, dict):
+            continue
+        if not rel.get("draft"):
+            continue
+        if not rel.get("prerelease"):
+            continue
+        body = rel.get("body") or ""
+        if _pr_in_text(pr_num, body):
+            return True
+    return False
+
 def _finalize_common(context: Context, v: Version, *, is_beta: bool) -> None:
     content = _read_changelog()
     hk_label = "beta-release" if is_beta else "release"
@@ -1155,6 +1183,51 @@ def _handle_commit_push(context: Context) -> None:
                 if code != 200 or not isinstance(pr, dict):
                     pr = p if isinstance(p, dict) else {}
                 pr_user = (pr.get("user") or {}).get("login") or ""
+                base_ref = (pr.get("base") or {}).get("ref", "") or ""
+                if pr.get("merged") is True and base_ref == "beta" and "dependabot" not in str(pr_user).lower():
+                    if _pr_already_recorded(context, pr_num_int, content):
+                        print(f"[release-manager] PR #{pr_num_int} already recorded; skipping.")
+                        processed_prs.add(pr_num_int)
+                        if first_sha7 is None:
+                            first_sha7 = sha7
+                        last_sha7 = sha7
+                        processed_this_sha = True
+                        break
+                    label_code, label_data = common.github_api(
+                        context.github_repository, context.github_token, f"/issues/{pr_num_int}/labels"
+                    )
+                    if label_code == 200 and isinstance(label_data, list):
+                        labels_list = [((l.get("name") or "").lower()) for l in label_data]
+                    else:
+                        labels_list = [((l.get("name") or "").lower()) for l in pr.get("labels", []) if isinstance(l, dict)]
+                    labels_path = _write_labels_temp(labels_list)
+                    try:
+                        pr_context = Context(
+                            github_repository=context.github_repository,
+                            github_token=context.github_token,
+                            mode="pr-merge",
+                        )
+                        pr_context.pull_request_author = pr_user
+                        pr_context.pull_request_branch = base_ref
+                        pr_context.pull_request_number = str(pr_num_int)
+                        pr_context.pull_request_title = pr.get("title") or ""
+                        pr_context.pull_request_labels = labels_path
+                        _handle_pr_merge(pr_context)
+                        processed_prs.add(pr_num_int)
+                        content = _read_changelog()
+                        _, last_beta = _latest_versions(content)
+                        final_target_version = last_beta or final_target_version
+                        if first_sha7 is None:
+                            first_sha7 = sha7
+                        last_sha7 = sha7
+                        processed_this_sha = True
+                        break
+                    finally:
+                        if labels_path and os.path.exists(labels_path):
+                            try:
+                                os.unlink(labels_path)
+                            except Exception:
+                                pass
                 if "dependabot" in str(pr_user).lower() and pr.get("merged") is True:
                     print(f"[release-manager] Commit {sha7} is part of Dependabot PR #{pr_num_int}; delegating to PR merge handler.")
                     label_code, label_data = common.github_api(context.github_repository, context.github_token, f"/issues/{pr_num_int}/labels")
@@ -1170,7 +1243,7 @@ def _handle_commit_push(context: Context) -> None:
                             mode="pr-merge",
                         )
                         pr_context.pull_request_author = pr_user
-                        pr_context.pull_request_branch = (pr.get("base") or {}).get("ref", "") or ""
+                        pr_context.pull_request_branch = base_ref
                         pr_context.pull_request_number = str(pr_num_int)
                         pr_context.pull_request_title = pr.get("title") or ""
                         pr_context.pull_request_labels = labels_path
