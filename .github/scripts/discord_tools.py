@@ -33,8 +33,9 @@ MODE=post
 """
 import json
 import os
-import requests
 import sys
+import urllib.error
+import urllib.request
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
@@ -287,13 +288,20 @@ def _handle_post() -> int:
             print("::error::EDITED_PAYLOAD was invalid JSON", file=sys.stderr)
             return 1
     try:
-        response = requests.post(webhook, json=edited_payload, timeout=45)
-        if response.ok:
-            print(f"POST -> {response.status_code} {response.reason}")
+        data = json.dumps(edited_payload, ensure_ascii=False).encode('utf-8')
+        req = urllib.request.Request(
+            webhook,
+            data=data,
+            headers={'Content-Type': 'application/json'},
+            method='POST',
+        )
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            print(f"POST -> {resp.status} {resp.reason}")
             return 0
-        print(f"::error::Discord webhook failed {response.status_code}: {response.text}", file=sys.stderr)
+    except urllib.error.HTTPError as e:
+        print(f"::error::Discord webhook failed {e.code}: {e.reason}", file=sys.stderr)
         return 1
-    except requests.RequestException as e:
+    except urllib.error.URLError as e:
         print(f"::error::Request failed: {e}", file=sys.stderr)
         return 1
 

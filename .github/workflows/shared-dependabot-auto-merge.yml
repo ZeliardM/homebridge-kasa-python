@@ -34,10 +34,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Ensure jq
-        id: ensure-jq
-        uses: ./.github/actions/ensure-jq
-
       - name: Determine Safety from Labels
         id: safety
         shell: bash
@@ -116,22 +112,11 @@ jobs:
         with:
           node-version: 24
 
-      - name: Update npm
-        id: update-npm
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install -g npm@latest
-
       - name: Setup Python 3.13
         id: setup-python
         uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-
-      - name: Ensure jq
-        id: ensure-jq
-        uses: ./.github/actions/ensure-jq
 
       - name: Fetch current labels for Pull Request
         id: fetch-labels

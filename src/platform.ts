@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 import HomeKitDevice from './devices/baseDevice.js';
 import create from './devices/create.js';
-import DeviceManager from './devices/deviceManager.js';
+import DeviceManager, { deviceEventEmitter } from './devices/deviceManager.js';
 import PythonChecker from './python/pythonChecker.js';
 import { parseConfig } from './config.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
@@ -32,7 +32,6 @@ import {
   satisfiesVersion,
   waitForServer,
 } from './utils.js';
-import { deviceEventEmitter } from './devices/deviceManager.js';
 import { createEnergyCharacteristics } from './devices/energyCharacteristics.js';
 import type { KasaPythonConfig } from './config.js';
 import type { KasaDevice } from './devices/deviceTypes.js';
@@ -359,11 +358,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private async addNewDevice(device: KasaDevice): Promise<void> {
     this.log.debug(`New device [${device.sys_info.device_id}] found, adding to HomeKit.`);
     await this.foundDevice(device);
-    const listenerCountBefore = this.periodicDeviceDiscoveryEmitter.listenerCount('periodicDeviceDiscoveryComplete');
-    this.log.debug(`Emitter listener count before foundDevice: ${listenerCountBefore}`);
-    this.periodicDeviceDiscoveryEmitter.setMaxListeners(this.periodicDeviceDiscoveryEmitter.getMaxListeners() + 10);
-    const listenerCountAfter = this.periodicDeviceDiscoveryEmitter.listenerCount('periodicDeviceDiscoveryComplete');
-    this.log.debug(`Emitter listener count after foundDevice: ${listenerCountAfter}`);
   }
 
   private updateAccessoryStatus(

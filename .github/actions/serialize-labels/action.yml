@@ -16,7 +16,6 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        mkdir -p .github
-        echo '${{ inputs.labels_json }}' > .github/labels.json
-        cat .github/labels.json | jq . > /dev/null
-        echo "path=.github/labels.json" >> "$GITHUB_OUTPUT"
+        echo '${{ inputs.labels_json }}' > /tmp/labels.json
+        cat /tmp/labels.json | jq . > /dev/null
+        echo "path=/tmp/labels.json" >> "$GITHUB_OUTPUT"

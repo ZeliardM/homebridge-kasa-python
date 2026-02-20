@@ -7,7 +7,7 @@ import { EventSource } from 'eventsource';
 import { EventEmitter } from 'node:events';
 
 import KasaPythonPlatform from '../platform.js';
-import { parseConfig } from '../config.js';
+import { normalizeManualDevices, parseConfig } from '../config.js';
 import type { ConfigDevice, FeatureInfo, HSV, KasaDevice, SysInfo } from './deviceTypes.js';
 
 export const deviceEventEmitter = new EventEmitter();
@@ -109,7 +109,7 @@ export default class DeviceManager {
           return true;
         });
         if (this.needsManualDevicesNormalization(platformSection.manualDevices)) {
-          platformSection.manualDevices = this.normalizeManualDevices(platformSection.manualDevices);
+          platformSection.manualDevices = normalizeManualDevices(platformSection.manualDevices);
         }
         await this.writeConfigFile(configPath, fileConfig);
         this.platform.config = parseConfig(platformSection);
@@ -214,22 +214,7 @@ export default class DeviceManager {
   }
 
   private needsManualDevicesNormalization(manualDevices: (string | ConfigDevice)[]): boolean {
-    return manualDevices.length > 0 &&
-      (typeof manualDevices[0] === 'string' ||
-        manualDevices.some(entry => typeof entry !== 'string'));
-  }
-
-  private normalizeManualDevices(manualDevices: (string | ConfigDevice)[]): ConfigDevice[] {
-    return manualDevices.map(entry => {
-      if (typeof entry === 'string') {
-        return { host: entry, alias: 'Will Be Filled By Plug-In Automatically' };
-      } else if ('host' in entry && !('alias' in entry)) {
-        (entry as ConfigDevice).alias = 'Will Be Filled By Plug-In Automatically';
-      } else if ('breakoutChildDevices' in entry) {
-        delete entry.breakoutChildDevices;
-      }
-      return entry;
-    });
+    return manualDevices.some(entry => typeof entry === 'string' || 'breakoutChildDevices' in entry);
   }
 
   private async readConfigFile(configPath: string): Promise<PlatformConfig> {

@@ -104,7 +104,7 @@ export const defaultConfig: KasaPythonConfig = {
   },
 };
 
-function convertManualDevices(manualDevices: (string | ConfigDevice)[] | undefined | null): ConfigDevice[] {
+export function normalizeManualDevices(manualDevices: (string | ConfigDevice)[] | undefined | null): ConfigDevice[] {
   if (!manualDevices || manualDevices.length === 0) {
     return [];
   }
@@ -197,7 +197,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
       additionalBroadcasts: parsedConfig.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
       manualDevices:
         parsedConfig.manualDevices
-          ? convertManualDevices(parsedConfig.manualDevices)
+          ? normalizeManualDevices(parsedConfig.manualDevices)
           : defaultConfig.discoveryOptions.manualDevices,
       excludeMacAddresses: parsedConfig.excludeMacAddresses ?? defaultConfig.discoveryOptions.excludeMacAddresses,
       includeMacAddresses: parsedConfig.includeMacAddresses ?? defaultConfig.discoveryOptions.includeMacAddresses,

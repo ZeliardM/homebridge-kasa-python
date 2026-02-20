@@ -10,7 +10,6 @@ import fs from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { ChildProcessWithoutNullStreams, spawn, SpawnOptionsWithoutStdio } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 export function deferAndCombine<T, U>(
@@ -215,7 +214,7 @@ export async function runCommand(
 
   if (outputFile) {
     logger.debug(`Writing command output to file: ${outputFile}`);
-    await writeFile(outputFile, stdout);
+    await fs.writeFile(outputFile, stdout);
   }
 
   logger.debug('Command finished.');

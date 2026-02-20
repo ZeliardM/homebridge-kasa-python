@@ -124,18 +124,6 @@ def _find_section_block(content: str, tag: str) -> str:
     m = re.search(pattern, content, flags=re.S | re.M)
     return m.group(1).strip() if m else ""
 
-def _squeeze_blank(text: str) -> str:
-    lines = text.splitlines()
-    out: list[str] = []
-    prev_blank = False
-    for l in lines:
-        blank = l.strip() == ""
-        if blank and prev_blank:
-            continue
-        out.append(l)
-        prev_blank = blank
-    return "\n".join(out)
-
 def _release_matches_tag(rel: dict, tag: str) -> bool:
     if not isinstance(rel, dict):
         return False
@@ -301,7 +289,7 @@ def _insert_entry(
                 inserted = True
         if not inserted:
             out = ["# Changelog", ""] + new_sec + out
-        return _squeeze_blank("\n".join(out)) + "\n"
+        return common.squeeze_blank("\n".join(out)) + "\n"
     if add_date and not _header_has_date(lines[header_idx]):
         lines[header_idx] = f"{lines[header_idx]} ({publish_date})"
     i = header_idx + 1
@@ -315,7 +303,7 @@ def _insert_entry(
     if entry in section:
         normalized = _normalize_section_spacing(section)
         new_content = lines[:header_idx] + normalized + lines[end:]
-        return _squeeze_blank("\n".join(new_content)) + "\n"
+        return common.squeeze_blank("\n".join(new_content)) + "\n"
     cat_header = f"### {category}"
 
     def section_category_positions(
@@ -392,7 +380,7 @@ def _insert_entry(
         ]
     section = _normalize_section_spacing(section)
     new_content = lines[:header_idx] + section + lines[end:]
-    return _squeeze_blank("\n".join(new_content)) + "\n"
+    return common.squeeze_blank("\n".join(new_content)) + "\n"
 
 def _rename_version_section(content: str, old_tag: str, new_tag: str) -> str:
     old_header = f"## [{old_tag}]"
@@ -427,54 +415,40 @@ def _collect_section_categories(block: str) -> dict[str, list[str]]:
             cats[current].append(line)
     return cats
 
-def _build_beta_body(version: Version, changelog: str) -> str:
+def _build_release_body(version: Version, changelog: str, prev_stable: Version | None = None) -> str:
     block = _find_section_block(changelog, version.tag())
     cats = _collect_section_categories(block)
-    if version.beta == 0:
-        prev_stable, _ = _latest_versions(changelog)
-        compare_from = prev_stable.tag() if prev_stable else "v0.0.0"
+    is_beta = version.is_beta()
+    if is_beta:
+        if version.beta == 0:
+            fallback, _ = _latest_versions(changelog)
+            compare_from = fallback.tag() if fallback else "v0.0.0"
+        else:
+            prev_version = Version(version.major, version.minor, version.patch, version.beta - 1)
+            compare_from = prev_version.tag()
     else:
-        prev_beta = Version(
-            version.major, version.minor, version.patch, version.beta - 1
-        )
-        compare_from = prev_beta.tag()
+        compare_from = prev_stable.tag() if prev_stable else "v0.0.0"
     ordered = [c for c in CATEGORY_ORDER if c in cats] + [
         c for c in cats if c not in CATEGORY_ORDER
     ]
     if not ordered:
-        body_sections = "### Other Changes\n\n_No changes in this beta release._"
-    else:
-        parts: list[str] = []
-        for c in ordered:
-            parts.append(f"### {c}\n")
-            parts.extend(cats[c])
-            parts.append("")
-        body_sections = "\n".join(parts).strip()
+        no_changes = "_No changes in this beta release._" if is_beta else "_No changes in this release._"
+        full_changelog_line = (
+            f"**Full Changelog**: https://github.com/{_repo()}/compare/{compare_from}..."
+            f"{version.tag()}"
+        )
+        return f"### Other Changes\n\n{no_changes}\n\n{full_changelog_line}"
+    parts: list[str] = []
+    for c in ordered:
+        parts.append(f"### {c}\n")
+        parts.extend(cats[c])
+        parts.append("")
+    body_sections = "\n".join(parts).strip()
     full_changelog_line = (
         f"**Full Changelog**: https://github.com/{_repo()}/compare/{compare_from}..."
         f"{version.tag()}"
     )
     return f"{body_sections}\n\n{full_changelog_line}"
-
-def _build_stable_body(version: Version, changelog: str, prev_stable: Version) -> str:
-    block = _find_section_block(changelog, version.tag())
-    cats = _collect_section_categories(block)
-    ordered = [c for c in CATEGORY_ORDER if c in cats] + [
-        c for c in cats if c not in CATEGORY_ORDER
-    ]
-    parts: list[str] = []
-    if ordered:
-        for c in ordered:
-            parts.append(f"### {c}\n")
-            parts.extend(cats[c])
-            parts.append("")
-    else:
-        parts = ["### Other Changes", "", "_No changes in this release._", ""]
-    parts.append(
-        f"**Full Changelog**: https://github.com/{_repo()}/compare/{prev_stable.tag()}..."
-        f"{version.tag()}"
-    )
-    return "\n".join(parts).strip()
 
 def _latest_versions(changelog: str) -> tuple[Version | None, Version | None]:
     versions = _list_versions(changelog)
@@ -750,7 +724,7 @@ def _aggregate_betas_to_stable(
             inserted = True
     if not inserted:
         out = ["# Changelog", ""] + parts + out
-    new_content = _squeeze_blank("\n".join(out)) + "\n"
+    new_content = common.squeeze_blank("\n".join(out)) + "\n"
     return new_content, included_tags
 
 def _ensure_repo_node_version(version: Version, context: str) -> None:
@@ -917,14 +891,14 @@ def _finalize_common(context: Context, v: Version, *, is_beta: bool) -> None:
     )
     common.git_force_tag(v.tag())
     if is_beta:
-        body = _build_beta_body(v, content)
+        body = _build_release_body(v, content)
     else:
         versions = [x for x in _list_versions(content) if not x.is_beta()]
         versions_sorted = sorted(versions, key=_version_sort_key)
         prev = Version(0, 0, 0)
         if len(versions_sorted) > 1 and versions_sorted[-1] == v:
             prev = versions_sorted[-2]
-        body = _build_stable_body(v, content, prev)
+        body = _build_release_body(v, content, prev)
     rel = common.gh_release(context.github_repository, context.github_token, tag=v.tag())
     if rel and rel.get("id"):
         common.gh_release_update(context.github_repository, context.github_token, int(rel["id"]), body=body)
@@ -1335,7 +1309,7 @@ def _handle_commit_push(context: Context) -> None:
         version_context = f"manual commits {first_sha7}..{last_sha7}"
     common.git_commit_files([CHANGELOG_FILE], msg)
     _ensure_repo_node_version(final_target_version, context=version_context)
-    body = _build_beta_body(final_target_version, content)
+    body = _build_release_body(final_target_version, content)
     _upsert_release(
         context,
         final_target_version.tag(),
@@ -1385,7 +1359,7 @@ def _handle_pr_merge(context: Context) -> None:
             context=f"stable PR #{context.pull_request_number}",
         )
         prev = prev_stable or Version(0, 0, 0)
-        body = _build_stable_body(target_stable, content, prev)
+        body = _build_release_body(target_stable, content, prev)
         _upsert_release(
             context,
             target_stable.tag(),
@@ -1429,7 +1403,7 @@ def _handle_pr_merge(context: Context) -> None:
         f"Update CHANGELOG.md for beta PR #{context.pull_request_number}",
     )
     _ensure_repo_node_version(target_version, context=f"beta PR #{context.pull_request_number}")
-    body = _build_beta_body(target_version, content)
+    body = _build_release_body(target_version, content)
     _upsert_release(
         context,
         target_version.tag(),

@@ -1,6 +1,5 @@
 import type { Logger } from 'homebridge';
 
-import axios from 'axios';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,7 +45,6 @@ class PythonChecker {
     await this.ensurePythonVersion();
     await this.ensureVenvCreated();
     await this.ensureVenvUsesCorrectPythonHome();
-    await this.ensureVenvPipUpToDate();
     await this.ensureVenvRequirementsSatisfied();
     this.log.debug('Python environment check completed successfully');
   }
@@ -171,21 +169,31 @@ class PythonChecker {
   }
 
   private async createVenv(): Promise<void> {
-    this.log.debug('Creating virtual environment at path:', this.venvPath);
-    const [stdout] = await runCommand(
-      this.log,
-      this.pythonExecutable,
-      ['-m', 'venv', this.venvPath, '--clear'],
-      undefined,
-      !this.advancedPythonLogging,
-      !this.advancedPythonLogging,
-    );
-    if (stdout.includes('not created successfully') || !this.isVenvCreated()) {
-      this.log.error('Failed to create virtual environment.');
-      await delay(300000);
-    } else {
-      this.log.debug('Virtual environment created successfully');
+    const maxAttempts = 3;
+    const retryDelayMs = [5000, 15000];
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      this.log.debug(`Creating virtual environment (attempt ${attempt}/${maxAttempts}):`, this.venvPath);
+      const [stdout] = await runCommand(
+        this.log,
+        this.pythonExecutable,
+        ['-m', 'venv', this.venvPath, '--clear'],
+        undefined,
+        !this.advancedPythonLogging,
+        !this.advancedPythonLogging,
+      );
+      if (!stdout.includes('not created successfully') && this.isVenvCreated()) {
+        this.log.debug('Virtual environment created successfully');
+        await this.updatePip();
+        return;
+      }
+      if (attempt < maxAttempts) {
+        const waitSec = retryDelayMs[attempt - 1] / 1000;
+        this.log.warn(`Failed to create virtual environment (attempt ${attempt}/${maxAttempts}). Retrying in ${waitSec}s...`);
+        await delay(retryDelayMs[attempt - 1]);
+      }
     }
+    throw new Error(`Failed to create virtual environment at: ${this.venvPath}`);
   }
 
   private async ensureVenvUsesCorrectPythonHome(): Promise<void> {
@@ -222,41 +230,9 @@ class PythonChecker {
     return pythonHome;
   }
 
-  private async ensureVenvPipUpToDate(): Promise<void> {
-    const currentVersion = await this.getVenvPipVersion();
-    const latestVersion = await this.getMostRecentPipVersion();
-    if (currentVersion !== latestVersion) {
-      await this.updatePip();
-    } else {
-      this.log.debug('Virtual environment pip is up to date');
-    }
-  }
-
-  private async getVenvPipVersion(): Promise<string> {
-    const [stdout] = await runCommand(
-      this.log,
-      this.venvPipExecutable,
-      ['--version'],
-      undefined,
-      !this.advancedPythonLogging,
-      !this.advancedPythonLogging,
-    );
-    return stdout.trim().split(' ')[1];
-  }
-
-  private async getMostRecentPipVersion(): Promise<string> {
-    try {
-      const response = await axios.get<{ info: { version: string } }>('https://pypi.org/pypi/pip/json');
-      return response.data.info.version;
-    } catch (err) {
-      this.log.error(`Error fetching latest pip version: ${err}`);
-      return '';
-    }
-  }
-
   private async updatePip(): Promise<void> {
     this.log.debug('Updating pip in virtual environment');
-    await runCommand(
+    const [, , exitCode] = await runCommand(
       this.log,
       this.venvPipExecutable,
       ['install', '--upgrade', 'pip'],
@@ -264,6 +240,9 @@ class PythonChecker {
       !this.advancedPythonLogging,
       !this.advancedPythonLogging,
     );
+    if (exitCode !== 0) {
+      throw new Error(`Failed to upgrade pip in virtual environment (exit code ${exitCode})`);
+    }
     this.log.debug('Pip updated successfully');
   }
 
@@ -301,7 +280,7 @@ class PythonChecker {
 
   private async installRequirements(): Promise<void> {
     this.log.debug('Installing requirements from:', this.requirementsPath);
-    await runCommand(
+    const [, , exitCode] = await runCommand(
       this.log,
       this.venvPipExecutable,
       ['install', '-r', this.requirementsPath],
@@ -309,6 +288,9 @@ class PythonChecker {
       !this.advancedPythonLogging,
       !this.advancedPythonLogging,
     );
+    if (exitCode !== 0) {
+      throw new Error(`Failed to install requirements from ${this.requirementsPath} (exit code ${exitCode})`);
+    }
     this.log.debug('Requirements installed successfully');
   }
 }
