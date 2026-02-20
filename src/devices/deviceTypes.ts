@@ -137,6 +137,7 @@ export interface CharacteristicDescriptor {
   type: WithUUID<new () => Characteristic>;
   name?: string;
   writable?: boolean;
+  debouncePolls?: number;
   getInitial(context: DescriptorContext): CharacteristicValue;
   getCurrent(context: DescriptorContext): CharacteristicValue;
   applySet?(value: CharacteristicValue, context: DescriptorContext): Promise<void>;

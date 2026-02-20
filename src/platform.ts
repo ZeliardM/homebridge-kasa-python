@@ -310,7 +310,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     const timeSinceLastSeen = now.getTime() - new Date(accessory.context.lastSeen || 0).getTime();
     const offlineInterval = this.config.discoveryOptions.offlineInterval;
     if (timeSinceLastSeen > offlineInterval) {
-      this.log.info(`Accessory [${accessory.displayName}] is offline and outside the offline interval. Removing.`);
+      this.log.debug(`Accessory [${accessory.displayName}] is offline and outside the offline interval. Removing.`);
       this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       this.configuredAccessories.delete(uuid);
     } else if (!accessory.context.offline) {
@@ -341,7 +341,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         if (existingDevice.kasaDevice.offline && !device.offline) {
           this.log.debug(`Device [${device.sys_info.device_id}] was offline and is now online. Updating and starting polling.`);
           existingDevice.kasaDevice = device;
-          existingDevice.updateAfterPeriodicDiscovery();
+          existingDevice.updateAfterPeriodicDiscovery(true);
           existingDevice.startPolling();
         } else {
           this.log.debug(`Updating existing HomeKit device [${device.sys_info.device_id}].`);
@@ -488,7 +488,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         `offline interval is ${offlineInterval}ms, offline status: ${accessory.context.offline}`);
 
       if (timeSinceLastSeen > offlineInterval && accessory.context.offline === true) {
-        this.log.info(
+        this.log.debug(
           `Platform Accessory [${accessory.displayName}] is offline and outside the offline interval, ` +
           'moving to offlineAccessories',
         );
@@ -526,7 +526,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
 
     if (this.homekitDevicesById.has(deviceId)) {
-      this.log.info(`HomeKit device already added: [${deviceAlias}] ${deviceType} [${deviceId}]`);
+      this.log.debug(`HomeKit device already added: [${deviceAlias}] ${deviceType} [${deviceId}]`);
       return;
     }
 

@@ -36,12 +36,12 @@ export default class DeviceManager {
   }
 
   async discoverDevices(): Promise<void> {
-    this.log.info('Starting device discovery (SSE)...');
+    this.log.debug('Starting device discovery...');
     try {
       const authConfig = this.username && this.password
         ? { auth: { username: this.username, password: this.password } }
         : {};
-      const response = await axios.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
+      await axios.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
         `${this.apiUrl}/discover`,
         {
           additionalBroadcasts: this.additionalBroadcasts,
@@ -51,7 +51,6 @@ export default class DeviceManager {
         },
         authConfig,
       );
-      this.log.info('Discovery initiated:', Object.keys(response.data).length, 'potential entries');
 
       const configPath = path.join(this.platform.storagePath, 'config.json');
       const fileConfig = await this.readConfigFile(configPath);
@@ -68,7 +67,7 @@ export default class DeviceManager {
           const data = JSON.parse(event.data);
           this.log.debug('SSE event data:', data);
           if (data.status === 'discovery_complete') {
-            this.log.info('Device discovery complete.');
+            this.log.debug('Device discovery complete.');
             eventSource.close();
             return;
           }
@@ -82,7 +81,7 @@ export default class DeviceManager {
             last_seen: new Date(),
             offline: false,
           };
-          this.log.info(`Discovered device: ${device.sys_info.alias} (${device.sys_info.host})`);
+          this.log.debug(`Discovered device: ${device.sys_info.alias} (${device.sys_info.host})`);
           this.updateDeviceAlias(device.sys_info);
           this.persistDiscoveredDevice(device, platformSection);
           deviceEventEmitter.emit('deviceDiscovered', device);

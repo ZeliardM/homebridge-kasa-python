@@ -107,6 +107,7 @@ export function buildOutletInUseDescriptor(
     type: C.OutletInUse,
     name: 'OutletInUse',
     writable: false,
+    debouncePolls: 2,
     getInitial: (context) => (hasEnergy ? energy(context) : state(context)),
     getCurrent: (context) => (hasEnergy ? energy(context) : state(context)),
   };

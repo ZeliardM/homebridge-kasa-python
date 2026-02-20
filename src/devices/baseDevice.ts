@@ -36,6 +36,7 @@ export default abstract class HomeKitDevice {
   protected updateEmitter = new EventEmitter();
 
   private static locks: Map<string, Promise<unknown>> = new Map();
+  private pendingChanges: Map<string, { pendingValue: CharacteristicValue; count: number }> = new Map();
 
   protected getSysInfoDeferred: () => Promise<void>;
 
@@ -185,7 +186,6 @@ export default abstract class HomeKitDevice {
       return;
     }
     try {
-      this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       const updatedSysInfo = await this.deviceManager.getSysInfo(host) as SysInfo;
       if (!updatedSysInfo) {
         this.log.warn('getSysInfo returned undefined');
@@ -198,7 +198,7 @@ export default abstract class HomeKitDevice {
     }
   }
 
-  protected async refreshAndUpdateCharacteristics(forceUpdate: boolean): Promise<void> {
+  protected async refreshAndUpdateCharacteristics(forceUpdate: boolean, skipFetch = false): Promise<void> {
     const deviceKey = this.kasaDevice.sys_info.device_id;
     if (!forceUpdate && HomeKitDevice.locks.has(deviceKey)) {
       this.log.debug('Skipping poll; active update lock');
@@ -214,8 +214,11 @@ export default abstract class HomeKitDevice {
       }
       this.isUpdating = true;
       try {
-        await this.getSysInfo();
+        if (!skipFetch) {
+          await this.getSysInfo();
+        }
         await this.updateAllServicesAndCharacteristics(forceUpdate);
+        this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
         this.log.error('Error during poll update:', error);
         this.kasaDevice.offline = true;
@@ -254,8 +257,10 @@ export default abstract class HomeKitDevice {
     }
   }
 
-  public updateAfterPeriodicDiscovery(): void {
-    void this.refreshAndUpdateCharacteristics(true);
+  public updateAfterPeriodicDiscovery(force = false): void {
+    // Data was already provided by the caller (kasaDevice was just assigned),
+    // so skip the getSysInfo fetch to avoid a redundant device round-trip.
+    void this.refreshAndUpdateCharacteristics(force, true);
   }
 
   protected setupPrimaryService(): void {
@@ -329,17 +334,15 @@ export default abstract class HomeKitDevice {
   }
 
   private async genericOnSet(descriptor: CharacteristicDescriptor, value: CharacteristicValue): Promise<void> {
-    const context = this.buildDescriptorContext();
     if (!descriptor.applySet) {
       return;
     }
-    await this.executeDescriptorSet(descriptor, value, context);
+    await this.executeDescriptorSet(descriptor, value);
   }
 
   private async executeDescriptorSet(
     descriptor: CharacteristicDescriptor,
     value: CharacteristicValue,
-    context: DescriptorContext,
     isGrouped = false,
   ): Promise<void> {
     const lockKey = this.makeLockKey();
@@ -352,6 +355,7 @@ export default abstract class HomeKitDevice {
       }
       try {
         this.isUpdating = true;
+        const context = this.buildDescriptorContext();
         await descriptor.applySet!(value, context);
 
         const postSetValue = descriptor.getCurrent(context);
@@ -391,19 +395,37 @@ export default abstract class HomeKitDevice {
           device: (previousSysInfo as SysInfo) || {} as SysInfo,
           alias: this.name,
         };
-        (previousContext.device as SysInfo).__snapshot = true;
 
-        const previousValue = previousSysInfo ? descriptor.getCurrent(previousContext) : descriptor.getInitial(context);
-        const nextValue = descriptor.getCurrent(context);
-        this.updateIfChanged(
-          this.primaryService,
-          this.primaryService.getCharacteristic(descriptor.type),
-          context.alias,
-          previousValue as CharacteristicValue,
-          nextValue as CharacteristicValue,
-          descriptor.name,
-          forceUpdate,
-        );
+        if (descriptor.debouncePolls && descriptor.debouncePolls > 1) {
+          const characteristic = this.primaryService.getCharacteristic(descriptor.type);
+          const hkValue: CharacteristicValue = characteristic.value !== null && characteristic.value !== undefined
+            ? characteristic.value as CharacteristicValue
+            : descriptor.getInitial(context) as CharacteristicValue;
+          const nextDeviceValue = descriptor.getCurrent(context) as CharacteristicValue;
+          const debounceKey = `primary:${descriptor.type.UUID}`;
+          const effectiveNext = this.resolveWithDebounce(debounceKey, hkValue, nextDeviceValue, descriptor.debouncePolls, forceUpdate);
+          this.updateIfChanged(
+            this.primaryService,
+            characteristic,
+            context.alias,
+            hkValue,
+            effectiveNext,
+            descriptor.name,
+            forceUpdate,
+          );
+        } else {
+          const previousValue = previousSysInfo ? descriptor.getCurrent(previousContext) : descriptor.getInitial(context);
+          const nextValue = descriptor.getCurrent(context);
+          this.updateIfChanged(
+            this.primaryService,
+            this.primaryService.getCharacteristic(descriptor.type),
+            context.alias,
+            previousValue as CharacteristicValue,
+            nextValue as CharacteristicValue,
+            descriptor.name,
+            forceUpdate,
+          );
+        }
       } catch (error) {
         this.log.error(`Update diff error for ${descriptor.name ?? descriptor.type.UUID}`, error);
       }
@@ -423,6 +445,34 @@ export default abstract class HomeKitDevice {
       return C.Active.INACTIVE;
     }
     return false;
+  }
+
+  protected resolveWithDebounce(
+    key: string,
+    currentHomeKitValue: CharacteristicValue,
+    nextDeviceValue: CharacteristicValue,
+    debouncePolls: number,
+    force = false,
+  ): CharacteristicValue {
+    if (force) {
+      this.pendingChanges.delete(key);
+      return nextDeviceValue;
+    }
+    if (currentHomeKitValue === nextDeviceValue) {
+      this.pendingChanges.delete(key);
+      return nextDeviceValue;
+    }
+    const pending = this.pendingChanges.get(key);
+    if (pending && pending.pendingValue === nextDeviceValue) {
+      pending.count++;
+      if (pending.count >= debouncePolls) {
+        this.pendingChanges.delete(key);
+        return nextDeviceValue;
+      }
+      return currentHomeKitValue;
+    }
+    this.pendingChanges.set(key, { pendingValue: nextDeviceValue, count: 1 });
+    return currentHomeKitValue;
   }
 
   protected updateIfChanged<T extends CharacteristicValue>(
