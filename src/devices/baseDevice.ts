@@ -95,10 +95,7 @@ export default abstract class HomeKitDevice {
     const deviceName = this.name;
     let displayNameChanged = false;
 
-    if (
-      (!currentDisplayName || currentDisplayName === deviceName)
-      && currentDisplayName !== deviceName
-    ) {
+    if (!currentDisplayName && deviceName) {
       accessory.displayName = deviceName;
       displayNameChanged = true;
     }
