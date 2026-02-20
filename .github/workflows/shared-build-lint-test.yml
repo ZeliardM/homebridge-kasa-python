@@ -38,13 +38,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Update npm
-        id: update-npm
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install -g npm@latest
-
       - name: Install Python Dependencies
         id: install-python-deps
         shell: bash

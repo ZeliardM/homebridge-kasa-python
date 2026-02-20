@@ -153,7 +153,9 @@
     "enableCredentials",
     {
       "type": "conditional",
-      "condition": "model.enableCredentials",
+      "condition": {
+        "functionBody": "return model.enableCredentials;"
+      },
       "items": [
         "username",
         "password"

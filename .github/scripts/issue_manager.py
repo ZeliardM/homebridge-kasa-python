@@ -55,9 +55,18 @@ CLASSIFICATION = {
 }
 
 def _section(body: str, title: str) -> str:
-    pat = rf"(?is)^###\s*{re.escape(title)}\s*$\n(.*?)(?=^###\s|\Z)"
-    mm = re.search(pat, body, re.MULTILINE)
-    return (mm.group(1).strip() if mm else "").strip()
+    lines = body.splitlines()
+    in_section = False
+    collected: list[str] = []
+    for line in lines:
+        if re.match(rf"^###\s*{re.escape(title)}\s*$", line, re.IGNORECASE):
+            in_section = True
+            continue
+        if in_section:
+            if re.match(r"^###\s", line):
+                break
+            collected.append(line)
+    return "\n".join(collected).strip()
 
 def _guess_kind(body: str) -> str:
     m = re.search(r"(?im)^###\s*Type\s*$", body)

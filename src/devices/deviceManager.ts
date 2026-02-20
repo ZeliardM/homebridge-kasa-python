@@ -1,13 +1,13 @@
 import type { CharacteristicValue, Logger, PlatformConfig } from 'homebridge';
 
 import axios from 'axios';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { EventSource } from 'eventsource';
 import { EventEmitter } from 'node:events';
-import { promises as fs } from 'node:fs';
 
 import KasaPythonPlatform from '../platform.js';
-import { parseConfig } from '../config.js';
+import { normalizeManualDevices, parseConfig } from '../config.js';
 import type { ConfigDevice, FeatureInfo, HSV, KasaDevice, SysInfo } from './deviceTypes.js';
 
 export const deviceEventEmitter = new EventEmitter();
@@ -36,12 +36,12 @@ export default class DeviceManager {
   }
 
   async discoverDevices(): Promise<void> {
-    this.log.info('Starting device discovery (SSE)...');
+    this.log.debug('Starting device discovery...');
     try {
       const authConfig = this.username && this.password
         ? { auth: { username: this.username, password: this.password } }
         : {};
-      const response = await axios.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
+      await axios.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
         `${this.apiUrl}/discover`,
         {
           additionalBroadcasts: this.additionalBroadcasts,
@@ -51,7 +51,6 @@ export default class DeviceManager {
         },
         authConfig,
       );
-      this.log.info('Discovery initiated:', Object.keys(response.data).length, 'potential entries');
 
       const configPath = path.join(this.platform.storagePath, 'config.json');
       const fileConfig = await this.readConfigFile(configPath);
@@ -68,7 +67,7 @@ export default class DeviceManager {
           const data = JSON.parse(event.data);
           this.log.debug('SSE event data:', data);
           if (data.status === 'discovery_complete') {
-            this.log.info('Device discovery complete.');
+            this.log.debug('Device discovery complete.');
             eventSource.close();
             return;
           }
@@ -82,7 +81,7 @@ export default class DeviceManager {
             last_seen: new Date(),
             offline: false,
           };
-          this.log.info(`Discovered device: ${device.sys_info.alias} (${device.sys_info.host})`);
+          this.log.debug(`Discovered device: ${device.sys_info.alias} (${device.sys_info.host})`);
           this.updateDeviceAlias(device.sys_info);
           this.persistDiscoveredDevice(device, platformSection);
           deviceEventEmitter.emit('deviceDiscovered', device);
@@ -110,7 +109,7 @@ export default class DeviceManager {
           return true;
         });
         if (this.needsManualDevicesNormalization(platformSection.manualDevices)) {
-          platformSection.manualDevices = this.normalizeManualDevices(platformSection.manualDevices);
+          platformSection.manualDevices = normalizeManualDevices(platformSection.manualDevices);
         }
         await this.writeConfigFile(configPath, fileConfig);
         this.platform.config = parseConfig(platformSection);
@@ -215,22 +214,7 @@ export default class DeviceManager {
   }
 
   private needsManualDevicesNormalization(manualDevices: (string | ConfigDevice)[]): boolean {
-    return manualDevices.length > 0 &&
-      (typeof manualDevices[0] === 'string' ||
-        manualDevices.some(entry => typeof entry !== 'string'));
-  }
-
-  private normalizeManualDevices(manualDevices: (string | ConfigDevice)[]): ConfigDevice[] {
-    return manualDevices.map(entry => {
-      if (typeof entry === 'string') {
-        return { host: entry, alias: 'Will Be Filled By Plug-In Automatically' };
-      } else if ('host' in entry && !('alias' in entry)) {
-        (entry as ConfigDevice).alias = 'Will Be Filled By Plug-In Automatically';
-      } else if ('breakoutChildDevices' in entry) {
-        delete entry.breakoutChildDevices;
-      }
-      return entry;
-    });
+    return manualDevices.some(entry => typeof entry === 'string' || 'breakoutChildDevices' in entry);
   }
 
   private async readConfigFile(configPath: string): Promise<PlatformConfig> {

@@ -230,6 +230,8 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0.0 (US) / Firmware: 1.1.3
   - Hardware: 1.0.0 (US) / Firmware: 1.3.7
   - Hardware: 1.0.0 (US) / Firmware: 1.4.0
+- **P105**
+  - Hardware: 1.0 (US) / Firmware: 1.2.5
 - **P110**
   - Hardware: 1.0 (AU) / Firmware: 1.3.1
   - Hardware: 1.0 (EU) / Firmware: 1.0.7
@@ -246,6 +248,8 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
 - **P135**
   - Hardware: 1.0 (US) / Firmware: 1.0.5
   - Hardware: 1.0 (US) / Firmware: 1.2.0
+- **TP10**
+  - Hardware: 1.0 (IT) / Firmware: 1.2.5
 - **TP15**
   - Hardware: 1.0 (US) / Firmware: 1.0.3
 
@@ -261,6 +265,8 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (UK) / Firmware: 1.0.3
 - **P306**
   - Hardware: 1.0 (US) / Firmware: 1.1.2
+- **P316M**
+  - Hardware: 1.6 (US) / Firmware: 1.0.5
 - **P400M**
 - **TP25**
   - Hardware: 1.0 (US) / Firmware: 1.0.2
@@ -283,6 +289,10 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
 
 ### Bulbs
 
+- **L430C**
+  - Hardware: 1.0 (EU) / Firmware: 1.0.4
+- **L430P**
+  - Hardware: 1.0 (EU) / Firmware: 1.0.9
 - **L510B**
   - Hardware: 3.0 (EU) / Firmware: 1.0.5
 - **L510E**
@@ -330,6 +340,7 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 2.0 (EU) / Firmware: 1.4.3
 - **C220**
   - Hardware: 1.0 (EU) / Firmware: 1.2.2
+  - Hardware: 1.0 (EU) / Firmware: 1.2.5
 - **C225**
   - Hardware: 2.0 (US) / Firmware: 1.0.11
 - **C325WB**

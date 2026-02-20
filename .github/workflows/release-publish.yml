@@ -67,13 +67,6 @@ jobs:
         with:
           node-version: 24
 
-      - name: Update npm
-        id: update-npm
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install -g npm@latest
-
       - name: Setup Python 3.13
         id: setup-python
         uses: actions/setup-python@v6
@@ -123,13 +116,6 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           cache: npm
-
-      - name: Update npm
-        id: update-npm
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install -g npm@latest
 
       - name: Install Node Dependencies
         id: install-node-deps

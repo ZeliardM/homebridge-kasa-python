@@ -42,6 +42,18 @@ def run(
         stderr=stderr,
     )
 
+def squeeze_blank(text: str) -> str:
+    lines = text.splitlines()
+    out: list[str] = []
+    prev_blank = False
+    for l in lines:
+        blank = l.strip() == ""
+        if blank and prev_blank:
+            continue
+        out.append(l)
+        prev_blank = blank
+    return "\n".join(out)
+
 def read_event(path: str | None = None) -> dict:
     event_path = path or os.environ.get("GITHUB_EVENT_PATH") or ""
     if not event_path or not os.path.exists(event_path):

@@ -65,10 +65,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Ensure jq
-        id: ensure-jq
-        uses: ./.github/actions/ensure-jq
-
       - name: Classify
         id: classify
         shell: bash
@@ -139,10 +135,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
-      - name: Ensure jq
-        id: ensure-jq
-        uses: ./.github/actions/ensure-jq
 
       - name: Validate Issue
         id: validate-issue

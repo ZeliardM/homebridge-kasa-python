@@ -59,6 +59,7 @@ jobs:
       needs.prepare.result == 'success' &&
       github.event_name == 'pull_request' &&
       github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
       (
         github.event.pull_request.base.ref == 'beta' ||
         (
@@ -84,22 +85,11 @@ jobs:
         with:
           node-version: 24
 
-      - name: Update npm
-        id: update-npm
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install -g npm@latest
-
       - name: Setup Python 3.13
         id: setup-python
         uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-
-      - name: Ensure jq
-        id: ensure-jq
-        uses: ./.github/actions/ensure-jq
 
       - name: Serialize Labels
         id: labels
@@ -142,13 +132,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-
-      - name: Update npm
-        id: update-npm
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install -g npm@latest
 
       - name: Setup Python 3.13
         id: setup-python

@@ -30,14 +30,6 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install Python requests
-        id: install_requests
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          python -m pip install requests
-
       - name: Get Discord Payload
         id: webhook
         uses: sarisia/actions-status-discord@v1

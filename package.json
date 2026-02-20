@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Kasa Python",
   "name": "homebridge-kasa-python",
-  "version": "3.0.0",
+  "version": "3.1.0-beta.4",
   "description": "Plugin that uses Python-Kasa API to communicate with Kasa Devices.",
   "license": "MIT",
   "type": "module",
@@ -30,20 +30,22 @@
   },
   "keywords": [
     "homebridge",
-    "homebridge-plugin",
     "homebridge-kasa",
     "homebridge-kasa-python",
+    "homebridge-plugin",
     "homekit",
     "kasa",
+    "kasa python",
     "plugin",
     "python",
     "python-kasa",
     "smarthome",
+    "smart home",
     "tapo",
     "tplink",
     "tplink-kasa",
-    "tplink-tapo",
-    "tplink-smarthome"
+    "tplink-smarthome",
+    "tplink-tapo"
   ],
   "files": [
     "config.schema.json",
@@ -52,19 +54,16 @@
     "requirements.txt"
   ],
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.3",
-    "@eslint/js": "^9.39.1",
-    "@stylistic/eslint-plugin": "^5.6.1",
-    "@types/node": "^25.0.3",
-    "@typescript-eslint/parser": "^8.50.0",
-    "eslint": "^9.39.2",
-    "globals": "^16.5.0",
-    "homebridge": "^2.0.0-beta.67",
-    "node-persist": "^4.0.4",
-    "nodemon": "^3.1.11",
-    "rimraf": "^6.1.2",
+    "@eslint/eslintrc": "3.3.3",
+    "@eslint/js": "^10.0.1",
+    "@stylistic/eslint-plugin": "^5.9.0",
+    "@types/node": "^25.3.0",
+    "eslint": "^10.0.1",
+    "homebridge": "^2.0.0-beta.71",
+    "nodemon": "^3.1.13",
+    "rimraf": "^6.1.3",
     "ts-node": "^10.9.2",
-    "typescript-eslint": "^8.50.1"
+    "typescript-eslint": "^8.56.0"
   },
   "homepage": "https://github.com/ZeliardM/homebridge-kasa-python#readme",
   "funding": [
@@ -78,10 +77,8 @@
     }
   ],
   "dependencies": {
-    "axios": "^1.13.2",
-    "eventsource": "^4.1.0",
-    "ts-essentials": "^10.1.1",
-    "typescript": "^5.9.3"
+    "axios": "^1.13.5",
+    "eventsource": "^4.1.0"
   },
   "overrides": {
     "node-persist": "^4.0.4"
