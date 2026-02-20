@@ -365,9 +365,14 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     lastSeen: Date,
     offline: boolean,
   ): void {
+    const offlineStatusChanged = accessory.context.offline !== offline;
+
     accessory.context.lastSeen = lastSeen;
     accessory.context.offline = offline;
-    this.api.updatePlatformAccessories([accessory]);
+
+    if (offlineStatusChanged) {
+      this.api.updatePlatformAccessories([accessory]);
+    }
   }
 
   private async checkPython(): Promise<void> {
@@ -456,12 +461,11 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     if (!this.configuredAccessories.has(accessory.UUID)) {
       this.log.debug(`Platform Accessory ${accessory.displayName} is not in configuredAccessories, adding it.`);
       this.configuredAccessories.set(accessory.UUID, accessory);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      this.log.debug(`Platform Accessory ${accessory.displayName} registered with Homebridge.`);
     } else {
-      this.log.debug(`Platform Accessory ${accessory.displayName} is already in configuredAccessories.`);
+      this.log.debug(`Platform Accessory ${accessory.displayName} is already in configuredAccessories, skipping registration.`);
     }
-
-    this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-    this.log.debug(`Platform Accessory ${accessory.displayName} registered with Homebridge.`);
   }
 
   configureAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
