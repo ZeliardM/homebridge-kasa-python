@@ -4,6 +4,7 @@
 ### Featured Changes
 
 - [enhancement] Workflow refactor and code cleanup [38d7214](https://github.com/ZeliardM/homebridge-kasa-python/commit/38d72140efcbf73456764d60eff6dc5c9e6d9753) (@ZeliardM)
+- Fix name room reset [#236](https://github.com/ZeliardM/homebridge-kasa-python/pull/236) (@arjunmehta)
 
 ### Bug Fixes
 
