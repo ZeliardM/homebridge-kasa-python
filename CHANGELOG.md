@@ -1,8 +1,13 @@
 # Changelog
 ## [v3.1.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.4)
 
+### Featured Changes
+
+- [enhancement] Workflow refactor and code cleanup [38d7214](https://github.com/ZeliardM/homebridge-kasa-python/commit/38d72140efcbf73456764d60eff6dc5c9e6d9753) (@ZeliardM)
+
 ### Bug Fixes
 
+- [bug] Fix snapshot handling and logging [636f3ee](https://github.com/ZeliardM/homebridge-kasa-python/commit/636f3ee6ebfe28ca787f25b14a61457e4bc44507) (@ZeliardM)
 - [bug] Fix workflow handling for dependabot [7f09558](https://github.com/ZeliardM/homebridge-kasa-python/commit/7f09558acb9d2610b2fb16a802b17541a9e76f83) (@ZeliardM)
 
 ### Other Changes
