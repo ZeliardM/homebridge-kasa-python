@@ -1,5 +1,5 @@
 # Changelog
-## [v3.1.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.4)
+## [v3.1.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.4) (2026-02-20)
 
 ### Featured Changes
 
@@ -13,6 +13,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v3.1.0-beta.4 [beta-release] (@github-actions)
 - [other] Update dependencies and requirements [0406540](https://github.com/ZeliardM/homebridge-kasa-python/commit/04065409e73ef2536468a0d1006d47d6649174d6) (@ZeliardM)
 - [other] Add missing CHANGELOG.md entries [70c4b86](https://github.com/ZeliardM/homebridge-kasa-python/commit/70c4b86150f0f407df6f4f2212a33a8076871a22) (@ZeliardM)
 - npm(deps-dev): bump nodemon from 3.1.11 to 3.1.13 [#250](https://github.com/ZeliardM/homebridge-kasa-python/pull/250) (@dependabot[bot])
