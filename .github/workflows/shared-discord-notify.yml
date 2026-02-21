@@ -31,49 +31,11 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Get Discord Payload
-        id: webhook
-        uses: sarisia/actions-status-discord@v1
-        with:
-          status: Success
-          title: ${{ inputs.title }}
-          description: Version `${{ github.event.release.tag_name }}`
-          url: https://github.com/${{ github.repository }}/releases/tag/${{ github.event.release.tag_name }}
-          username: Homebridge
-          avatar_url: https://raw.githubusercontent.com/homebridge/branding/latest/logos/homebridge-color-round-stylized.png
-          color: 4726621
-          nodetail: false
-          nocontext: false
-          notimestamp: false
-          nofail: false
-          ack_no_webhook: true
-
-      - name: Build Trimmed Event Field Value
-        id: release_notes
-        shell: bash
-        env:
-          MODE: trim
-        run: |
-          set -euo pipefail
-          python3 .github/scripts/discord_tools.py
-
-      - name: Edit Payload with Trimmed Release Notes
-        id: edit_payload
-        shell: bash
-        env:
-          MODE: edit-payload
-          EVENT_VALUE: ${{ steps.release_notes.outputs.body }}
-          WEBHOOK_PAYLOAD: ${{ steps.webhook.outputs.payload }}
-        run: |
-          set -euo pipefail
-          python3 .github/scripts/discord_tools.py
-
-      - name: Post to Discord
+      - name: Post Discord Notification
         id: post
         shell: bash
         env:
-          MODE: post
-          EDITED_PAYLOAD: ${{ steps.edit_payload.outputs.edited_payload }}
+          DISCORD_TITLE: ${{ inputs.title }}
           WEBHOOK_URL: ${{ secrets.discord_webhook }}
         run: |
           set -euo pipefail

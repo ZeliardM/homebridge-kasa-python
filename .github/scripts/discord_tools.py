@@ -1,36 +1,14 @@
 #!/usr/bin/env python3
 """
-Discord workflow helpers with three env-driven modes, controlled by MODE:
+Discord notification script for GitHub release events.
 
-MODE=trim
-  - Reads the GitHub Release event payload (GITHUB_EVENT_PATH)
-  - Builds a compact "Event - <event>" field value from the release body:
-      * Bold release name or tag on the first line if available
-      * Category headings with bullets under their correct categories
-      * One bullet per present category initially
-      * Appends "**Full Changelog**: ..." at the bottom (if present)
-      * Round-robins remaining bullets under correct categories until the Discord field limit (1024 chars) is reached
-      * If not all bullets fit, appends "- …" to the last non-empty category (if space allows)
-      * Ensures an "Update CHANGELOG.md for (beta) release <version> ..." bullet exists in Other Changes,
-        inserting it as the first bullet there if missing
-  - Writes Actions output key "body" (multiline <<EOF block)
-  - Prints the final trimmed value to stdout
+Builds a Discord webhook embed from the GitHub release event and posts it.
 
-MODE=edit-payload
-  - Reads the Discord webhook payload JSON from env WEBHOOK_PAYLOAD
-  - Reads the trimmed event value from env EVENT_VALUE
-  - Replaces the first embed field whose name starts with "Event -"
-    with the trimmed value
-  - Ensures the event field value <= 1024 chars
-  - Writes Actions output key "edited_payload" (multiline <<EOF block)
-  - Prints the final JSON to stdout
-
-MODE=post
-  - Posts the payload to the Discord webhook
-  - Requires:
-      * env WEBHOOK_URL
-      * env EDITED_PAYLOAD (stringified JSON payload)
+Required environment variables:
+  WEBHOOK_URL       - Discord webhook URL
+  DISCORD_TITLE     - Embed title prefix
 """
+import datetime
 import json
 import os
 import sys
@@ -190,131 +168,77 @@ def _build_event_value_from_body(body: str, name_or_tag: str, field_hard_max: in
         event_val = _trunc_with_ellipsis(event_val, field_hard_max)
     return event_val
 
-def _write_actions_output(key: str, value: str) -> None:
-    out_path = os.environ.get("GITHUB_OUTPUT")
-    if not out_path:
-        return
-    with open(out_path, "a", encoding="utf-8") as f:
-        f.write(f"{key}<<EOF\n")
-        f.write(value)
-        f.write("\nEOF\n")
-
-def _ensure_event_field(payload: dict, value: str) -> None:
-    embeds = payload.get("embeds")
-    if not isinstance(embeds, list) or not embeds:
-        payload["embeds"] = [{}]
-        embeds = payload["embeds"]
-    embed = embeds[0] if embeds else {}
-    if not isinstance(embed, dict):
-        embed = {}
-        payload["embeds"] = [embed]
-    fields = embed.get("fields")
-    if not isinstance(fields, list):
-        fields = []
-        embed["fields"] = fields
-    idx_event = -1
-    for i, f in enumerate(fields):
-        name = str(f.get("name") or "")
-        if name.lower().startswith("event -"):
-            idx_event = i
-            break
-    if len(value) > 1024:
-        value = _trunc_with_ellipsis(value, 1024)
-    if idx_event >= 0:
-        fields[idx_event]["value"] = value or "No further information"
-        fields[idx_event]["inline"] = False
-        if "name" in fields[idx_event]:
-            nm = str(fields[idx_event]["name"])
-            if len(nm) > 256:
-                fields[idx_event]["name"] = _trunc_with_ellipsis(nm, 256)
-        return
-    idx_after_ref = -1
-    for i, f in enumerate(fields):
-        name = str(f.get("name") or "")
-        if name.strip().lower() == "ref":
-            idx_after_ref = i
-            break
-    new_field = {
-        "name": "Event - release",
-        "value": value or "No further information",
-        "inline": False,
-    }
-    if idx_after_ref >= 0:
-        fields.insert(idx_after_ref + 1, new_field)
-    else:
-        fields.append(new_field)
-
-def _handle_trim() -> int:
-    evt = common.read_event()
-    body = _read_release_body(evt)
-    name_or_tag = _read_release_name_or_tag(evt)
-    event_value = _build_event_value_from_body(
-        body=body,
-        name_or_tag=name_or_tag,
-        field_hard_max=1024,
-    )
-    _write_actions_output("body", event_value)
-    print(event_value)
-    return 0
-
-def _handle_edit_payload() -> int:
-    event_value = os.environ.get("EVENT_VALUE")
-    payload_raw = os.environ.get("WEBHOOK_PAYLOAD")
+def _post_to_discord(webhook: str, payload: dict) -> int:
     try:
-        payload = json.loads(payload_raw)
-    except Exception:
-        try:
-            fixed = payload_raw.replace("'", '"')
-            payload = json.loads(fixed)
-        except Exception:
-            print("::error::WEBHOOK_PAYLOAD was invalid JSON", file=sys.stderr)
-            return 1
-    _ensure_event_field(payload, event_value)
-    final_json = json.dumps(payload, ensure_ascii=False)
-    _write_actions_output("edited_payload", final_json)
-    print(final_json)
-    return 0
-
-def _handle_post() -> int:
-    edited_payload_raw = os.environ.get("EDITED_PAYLOAD")
-    webhook = os.environ.get("WEBHOOK_URL")
-    try:
-        edited_payload = json.loads(edited_payload_raw)
-    except Exception:
-        try:
-            fixed = edited_payload_raw.replace("'", '"')
-            edited_payload = json.loads(fixed)
-        except Exception:
-            print("::error::EDITED_PAYLOAD was invalid JSON", file=sys.stderr)
-            return 1
-    try:
-        data = json.dumps(edited_payload, ensure_ascii=False).encode('utf-8')
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(
             webhook,
             data=data,
-            headers={'Content-Type': 'application/json'},
-            method='POST',
+            headers={"Content-Type": "application/json"},
+            method="POST",
         )
         with urllib.request.urlopen(req, timeout=45) as resp:
             print(f"POST -> {resp.status} {resp.reason}")
             return 0
     except urllib.error.HTTPError as e:
-        print(f"::error::Discord webhook failed {e.code}: {e.reason}", file=sys.stderr)
+        resp_body = ""
+        try:
+            resp_body = e.read().decode("utf-8", errors="replace")
+        except Exception:
+            pass
+        print(
+            f"::error::Discord webhook failed {e.code}: {e.reason} | body: {resp_body}",
+            file=sys.stderr,
+        )
         return 1
     except urllib.error.URLError as e:
         print(f"::error::Request failed: {e}", file=sys.stderr)
         return 1
 
 def main() -> int:
-    mode = os.environ.get("MODE")
-    if mode == "trim":
-        return _handle_trim()
-    if mode == "edit-payload":
-        return _handle_edit_payload()
-    if mode == "post":
-        return _handle_post()
-    print("::error::MODE must be one of: trim, edit-payload, post", file=sys.stderr)
-    return 1
+    webhook = os.environ.get("WEBHOOK_URL") or ""
+    if not webhook:
+        print("::error::WEBHOOK_URL is required", file=sys.stderr)
+        return 1
+    title = os.environ.get("DISCORD_TITLE") or ""
+    repo = os.environ.get("GITHUB_REPOSITORY") or ""
+    ref = os.environ.get("GITHUB_REF") or ""
+    actor = os.environ.get("GITHUB_ACTOR") or ""
+    workflow_name = os.environ.get("GITHUB_WORKFLOW") or ""
+    run_id = os.environ.get("GITHUB_RUN_ID") or ""
+    server_url = (os.environ.get("GITHUB_SERVER_URL") or "https://github.com").rstrip("/")
+    evt = common.read_event()
+    body = _read_release_body(evt)
+    tag_name = _read_release_name_or_tag(evt)
+    rel = _read_release(evt)
+    release_url = str(rel.get("html_url") or f"{server_url}/{repo}/releases/tag/{tag_name}")
+    event_value = _build_event_value_from_body(
+        body=body,
+        name_or_tag=tag_name,
+        field_hard_max=1024,
+    )
+    embed_title = f"Success: {title}" if title else "Success"
+    embed: dict = {
+        "color": 4726621,
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "title": embed_title,
+        "url": release_url,
+        "description": f"Version `{tag_name}`",
+        "fields": [
+            {"name": "Repository", "value": f"[{repo}]({server_url}/{repo})", "inline": True},
+            {"name": "Ref", "value": ref, "inline": True},
+            {"name": "Event - release", "value": event_value or "No further information", "inline": False},
+            {"name": "Triggered by", "value": actor, "inline": True},
+            {"name": "Workflow", "value": f"[{workflow_name}]({server_url}/{repo}/actions/runs/{run_id})", "inline": True},
+        ],
+    }
+    discord_payload: dict = {
+        "embeds": [embed],
+        "username": "Homebridge",
+        "avatar_url": "https://raw.githubusercontent.com/homebridge/branding/latest/logos/homebridge-color-round-stylized.png",
+    }
+    print(json.dumps(discord_payload, ensure_ascii=False, indent=2))
+    return _post_to_discord(webhook, discord_payload)
 
 if __name__ == "__main__":
     sys.exit(main())
