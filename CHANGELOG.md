@@ -1,4 +1,15 @@
 # Changelog
+## [v3.1.0-beta.5](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.5)
+
+### Featured Changes
+
+- [feature] Add KL110B support [773d8e4](https://github.com/ZeliardM/homebridge-kasa-python/commit/773d8e491d5d3608d3b3d8196b5d15c4cfe4c61f) (@ZeliardM)
+
+### Bug Fixes
+
+- [bug] Fix Discord Release Posting [9f0406a](https://github.com/ZeliardM/homebridge-kasa-python/commit/9f0406a13256c13fd15c30d7795d22b63a04eb9e) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.1.0-beta.4...v3.1.0-beta.5
 
 ## [v3.1.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.4) (2026-02-21)
 
