@@ -3,6 +3,7 @@
 
 ### Featured Changes
 
+- [enhancement] Consolidate Discord Notification [b6eb862](https://github.com/ZeliardM/homebridge-kasa-python/commit/b6eb862ed7ba8eb5e6034eef63c318d0365796eb) (@ZeliardM)
 - [feature] Add KL110B support [773d8e4](https://github.com/ZeliardM/homebridge-kasa-python/commit/773d8e491d5d3608d3b3d8196b5d15c4cfe4c61f) (@ZeliardM)
 
 ### Bug Fixes
