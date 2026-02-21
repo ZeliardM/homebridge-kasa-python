@@ -1,5 +1,5 @@
 # Changelog
-## [v3.1.0-beta.5](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.5)
+## [v3.1.0-beta.5](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.5) (2026-02-21)
 
 ### Featured Changes
 
@@ -10,6 +10,10 @@
 
 - [bug] Fix Discord Cloudflare Error [60c69e1](https://github.com/ZeliardM/homebridge-kasa-python/commit/60c69e1cf59737c04d291be8d92fe4d55de4b9c9) (@ZeliardM)
 - [bug] Fix Discord Release Posting [9f0406a](https://github.com/ZeliardM/homebridge-kasa-python/commit/9f0406a13256c13fd15c30d7795d22b63a04eb9e) (@ZeliardM)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.1.0-beta.5 [beta-release] (@github-actions)
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.1.0-beta.4...v3.1.0-beta.5
 
