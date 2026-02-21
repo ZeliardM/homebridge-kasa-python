@@ -19,7 +19,6 @@
 - [other] Fix and re-align version numbers [676ea8e](https://github.com/ZeliardM/homebridge-kasa-python/commit/676ea8e9aa7cd60a7856ae94e39048aa7d812a89) (@ZeliardM)
 - [other] Update dependencies and requirements [0406540](https://github.com/ZeliardM/homebridge-kasa-python/commit/04065409e73ef2536468a0d1006d47d6649174d6) (@ZeliardM)
 - [other] Add missing CHANGELOG.md entries [70c4b86](https://github.com/ZeliardM/homebridge-kasa-python/commit/70c4b86150f0f407df6f4f2212a33a8076871a22) (@ZeliardM)
-- Update CHANGELOG.md for beta release v3.1.0-beta.4 [beta-release] (@github-actions)
 - npm(deps-dev): bump nodemon from 3.1.11 to 3.1.13 [#250](https://github.com/ZeliardM/homebridge-kasa-python/pull/250) (@dependabot[bot])
 - npm(deps-dev): bump @types/node from 25.2.3 to 25.3.0 [#249](https://github.com/ZeliardM/homebridge-kasa-python/pull/249) (@dependabot[bot])
 - npm(deps-dev): bump @stylistic/eslint-plugin from 5.8.0 to 5.9.0 in the stylistic group [#248](https://github.com/ZeliardM/homebridge-kasa-python/pull/248) (@dependabot[bot])
