@@ -174,7 +174,10 @@ def _post_to_discord(webhook: str, payload: dict) -> int:
         req = urllib.request.Request(
             webhook,
             data=data,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "homebridge-kasa-python/discord-notify",
+            },
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=45) as resp:
