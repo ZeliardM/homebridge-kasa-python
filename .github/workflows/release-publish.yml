@@ -82,7 +82,7 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
-          python .github/scripts/release_manager.py
+          python3 .github/scripts/release_manager.py
 
   build_lint_test:
     name: Build, Lint, and Test

@@ -106,7 +106,7 @@ jobs:
           PULL_REQUEST_LABELS: ${{ steps.labels.outputs.path }}
         run: |
           set -euo pipefail
-          python .github/scripts/release_manager.py
+          python3 .github/scripts/release_manager.py
 
   manual-commit-push:
     name: Manual Commit Push
@@ -146,7 +146,7 @@ jobs:
           MODE: commit-push
         run: |
           set -euo pipefail
-          python .github/scripts/release_manager.py
+          python3 .github/scripts/release_manager.py
 
   fork-notice:
     name: Fork Notice

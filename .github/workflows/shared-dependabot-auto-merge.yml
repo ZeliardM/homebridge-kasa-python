@@ -167,7 +167,7 @@ jobs:
             fi
             echo "::notice::Running release_manager.py (MODE=${MODE})"
             set +e
-            python .github/scripts/release_manager.py
+            python3 .github/scripts/release_manager.py
             status=$?
             set -e
             if [ "$status" -eq 0 ]; then
