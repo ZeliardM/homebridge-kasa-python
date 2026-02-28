@@ -1,5 +1,5 @@
 # Changelog
-## [v3.1.0-beta.6](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.6)
+## [v3.1.0-beta.6](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.6) (2026-02-28)
 
 ### Bug Fixes
 
@@ -8,6 +8,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v3.1.0-beta.6 [beta-release] (@github-actions)
 - [other] Update dependencies [4e8b1ee](https://github.com/ZeliardM/homebridge-kasa-python/commit/4e8b1ee0e8329c4af7869b33b0acaf5fa5e22d6b) (@ZeliardM)
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.1.0-beta.5...v3.1.0-beta.6
