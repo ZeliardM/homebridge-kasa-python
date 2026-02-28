@@ -140,7 +140,6 @@ export default class DeviceManager {
       const response = await axios.post(`${this.apiUrl}/getSysInfo`, { host });
       const sysInfo: SysInfo = response.data.sys_info;
       if (!sysInfo) {
-        this.log.error(`No sys_info returned for host: ${host}`);
         return undefined;
       }
       this.updateDeviceAlias(sysInfo);

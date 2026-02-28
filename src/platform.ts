@@ -337,14 +337,17 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     const existingDevice = this.homekitDevicesById.get(device.sys_info.device_id);
     if (existingDevice) {
       if (!existingDevice.isUpdating) {
-        if (existingDevice.kasaDevice.offline && !device.offline) {
-          this.log.debug(`Device [${device.sys_info.device_id}] was offline and is now online. Updating and starting polling.`);
-          existingDevice.kasaDevice = device;
+        const comingOnline = existingDevice.kasaDevice.offline && !device.offline;
+        existingDevice.kasaDevice.sys_info = device.sys_info;
+        existingDevice.kasaDevice.feature_info = device.feature_info;
+        existingDevice.kasaDevice.last_seen = device.last_seen;
+        existingDevice.kasaDevice.offline = device.offline;
+        if (comingOnline) {
+          this.log.debug(`Device [${device.sys_info.device_id}] was offline and is now online. Updating and restarting polling.`);
           existingDevice.updateAfterPeriodicDiscovery(true);
           existingDevice.startPolling();
         } else {
           this.log.debug(`Updating existing HomeKit device [${device.sys_info.device_id}].`);
-          existingDevice.kasaDevice = device;
           existingDevice.updateAfterPeriodicDiscovery();
         }
       } else {

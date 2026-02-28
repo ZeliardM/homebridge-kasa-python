@@ -196,17 +196,12 @@ export default abstract class HomeKitDevice {
       this.log.warn('No host in sys_info');
       return;
     }
-    try {
-      const updatedSysInfo = await this.deviceManager.getSysInfo(host) as SysInfo;
-      if (!updatedSysInfo) {
-        this.log.warn('getSysInfo returned undefined');
-        return;
-      }
-      this.kasaDevice.sys_info = updatedSysInfo;
-      this.log.debug(`Updated sys_info: ${updatedSysInfo.alias ?? host}`);
-    } catch (error) {
-      this.log.error('Error updating sys_info', error);
+    const updatedSysInfo = await this.deviceManager.getSysInfo(host);
+    if (!updatedSysInfo) {
+      throw new Error(`No sys_info returned for ${host}. Marking offline and stopping polling.`);
     }
+    this.kasaDevice.sys_info = updatedSysInfo;
+    this.log.debug(`Updated sys_info: ${updatedSysInfo.alias ?? host}`);
   }
 
   protected async refreshAndUpdateCharacteristics(forceUpdate: boolean, skipFetch = false): Promise<void> {
@@ -372,12 +367,8 @@ export default abstract class HomeKitDevice {
         const postSetValue = descriptor.getCurrent(context);
 
         if (this.primaryService) {
-          this.updateValue(
-            this.primaryService,
-            this.primaryService.getCharacteristic(descriptor.type),
-            context.alias,
-            postSetValue as CharacteristicValue,
-          );
+          const char = this.primaryService.getCharacteristic(descriptor.type);
+          this.log.info(`Set ${this.platform.lsc(this.primaryService, char)} on ${context.alias} to ${postSetValue}`);
         }
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
