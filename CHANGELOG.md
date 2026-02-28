@@ -3,7 +3,12 @@
 
 ### Bug Fixes
 
+- [bug] Update device value handling [474bac1](https://github.com/ZeliardM/homebridge-kasa-python/commit/474bac15bf58449c28175c5260a3af9e6ee82f79) (@ZeliardM)
 - [bug] Update dependencies [0562b55](https://github.com/ZeliardM/homebridge-kasa-python/commit/0562b553c7d8809c4643926ba059a31ffbdee09a) (@ZeliardM)
+
+### Other Changes
+
+- [other] Update dependencies [4e8b1ee](https://github.com/ZeliardM/homebridge-kasa-python/commit/4e8b1ee0e8329c4af7869b33b0acaf5fa5e22d6b) (@ZeliardM)
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.1.0-beta.5...v3.1.0-beta.6
 
