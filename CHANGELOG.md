@@ -1,4 +1,16 @@
 # Changelog
+## [v3.1.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.7)
+
+### Bug Fixes
+
+- [bug] Fix offline rediscovery failure [f5807db](https://github.com/ZeliardM/homebridge-kasa-python/commit/f5807dbe71e77de953cc877a8ca638ec9dfbe0d6) (@ZeliardM)
+
+### Other Changes
+
+- [other] Update dependencies [eba5ea1](https://github.com/ZeliardM/homebridge-kasa-python/commit/eba5ea11b0cd3a6013defd079f69f5f1c63353f5) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.1.0-beta.6...v3.1.0-beta.7
+
 ## [v3.1.0-beta.6](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.6) (2026-02-28)
 
 ### Bug Fixes
