@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.1.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.7)
 
+### Featured Changes
+
+- [feature] Add LB130 Support [eef5a03](https://github.com/ZeliardM/homebridge-kasa-python/commit/eef5a03628c4c17240ba02adc27fee9cc87c1924) (@ZeliardM)
+
 ### Bug Fixes
 
 - [bug] Fix offline rediscovery failure [f5807db](https://github.com/ZeliardM/homebridge-kasa-python/commit/f5807dbe71e77de953cc877a8ca638ec9dfbe0d6) (@ZeliardM)
