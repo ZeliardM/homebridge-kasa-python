@@ -116,9 +116,9 @@ export const Switches = [
   'KS230', 'KS240', 'S210', 'S220', 'S500', 'S500D', 'S505', 'S505D', 'TS15',
 ];
 export const LightBulbs = [
-  'KL110', 'KL110B', 'KL120', 'KL125', 'KL130', 'KL135', 'KL50', 'KL60', 'LB100', 'LB110', 'L430C', 'L430P',
-  'L510', 'L510 Series', 'L530', 'L535', 'L630', 'KL400L5', 'KL400L10', 'KL420L5', 'KL430', 'L900',
-  'L920', 'L930',
+  'KL110', 'KL110B', 'KL120', 'KL125', 'KL130', 'KL135', 'KL50', 'KL60', 'LB100', 'LB110', 'LB130',
+  'L430C', 'L430P', 'L510', 'L510 Series', 'L530', 'L535', 'L630', 'KL400L5', 'KL400L10', 'KL420L5',
+  'KL430', 'L900', 'L920', 'L930',
 ];
 export const Unsupported = [
   'C100', 'C110', 'C210', 'C220', 'C225', 'C325WB', 'C520WS', 'C720', 'TC65', 'TC70', 'D100C', 'D130',
