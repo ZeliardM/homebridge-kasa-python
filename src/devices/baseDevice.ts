@@ -226,7 +226,11 @@ export default abstract class HomeKitDevice {
         await this.updateAllServicesAndCharacteristics(forceUpdate);
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
-        this.log.error('Error during poll update:', error);
+        if (error instanceof Error && error.message.startsWith('No sys_info returned for ')) {
+          this.log.warn(`Poll update failed: ${error.message}`);
+        } else {
+          this.log.error('Error during poll update:', error);
+        }
         this.kasaDevice.offline = true;
         await this.stopPolling();
       } finally {
@@ -250,14 +254,13 @@ export default abstract class HomeKitDevice {
     );
   }
 
-  public async stopPolling(): Promise<void> {
+  public async stopPolling(waitForCurrentUpdate = false): Promise<void> {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
       this.pollingInterval = undefined;
     }
-    if (this.isUpdating) {
+    if (waitForCurrentUpdate && this.isUpdating) {
       await new Promise<void>(resolve => {
-        this.isUpdating = false;
         this.updateEmitter.once('updateComplete', resolve);
       });
     }

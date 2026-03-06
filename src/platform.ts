@@ -101,7 +101,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       }
       this.log.debug('Stopping all polling tasks');
       for (const device of this.homekitDevicesById.values()) {
-        await device.stopPolling();
+        await device.stopPolling(true);
       }
       this.log.debug('Waiting for tasks to complete');
       try {
