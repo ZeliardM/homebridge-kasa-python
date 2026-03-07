@@ -113,7 +113,7 @@ export const PowerStrips = [
 ];
 export const Switches = [
   'ES20M', 'HS200', 'HS210', 'HS220', 'KP405', 'KS200', 'KS200M', 'KS205', 'KS220', 'KS220M', 'KS225',
-  'KS230', 'KS240', 'S210', 'S220', 'S500', 'S500D', 'S505', 'S505D', 'TS15',
+  'KS230', 'KS240', 'S210', 'S220', 'S500', 'S500D', 'S505', 'S505D', 'S515D', 'TS15',
 ];
 export const LightBulbs = [
   'KL110', 'KL110B', 'KL120', 'KL125', 'KL130', 'KL135', 'KL50', 'KL60', 'LB100', 'LB110', 'LB130', 'L430C',
