@@ -1,4 +1,17 @@
 # Changelog
+## [v3.1.0-beta.8](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.8)
+
+### Bug Fixes
+
+- [bug] Fix Issue Validation comments to display information needed [f9075e1](https://github.com/ZeliardM/homebridge-kasa-python/commit/f9075e16e23c1004b7961b0fec7d4c6ee4d0ca39) (@ZeliardM)
+
+### Other Changes
+
+- [other] Update dependencies [054c824](https://github.com/ZeliardM/homebridge-kasa-python/commit/054c8248afe99b2433aa276c7991364b11521daa) (@ZeliardM)
+- [other] Fix typo in CODEOWNERS [b106a51](https://github.com/ZeliardM/homebridge-kasa-python/commit/b106a5198fb4abb9f447ed9c334ae6a41f1568d0) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.1.0-beta.7...v3.1.0-beta.8
+
 ## [v3.1.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.7) (2026-03-06)
 
 ### Featured Changes
