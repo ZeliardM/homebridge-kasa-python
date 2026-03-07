@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.1.0-beta.8](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0-beta.8)
 
+### Featured Changes
+
+- [feature] Add S515D Support [893d9b2](https://github.com/ZeliardM/homebridge-kasa-python/commit/893d9b2f7fded8e22df005d7dab1637136ddaefb) (@ZeliardM)
+
 ### Bug Fixes
 
 - [bug] Fix Issue Validation comments to display information needed [f9075e1](https://github.com/ZeliardM/homebridge-kasa-python/commit/f9075e16e23c1004b7961b0fec7d4c6ee4d0ca39) (@ZeliardM)
