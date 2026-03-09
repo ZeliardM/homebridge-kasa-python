@@ -138,6 +138,7 @@ export interface CharacteristicDescriptor {
   name?: string;
   writable?: boolean;
   debouncePolls?: number;
+  syncHomeKitValueAfterSet?: boolean;
   getInitial(context: DescriptorContext): CharacteristicValue;
   getCurrent(context: DescriptorContext): CharacteristicValue;
   applySet?(value: CharacteristicValue, context: DescriptorContext): Promise<void>;

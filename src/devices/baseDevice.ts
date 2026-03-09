@@ -371,7 +371,16 @@ export default abstract class HomeKitDevice {
 
         if (this.primaryService) {
           const char = this.primaryService.getCharacteristic(descriptor.type);
-          this.log.info(`Set ${this.platform.lsc(this.primaryService, char)} on ${context.alias} to ${postSetValue}`);
+          if (descriptor.syncHomeKitValueAfterSet) {
+            this.updateValue(
+              this.primaryService,
+              char,
+              context.alias,
+              postSetValue as CharacteristicValue,
+            );
+          } else {
+            this.log.info(`Set ${this.platform.lsc(this.primaryService, char)} on ${context.alias} to ${postSetValue}`);
+          }
         }
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {

@@ -143,7 +143,7 @@ jobs:
           MODE: pr-merge
           PULL_REQUEST_LABELS: ${{ steps.labels.outputs.path }}
         run: |
-          set -uo pipefail
+          set -euo pipefail
           export PULL_REQUEST_BRANCH="$(gh pr view "$PULL_REQUEST_NUMBER" --json baseRefName --jq .baseRefName)"
           MAX_ATTEMPTS=${MAX_ATTEMPTS:-5}
           BASE_SLEEP=${BASE_SLEEP:-5}
@@ -151,31 +151,39 @@ jobs:
           attempt=1
           echo "::notice::Starting sync+release_manager loop (max ${MAX_ATTEMPTS} attempts)"
           while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+            attempt_status=0
             echo "::notice::Attempt ${attempt} of ${MAX_ATTEMPTS}"
             echo "::notice::Syncing local beta -> origin/beta"
             git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
             if ! git fetch origin beta --depth=1; then
               echo "::warning::git fetch failed on attempt ${attempt}"
-              FETCH_OK=false
+              attempt_status=1
+            elif ! git checkout -B beta origin/beta; then
+              echo "::warning::git checkout failed on attempt ${attempt}"
+              attempt_status=1
+            elif ! git reset --hard origin/beta; then
+              echo "::warning::git reset failed on attempt ${attempt}"
+              attempt_status=1
+            elif ! git clean -fd; then
+              echo "::warning::git clean failed on attempt ${attempt}"
+              attempt_status=1
+            fi
+
+            if [ "$attempt_status" -eq 0 ]; then
+              echo "::notice::Running release_manager.py (MODE=${MODE})"
+              if ! python3 .github/scripts/release_manager.py; then
+                echo "::warning::release_manager.py failed on attempt ${attempt}"
+                attempt_status=1
+              fi
             else
-              FETCH_OK=true
+              echo "::notice::Skipping release_manager.py because sync failed on attempt ${attempt}"
             fi
-            if [ "$FETCH_OK" = "true" ]; then
-              git checkout -B beta origin/beta || true
-              git reset --hard origin/beta || true
-              git clean -fd || true
-            fi
-            echo "::notice::Running release_manager.py (MODE=${MODE})"
-            set +e
-            python3 .github/scripts/release_manager.py
-            status=$?
-            set -e
-            if [ "$status" -eq 0 ]; then
+
+            if [ "$attempt_status" -eq 0 ]; then
               echo "::notice::release_manager.py succeeded on attempt ${attempt}"
               exit 0
-            else
-              echo "::warning::release_manager.py failed on attempt ${attempt}"
             fi
+
             if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
               sleep_sec=$(( BASE_SLEEP * attempt + (RANDOM % JITTER) ))
               echo "::notice::Retrying in ${sleep_sec}s (including jitter) ..."
