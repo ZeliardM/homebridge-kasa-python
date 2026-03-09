@@ -727,8 +727,9 @@ def _aggregate_betas_to_stable(
 ) -> tuple[str, list[str]]:
     aggregated, included_tags = _stable_category_entries(content, betas)
     if included_tags:
+        note_tags = list(reversed(included_tags))
         note = (
-            f"- Convert beta releases ({', '.join(included_tags)}) "
+            f"- Convert beta releases ({', '.join(note_tags)}) "
             f"to regular release {target.tag()} [beta-to-release] (@github-actions)"
         )
         aggregated.setdefault("Other Changes", []).append(note)
