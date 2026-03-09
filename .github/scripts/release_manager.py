@@ -415,6 +415,56 @@ def _collect_section_categories(block: str) -> dict[str, list[str]]:
             cats[current].append(line)
     return cats
 
+def _pr_sort_key(line: str) -> int:
+    m = re.search(r"#(\d+)\]", line)
+    if not m:
+        m = re.search(r"/pull/(\d+)", line)
+    return int(m.group(1)) if m else -1
+
+def _stable_category_entries(
+    content: str,
+    betas: list[Version],
+) -> tuple[dict[str, list[str]], list[str]]:
+    aggregated_commits: dict[str, list[str]] = {c: [] for c in CATEGORY_ORDER}
+    aggregated_prs: dict[str, list[str]] = {c: [] for c in CATEGORY_ORDER}
+    seen: set[str] = set()
+    included_tags: list[str] = []
+
+    for b in sorted(betas, key=_version_sort_key, reverse=True):
+        block = _find_section_block(content, b.tag())
+        if not block:
+            continue
+        included_tags.append(b.tag())
+        cats = _collect_section_categories(block)
+        for cat, entries in cats.items():
+            aggregated_commits.setdefault(cat, [])
+            aggregated_prs.setdefault(cat, [])
+            for e in entries:
+                if e.endswith("[beta-release] (@github-actions)"):
+                    continue
+                if e in seen:
+                    continue
+                seen.add(e)
+                if "/commit/" in e:
+                    aggregated_commits[cat].append(e)
+                else:
+                    aggregated_prs[cat].append(e)
+
+    aggregated: dict[str, list[str]] = {}
+    all_categories = list(dict.fromkeys(
+        CATEGORY_ORDER
+        + list(aggregated_commits.keys())
+        + list(aggregated_prs.keys())
+    ))
+    for cat in all_categories:
+        commits = aggregated_commits.get(cat, [])
+        prs = sorted(aggregated_prs.get(cat, []), key=_pr_sort_key, reverse=True)
+        combined = commits + prs
+        if combined:
+            aggregated[cat] = combined
+
+    return aggregated, included_tags
+
 def _build_release_body(version: Version, changelog: str, prev_stable: Version | None = None) -> str:
     block = _find_section_block(changelog, version.tag())
     cats = _collect_section_categories(block)
@@ -675,24 +725,7 @@ def _create_beta_entry(
 def _aggregate_betas_to_stable(
     content: str, target: Version, betas: list[Version]
 ) -> tuple[str, list[str]]:
-    aggregated: dict[str, list[str]] = {c: [] for c in CATEGORY_ORDER}
-    seen: set[str] = set()
-    included_tags: list[str] = []
-    for b in betas:
-        block = _find_section_block(content, b.tag())
-        if not block:
-            continue
-        included_tags.append(b.tag())
-        cats = _collect_section_categories(block)
-        for cat, entries in cats.items():
-            if cat not in aggregated:
-                aggregated[cat] = []
-            for e in entries:
-                if e.endswith("[beta-release] (@github-actions)"):
-                    continue
-                if e not in seen:
-                    aggregated[cat].append(e)
-                    seen.add(e)
+    aggregated, included_tags = _stable_category_entries(content, betas)
     if included_tags:
         note = (
             f"- Convert beta releases ({', '.join(included_tags)}) "
