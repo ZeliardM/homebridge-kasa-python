@@ -16,6 +16,8 @@
 
 ### Bug Fixes
 
+- [bug] Fix convert stable release comment ordering [f80d452](https://github.com/ZeliardM/homebridge-kasa-python/commit/f80d452d00ba0dd5d6bb13197625d46705099488) (@ZeliardM)
+- [bug] Fix stable release aggregation ordering [7cb4c2d](https://github.com/ZeliardM/homebridge-kasa-python/commit/7cb4c2dcd1d9afb86b20b2f1fd6a6b4c32663ded) (@ZeliardM)
 - [bug] Fix Issue Validation comments to display information needed [f9075e1](https://github.com/ZeliardM/homebridge-kasa-python/commit/f9075e16e23c1004b7961b0fec7d4c6ee4d0ca39) (@ZeliardM)
 - [bug] Fix offline rediscovery failure [f5807db](https://github.com/ZeliardM/homebridge-kasa-python/commit/f5807dbe71e77de953cc877a8ca638ec9dfbe0d6) (@ZeliardM)
 - [bug] Update device value handling [474bac1](https://github.com/ZeliardM/homebridge-kasa-python/commit/474bac15bf58449c28175c5260a3af9e6ee82f79) (@ZeliardM)
