@@ -52,10 +52,6 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
     return list;
   }
 
-  protected async updateAllServicesAndCharacteristics(forceUpdate: boolean): Promise<void> {
-    await super.updateAllServicesAndCharacteristics(forceUpdate);
-  }
-
   public identify(): void {
     this.log.info('identify');
   }

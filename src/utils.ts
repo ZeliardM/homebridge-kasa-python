@@ -6,52 +6,11 @@ import type {
 } from 'homebridge';
 
 import axios from 'axios';
+import fs from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { ChildProcessWithoutNullStreams, spawn, SpawnOptionsWithoutStdio } from 'node:child_process';
-import { promises as fs } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-
-export async function checkForUpgrade(
-  packageConfig: { name: string; version: string; engines: { node: string } },
-  storagePath: string,
-  logger: Logging,
-): Promise<boolean> {
-  const versionDir = path.join(storagePath, 'kasa-python');
-  const versionFilePath = path.join(versionDir, 'kasa-python-version.json');
-  let storedVersion = '';
-
-  logger.debug('Checking for upgrade at path:', versionFilePath);
-
-  try {
-    await fs.access(versionFilePath);
-    const versionData = await fs.readFile(versionFilePath, 'utf8');
-    storedVersion = JSON.parse(versionData).version;
-    logger.debug('Stored version:', storedVersion);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      logger.info('Version file does not exist, treating as new install or version change.');
-    } else {
-      logger.error('Error reading version file:', error);
-    }
-  }
-
-  if (storedVersion !== packageConfig.version) {
-    try {
-      logger.debug('Updating version file to new version:', packageConfig.version);
-      await fs.mkdir(versionDir, { recursive: true });
-      await fs.writeFile(versionFilePath, JSON.stringify({ version: packageConfig.version }), 'utf8');
-      logger.info(`Version file updated to version ${packageConfig.version}`);
-    } catch (error) {
-      logger.error('Error writing version file:', error);
-    }
-    return true;
-  }
-
-  logger.debug('No upgrade needed, version is up to date.');
-  return false;
-}
 
 export function deferAndCombine<T, U>(
   fn: ((requestCount: number) => Promise<T>) | (() => Promise<T>),
@@ -255,7 +214,7 @@ export async function runCommand(
 
   if (outputFile) {
     logger.debug(`Writing command output to file: ${outputFile}`);
-    await writeFile(outputFile, stdout);
+    await fs.writeFile(outputFile, stdout);
   }
 
   logger.debug('Command finished.');

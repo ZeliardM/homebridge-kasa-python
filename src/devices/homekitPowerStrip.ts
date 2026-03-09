@@ -26,12 +26,10 @@ export default class HomeKitDevicePowerStrip extends HomeKitParentDevice {
   }
 
   protected getChildServiceType(_child: ChildDevice) {
-    void _child;
     return this.platform.Service.Outlet;
   }
 
   protected buildChildDescriptors(_child: ChildDevice): CharacteristicDescriptor[] {
-    void _child;
     const C = this.platform.Characteristic;
     const energyChars = this.platform.energyCharacteristics;
 

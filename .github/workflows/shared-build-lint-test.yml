@@ -23,6 +23,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.ref }}
 
       - name: Setup Node ${{ matrix.node-version }}
         id: setup-node
@@ -37,13 +38,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-
-      - name: Update npm
-        id: update-npm
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install -g npm@latest
 
       - name: Install Python Dependencies
         id: install-python-deps

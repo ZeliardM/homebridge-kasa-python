@@ -107,6 +107,7 @@ export function buildOutletInUseDescriptor(
     type: C.OutletInUse,
     name: 'OutletInUse',
     writable: false,
+    debouncePolls: 2,
     getInitial: (context) => (hasEnergy ? energy(context) : state(context)),
     getCurrent: (context) => (hasEnergy ? energy(context) : state(context)),
   };
@@ -160,6 +161,7 @@ export function buildFanRotationDescriptor(
     type: C.RotationSpeed,
     name: 'RotationSpeed',
     writable: true,
+    syncHomeKitValueAfterSet: true,
     getInitial: context => (context.child ? context.child.fan_speed_level : context.device.fan_speed_level) ?? 0,
     getCurrent: context => (context.child ? context.child.fan_speed_level : context.device.fan_speed_level) ?? 0,
     applySet: async (value, context) => {

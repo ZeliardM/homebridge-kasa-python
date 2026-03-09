@@ -15,9 +15,11 @@ export default function accessoryInformation(
     const modelCharacteristic = infoService.getCharacteristic(Characteristic.Model);
     const serialCharacteristic = infoService.getCharacteristic(Characteristic.SerialNumber);
     const firmwareCharacteristic = infoService.getCharacteristic(Characteristic.FirmwareRevision);
+    const currentName = nameCharacteristic.value as string ?? '';
+    const deviceName = homekitDevice.name ?? '';
 
-    if ((nameCharacteristic.value as string ?? '') !== (homekitDevice.name ?? '')) {
-      infoService.setCharacteristic(Characteristic.Name, homekitDevice.name as CharacteristicValue);
+    if (!currentName) {
+      infoService.setCharacteristic(Characteristic.Name, deviceName as CharacteristicValue);
     }
     if ((manufacturerCharacteristic.value as string ?? '') !== (homekitDevice.manufacturer ?? '')) {
       infoService.setCharacteristic(Characteristic.Manufacturer, homekitDevice.manufacturer as CharacteristicValue);

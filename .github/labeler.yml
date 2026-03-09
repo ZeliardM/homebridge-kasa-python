@@ -42,11 +42,3 @@ bug:
 breaking-change:
   - head-branch:
     - '.*[bB]reaking.*'
-
-beta:
-  - base-branch:
-    - 'beta'
-
-latest:
-  - base-branch:
-    - 'latest'

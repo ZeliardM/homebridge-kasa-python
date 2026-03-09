@@ -8,22 +8,12 @@ updates:
       time: "15:00"
       timezone: "America/New_York"
     target-branch: "beta"
-    labels: ["dependency"]
     assignees: ["ZeliardM"]
     versioning-strategy: "increase"
     commit-message:
       prefix: "npm"
-      prefix-development: "npm"
+      prefix-development: "npm-dev"
       include: "scope"
-    groups:
-      typescript-eslint:
-        patterns: ["@typescript-eslint/*", "typescript", "ts-essentials"]
-      eslint:
-        patterns: ["@eslint/js", "eslint"]
-      stylistic:
-        patterns: ["@stylistic/eslint-plugin"]
-      md5:
-        patterns: ["@types/md5", "md5"]
 
   - package-ecosystem: "pip"
     directory: "/"
@@ -33,20 +23,12 @@ updates:
       time: "15:00"
       timezone: "America/New_York"
     target-branch: "beta"
-    labels: ["dependency"]
     assignees: ["ZeliardM"]
     versioning-strategy: "increase"
     commit-message:
       prefix: "pip"
-      prefix-development: "pip"
+      prefix-development: "pip-dev"
       include: "scope"
-    groups:
-      pydantic:
-        patterns: ["pydantic", "pydantic_core", "pydantic-core"]
-      crypt:
-        patterns: ["cryptography", "chacha20poly1305-reuseable"]
-      aio:
-        patterns: ["aiosignal", "aiohttp"]
 
   - package-ecosystem: "github-actions"
     directory: "/"

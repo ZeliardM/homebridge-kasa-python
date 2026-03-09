@@ -55,9 +55,18 @@ CLASSIFICATION = {
 }
 
 def _section(body: str, title: str) -> str:
-    pat = rf"(?is)^###\s*{re.escape(title)}\s*$\n(.*?)(?=^###\s|\Z)"
-    mm = re.search(pat, body, re.MULTILINE)
-    return (mm.group(1).strip() if mm else "").strip()
+    lines = body.splitlines()
+    in_section = False
+    collected: list[str] = []
+    for line in lines:
+        if re.match(rf"^###\s*{re.escape(title)}\s*$", line, re.IGNORECASE):
+            in_section = True
+            continue
+        if in_section:
+            if re.match(r"^###\s", line):
+                break
+            collected.append(line)
+    return "\n".join(collected).strip()
 
 def _guess_kind(body: str) -> str:
     m = re.search(r"(?im)^###\s*Type\s*$", body)
@@ -174,6 +183,31 @@ def _handle_validate(context: Context) -> dict:
             )
     if "needs-info" in labels:
         ok = False
+        canonical_label = _first_existing_classification(labels)
+        guessed = _guess_kind(body)
+        canonical = MAP.get(guessed, "") or canonical_label
+        if canonical == "bug":
+            env = _section(body, "Environment")
+            details = _section(body, "Details")
+            if len(env) < 15:
+                messages.append("Environment section is too short or missing (expected >=15 chars).")
+            if not re.search(r"\b(step|reproduce|expected|actual)\b", details, re.IGNORECASE):
+                messages.append("Details should include reproduction steps and expected/actual behaviour.")
+        elif canonical == "breaking-change":
+            migration = _section(body, "Migration Strategy")
+            details = _section(body, "Details")
+            if len(migration) < 30:
+                messages.append("Migration Strategy is too short or missing (expected >=30 chars).")
+            if not re.search(r"(impact|rationale|break)", details, re.IGNORECASE):
+                messages.append("Details should describe impact or rationale for the breaking change.")
+        elif canonical in ("enhancement", "question", "docs", "dependency", "internal", "workflow"):
+            if not body or len(body.strip()) < 20:
+                messages.append("Issue body is too short for this type; please provide more detail and examples.")
+        else:
+            if not body or len(body.strip()) < 20:
+                messages.append("Please provide a more detailed description, including steps to reproduce or expected behaviour.")
+            else:
+                messages.append("Please clarify the issue type and expand the body where relevant (Environment, Details, Migration Strategy, etc.).")
         messages.append(
             "Issue is still marked as needs-info. Please provide the requested information."
         )

@@ -14,15 +14,14 @@ import { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { fileURLToPath } from 'node:url';
 
-import create from './devices/create.js';
-import DeviceManager from './devices/deviceManager.js';
 import HomeKitDevice from './devices/baseDevice.js';
+import create from './devices/create.js';
+import DeviceManager, { deviceEventEmitter } from './devices/deviceManager.js';
 import PythonChecker from './python/pythonChecker.js';
-import { parseConfig } from './config.js';
+import { ConfigParseError, loadPlatformConfigFromStorage } from './config.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { TaskQueue } from './taskQueue.js';
 import {
-  checkForUpgrade,
   deferAndCombine,
   getAvailablePort,
   isObjectLike,
@@ -33,7 +32,6 @@ import {
   satisfiesVersion,
   waitForServer,
 } from './utils.js';
-import { deviceEventEmitter } from './devices/deviceManager.js';
 import { createEnergyCharacteristics } from './devices/energyCharacteristics.js';
 import type { KasaPythonConfig } from './config.js';
 import type { KasaDevice } from './devices/deviceTypes.js';
@@ -51,22 +49,22 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public readonly Characteristic: typeof Characteristic;
   public readonly configuredAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
-  public readonly energyCharacteristics: EnergyCharacteristics | undefined;
   public readonly offlineAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
   public readonly Service: typeof Service;
   public readonly storagePath: string;
-  public venvPythonExecutable: string = '';
-  public config: KasaPythonConfig;
+  public config!: KasaPythonConfig;
   public deviceManager: DeviceManager | undefined;
+  public energyCharacteristics: EnergyCharacteristics | undefined;
   public isShuttingDown: boolean = false;
   public periodicDeviceDiscovering: boolean = false;
   public periodicDeviceDiscoveryEmitter: EventEmitter;
   public port: number = 0;
   public taskQueue: TaskQueue;
+  public venvPythonExecutable: string = '';
   private readonly homekitDevicesById: Map<string, HomeKitDevice> = new Map();
+  private readonly pendingAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
   private deviceDiscoveredHandler?: (device: KasaDevice) => Promise<void>;
   private hideHomeKitMatter: boolean = true;
-  private isUpgrade: boolean = false;
   private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
   private platformInitialization: Promise<void>;
 
@@ -74,10 +72,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.Service = this.api.hap.Service;
     this.Characteristic = this.api.hap.Characteristic;
     this.storagePath = this.api.user.storagePath();
-    this.config = parseConfig(config);
-    if (this.config.enableEnergyMonitoring) {
-      this.energyCharacteristics = createEnergyCharacteristics(this.api.hap);
-    }
     this.periodicDeviceDiscoveryEmitter = new EventEmitter();
     this.taskQueue = new TaskQueue(this.log, () => this.isShuttingDown);
 
@@ -104,7 +98,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       }
       this.log.debug('Stopping all polling tasks');
       for (const device of this.homekitDevicesById.values()) {
-        await device.stopPolling();
+        await device.stopPolling(true);
       }
       this.log.debug('Waiting for tasks to complete');
       try {
@@ -141,10 +135,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     packageConfig = await loadPackageConfig(this.log);
     this.logInitializationDetails();
     await this.verifyEnvironment();
-    this.isUpgrade = await checkForUpgrade(packageConfig, this.storagePath, this.log);
-    if (this.isUpgrade) {
-      this.log.info('Plugin version changed, virtual python environment will be recreated.');
-    }
   }
 
   private logInitializationDetails(): void {
@@ -169,16 +159,16 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       if (
         this.api.versionGreaterOrEqual &&
         !(
-          this.api.versionGreaterOrEqual('1.11.0') ||
+          this.api.versionGreaterOrEqual('1.8.0') ||
           this.api.versionGreaterOrEqual('2.0.0')
         )
       ) {
         throw new Error(
-          `homebridge-kasa-python requires Homebridge ^1.11.0 || ^2.0.0-beta.0. Currently running: ${this.api.serverVersion}`,
+          `homebridge-kasa-python requires Homebridge ^1.8.0 || ^2.0.0-beta.0. Currently running: ${this.api.serverVersion}`,
         );
       } else {
         this.log.debug(
-          `Homebridge version ${this.api.serverVersion} satisfies the requirement ^1.11.0 || ^2.0.0-beta.0`,
+          `Homebridge version ${this.api.serverVersion} satisfies the requirement ^1.8.0 || ^2.0.0-beta.0`,
         );
       }
     } catch (error) {
@@ -191,8 +181,15 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.log.debug('Finished launching');
 
     try {
+      this.log.debug('Loading configuration');
+      this.config = await loadPlatformConfigFromStorage(this.storagePath);
+      this.processPendingAccessories();
+      this.energyCharacteristics = this.config.enableEnergyMonitoring
+        ? createEnergyCharacteristics(this.api.hap)
+        : undefined;
+
       this.log.debug('Checking Python environment');
-      await this.checkPython(this.isUpgrade);
+      await this.checkPython();
 
       this.log.debug('Getting available port');
       this.port = await getAvailablePort();
@@ -212,6 +209,10 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       const discoveredDeviceIds = new Set<string>();
       this.setupPeriodicDiscovery(discoveredDeviceIds);
     } catch (error) {
+      if (error instanceof ConfigParseError) {
+        this.log.error(`Invalid configuration. Startup halted until the config is fixed. ${error.message}`);
+        return;
+      }
       this.log.error('An error occurred during startup:', error);
     }
   }
@@ -316,7 +317,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     const timeSinceLastSeen = now.getTime() - new Date(accessory.context.lastSeen || 0).getTime();
     const offlineInterval = this.config.discoveryOptions.offlineInterval;
     if (timeSinceLastSeen > offlineInterval) {
-      this.log.info(`Accessory [${accessory.displayName}] is offline and outside the offline interval. Removing.`);
+      this.log.debug(`Accessory [${accessory.displayName}] is offline and outside the offline interval. Removing.`);
       this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       this.configuredAccessories.delete(uuid);
     } else if (!accessory.context.offline) {
@@ -344,14 +345,17 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     const existingDevice = this.homekitDevicesById.get(device.sys_info.device_id);
     if (existingDevice) {
       if (!existingDevice.isUpdating) {
-        if (existingDevice.kasaDevice.offline && !device.offline) {
-          this.log.debug(`Device [${device.sys_info.device_id}] was offline and is now online. Updating and starting polling.`);
-          existingDevice.kasaDevice = device;
-          existingDevice.updateAfterPeriodicDiscovery();
+        const comingOnline = existingDevice.kasaDevice.offline && !device.offline;
+        existingDevice.kasaDevice.sys_info = device.sys_info;
+        existingDevice.kasaDevice.feature_info = device.feature_info;
+        existingDevice.kasaDevice.last_seen = device.last_seen;
+        existingDevice.kasaDevice.offline = device.offline;
+        if (comingOnline) {
+          this.log.debug(`Device [${device.sys_info.device_id}] was offline and is now online. Updating and restarting polling.`);
+          existingDevice.updateAfterPeriodicDiscovery(true);
           existingDevice.startPolling();
         } else {
           this.log.debug(`Updating existing HomeKit device [${device.sys_info.device_id}].`);
-          existingDevice.kasaDevice = device;
           existingDevice.updateAfterPeriodicDiscovery();
         }
       } else {
@@ -365,11 +369,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private async addNewDevice(device: KasaDevice): Promise<void> {
     this.log.debug(`New device [${device.sys_info.device_id}] found, adding to HomeKit.`);
     await this.foundDevice(device);
-    const listenerCountBefore = this.periodicDeviceDiscoveryEmitter.listenerCount('periodicDeviceDiscoveryComplete');
-    this.log.debug(`Emitter listener count before foundDevice: ${listenerCountBefore}`);
-    this.periodicDeviceDiscoveryEmitter.setMaxListeners(this.periodicDeviceDiscoveryEmitter.getMaxListeners() + 10);
-    const listenerCountAfter = this.periodicDeviceDiscoveryEmitter.listenerCount('periodicDeviceDiscoveryComplete');
-    this.log.debug(`Emitter listener count after foundDevice: ${listenerCountAfter}`);
   }
 
   private updateAccessoryStatus(
@@ -377,15 +376,20 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     lastSeen: Date,
     offline: boolean,
   ): void {
+    const offlineStatusChanged = accessory.context.offline !== offline;
+
     accessory.context.lastSeen = lastSeen;
     accessory.context.offline = offline;
-    this.api.updatePlatformAccessories([accessory]);
+
+    if (offlineStatusChanged) {
+      this.api.updatePlatformAccessories([accessory]);
+    }
   }
 
-  private async checkPython(isUpgrade: boolean): Promise<void> {
+  private async checkPython(): Promise<void> {
     try {
-      this.log.debug(`Running PythonChecker with isUpgrade: ${isUpgrade}`);
-      await new PythonChecker(this).allInOne(isUpgrade);
+      this.log.debug('Running PythonChecker');
+      await new PythonChecker(this).allInOne();
     } catch (error) {
       this.log.error('Error checking python environment:', error);
       throw error;
@@ -468,16 +472,22 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     if (!this.configuredAccessories.has(accessory.UUID)) {
       this.log.debug(`Platform Accessory ${accessory.displayName} is not in configuredAccessories, adding it.`);
       this.configuredAccessories.set(accessory.UUID, accessory);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      this.log.debug(`Platform Accessory ${accessory.displayName} registered with Homebridge.`);
     } else {
-      this.log.debug(`Platform Accessory ${accessory.displayName} is already in configuredAccessories.`);
+      this.log.debug(`Platform Accessory ${accessory.displayName} is already in configuredAccessories, skipping registration.`);
     }
-
-    this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-    this.log.debug(`Platform Accessory ${accessory.displayName} registered with Homebridge.`);
   }
 
-  configureAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
-    this.log.debug(`Configuring Platform Accessory: [${accessory.displayName}] UUID: ${accessory.UUID}`);
+  private processPendingAccessories(): void {
+    for (const accessory of this.pendingAccessories.values()) {
+      this.restoreAccessory(accessory);
+    }
+    this.pendingAccessories.clear();
+  }
+
+  private restoreAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
+    this.log.debug(`Restoring Platform Accessory: [${accessory.displayName}] UUID: ${accessory.UUID}`);
 
     if (!accessory.context.lastSeen && !accessory.context.offline) {
       this.log.debug(`Setting initial lastSeen and offline status for Platform Accessory: [${accessory.displayName}]`);
@@ -494,7 +504,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         `offline interval is ${offlineInterval}ms, offline status: ${accessory.context.offline}`);
 
       if (timeSinceLastSeen > offlineInterval && accessory.context.offline === true) {
-        this.log.info(
+        this.log.debug(
           `Platform Accessory [${accessory.displayName}] is offline and outside the offline interval, ` +
           'moving to offlineAccessories',
         );
@@ -523,6 +533,11 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
   }
 
+  configureAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
+    this.log.debug(`Configuring Platform Accessory: [${accessory.displayName}] UUID: ${accessory.UUID}`);
+    this.pendingAccessories.set(accessory.UUID, accessory);
+  }
+
   private async foundDevice(device: KasaDevice): Promise<void> {
     const { sys_info: { alias: deviceAlias, device_id: deviceId, device_type: deviceType, host: deviceHost } } = device;
 
@@ -532,7 +547,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
 
     if (this.homekitDevicesById.has(deviceId)) {
-      this.log.info(`HomeKit device already added: [${deviceAlias}] ${deviceType} [${deviceId}]`);
+      this.log.debug(`HomeKit device already added: [${deviceAlias}] ${deviceType} [${deviceId}]`);
       return;
     }
 

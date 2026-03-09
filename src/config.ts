@@ -1,3 +1,9 @@
+import type { PlatformConfig } from 'homebridge';
+
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+import { PLATFORM_NAME } from './settings.js';
 import { isObjectLike } from './utils.js';
 import type { ConfigDevice } from './devices/deviceTypes.js';
 
@@ -104,20 +110,84 @@ export const defaultConfig: KasaPythonConfig = {
   },
 };
 
-function convertManualDevices(manualDevices: (string | ConfigDevice)[] | undefined | null): ConfigDevice[] {
+const MISSING_ALIAS_PLACEHOLDER = 'Will Be Filled By Plug-In Automatically';
+
+type LegacyConfigDevice = ConfigDevice & { breakoutChildDevices?: boolean };
+type HomebridgeConfigFile = { platforms?: PlatformConfig[] } & Record<string, unknown>;
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+export function migrateManualDevices(
+  manualDevices: (string | ConfigDevice)[] | undefined | null,
+): { manualDevices: ConfigDevice[]; changed: boolean } {
   if (!manualDevices || manualDevices.length === 0) {
-    return [];
+    return { manualDevices: [], changed: false };
   }
 
-  return manualDevices.map(device => {
+  let changed = false;
+  const migratedDevices = manualDevices.map(device => {
     if (typeof device === 'string') {
-      return { host: device, alias: 'Will Be Filled By Plug-In Automatically' };
-    } else if ('breakoutChildDevices' in device) {
-      delete device.breakoutChildDevices;
-    } else if ('host' in device && !('alias' in device)) {
-      (device as ConfigDevice).alias = 'Will Be Filled By Plug-In Automatically';
+      changed = true;
+      return { host: device, alias: MISSING_ALIAS_PLACEHOLDER };
     }
-    return device;
+
+    const migratedDevice = device as LegacyConfigDevice;
+    const alias = isNonEmptyString(migratedDevice.alias) ? migratedDevice.alias : MISSING_ALIAS_PLACEHOLDER;
+    if (alias !== migratedDevice.alias || 'breakoutChildDevices' in migratedDevice) {
+      changed = true;
+    }
+
+    return {
+      host: migratedDevice.host,
+      alias,
+    };
+  });
+
+  return { manualDevices: migratedDevices, changed };
+}
+
+function validateManualDevices(
+  manualDevices: unknown,
+  errors: string[],
+): void {
+  if (manualDevices === undefined) {
+    return;
+  }
+
+  if (!Array.isArray(manualDevices)) {
+    errors.push('`manualDevices` should be an array.');
+    return;
+  }
+
+  manualDevices.forEach((entry, index) => {
+    if (typeof entry === 'string') {
+      if (!isNonEmptyString(entry)) {
+        errors.push(`\`manualDevices[${index}]\` should not be an empty string.`);
+      } else {
+        errors.push(`\`manualDevices[${index}]\` should be an object with \`host\` and \`alias\`.`);
+      }
+      return;
+    }
+
+    if (!isObjectLike(entry)) {
+      errors.push(`\`manualDevices[${index}]\` should be an object.`);
+      return;
+    }
+
+    const device = entry as Record<string, unknown>;
+    if (!isNonEmptyString(device.host)) {
+      errors.push(`\`manualDevices[${index}].host\` should be a non-empty string.`);
+    }
+
+    if (!isNonEmptyString(device.alias)) {
+      errors.push(`\`manualDevices[${index}].alias\` should be a non-empty string.`);
+    }
+
+    if ('breakoutChildDevices' in device) {
+      errors.push(`\`manualDevices[${index}]\` uses unsupported legacy field \`breakoutChildDevices\`.`);
+    }
   });
 }
 
@@ -138,9 +208,7 @@ function validateConfig(config: Record<string, unknown>): string[] {
     errors.push('`additionalBroadcasts` should be an array of strings.');
   }
 
-  if (config.manualDevices !== undefined && !Array.isArray(config.manualDevices)) {
-    errors.push('`manualDevices` should be an array.');
-  }
+  validateManualDevices(config.manualDevices, errors);
 
   if (config.excludeMacAddresses !== undefined && !Array.isArray(config.excludeMacAddresses)) {
     errors.push('`excludeMacAddresses` should be an array of strings.');
@@ -180,6 +248,8 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
   }
 
   const parsedConfig = { ...defaultConfig, ...config } as KasaPythonConfigInput;
+  const strictManualDevices = (parsedConfig.manualDevices as ConfigDevice[] | undefined)
+    ?? defaultConfig.discoveryOptions.manualDevices;
 
   return {
     name: parsedConfig.name ?? defaultConfig.name,
@@ -195,10 +265,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
       discoveryPollingInterval: (parsedConfig.discoveryPollingInterval ?? defaultConfig.discoveryOptions.discoveryPollingInterval) * 1000,
       offlineInterval: (parsedConfig.offlineInterval ?? defaultConfig.discoveryOptions.offlineInterval) * 24 * 60 * 60 * 1000,
       additionalBroadcasts: parsedConfig.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
-      manualDevices:
-        parsedConfig.manualDevices
-          ? convertManualDevices(parsedConfig.manualDevices)
-          : defaultConfig.discoveryOptions.manualDevices,
+      manualDevices: strictManualDevices,
       excludeMacAddresses: parsedConfig.excludeMacAddresses ?? defaultConfig.discoveryOptions.excludeMacAddresses,
       includeMacAddresses: parsedConfig.includeMacAddresses ?? defaultConfig.discoveryOptions.includeMacAddresses,
     },
@@ -209,4 +276,85 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
       logEnergyMonitoring: parsedConfig.logEnergyMonitoring ?? defaultConfig.advancedOptions.logEnergyMonitoring,
     },
   };
+}
+
+function getConfigPath(storagePath: string): string {
+  return path.join(storagePath, 'config.json');
+}
+
+async function readHomebridgeConfig(storagePath: string): Promise<HomebridgeConfigFile> {
+  const data = await fs.readFile(getConfigPath(storagePath), 'utf8');
+  return JSON.parse(data) as HomebridgeConfigFile;
+}
+
+async function writeHomebridgeConfig(storagePath: string, fileConfig: HomebridgeConfigFile): Promise<void> {
+  await fs.writeFile(getConfigPath(storagePath), JSON.stringify(fileConfig, null, 2), 'utf8');
+}
+
+function getPlatformSection(fileConfig: HomebridgeConfigFile, platformName: string): PlatformConfig | undefined {
+  return fileConfig.platforms?.find(platformConfig => platformConfig.platform === platformName);
+}
+
+export async function loadPlatformConfigFromStorage(storagePath: string): Promise<KasaPythonConfig> {
+  const fileConfig = await readHomebridgeConfig(storagePath);
+  const platformSection = getPlatformSection(fileConfig, PLATFORM_NAME);
+  if (!platformSection) {
+    throw new ConfigParseError('KasaPython configuration missing in config file.');
+  }
+
+  const { manualDevices, changed } = migrateManualDevices(platformSection.manualDevices as (string | ConfigDevice)[] | undefined);
+  if (platformSection.manualDevices !== undefined) {
+    platformSection.manualDevices = manualDevices;
+  }
+
+  const parsedConfig = parseConfig(platformSection);
+  if (changed) {
+    await writeHomebridgeConfig(storagePath, fileConfig);
+  }
+
+  return parsedConfig;
+}
+
+export async function persistDiscoveredAliases(
+  storagePath: string,
+  aliasesByHost: Map<string, string>,
+): Promise<KasaPythonConfig | undefined> {
+  if (aliasesByHost.size === 0) {
+    return undefined;
+  }
+
+  const fileConfig = await readHomebridgeConfig(storagePath);
+  const platformSection = getPlatformSection(fileConfig, PLATFORM_NAME);
+  if (!platformSection) {
+    throw new ConfigParseError('KasaPython configuration missing in config file.');
+  }
+
+  const manualDevices = platformSection.manualDevices;
+  if (!Array.isArray(manualDevices) || manualDevices.length === 0) {
+    return undefined;
+  }
+
+  let changed = false;
+  for (const entry of manualDevices) {
+    if (!isObjectLike(entry)) {
+      continue;
+    }
+
+    const device = entry as Record<string, unknown>;
+    const host = typeof device.host === 'string' ? device.host : undefined;
+    const nextAlias = host ? aliasesByHost.get(host) : undefined;
+    if (!nextAlias || device.alias === nextAlias) {
+      continue;
+    }
+
+    device.alias = nextAlias;
+    changed = true;
+  }
+
+  if (!changed) {
+    return undefined;
+  }
+
+  await writeHomebridgeConfig(storagePath, fileConfig);
+  return parseConfig(platformSection);
 }

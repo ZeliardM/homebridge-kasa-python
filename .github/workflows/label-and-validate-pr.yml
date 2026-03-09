@@ -188,10 +188,6 @@ jobs:
           ref: ${{ env.PULL_REQUEST_BASE_SHA }}
           fetch-depth: 0
 
-      - name: Ensure jq
-        id: ensure-jq
-        uses: ./.github/actions/ensure-jq
-
       - name: Validate Pull Request
         id: validate-pr
         shell: bash

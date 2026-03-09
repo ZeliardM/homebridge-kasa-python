@@ -1,47 +1,49 @@
-import type { CharacteristicValue, Logger, PlatformConfig } from 'homebridge';
+import type { CharacteristicValue, Logger } from 'homebridge';
 
 import axios from 'axios';
-import path from 'node:path';
 import { EventSource } from 'eventsource';
 import { EventEmitter } from 'node:events';
-import { promises as fs } from 'node:fs';
 
 import KasaPythonPlatform from '../platform.js';
-import { parseConfig } from '../config.js';
-import type { ConfigDevice, FeatureInfo, HSV, KasaDevice, SysInfo } from './deviceTypes.js';
+import { persistDiscoveredAliases } from '../config.js';
+import type { FeatureInfo, HSV, KasaDevice, SysInfo } from './deviceTypes.js';
 
 export const deviceEventEmitter = new EventEmitter();
 
 type ControlValue = CharacteristicValue | HSV;
 
 export default class DeviceManager {
-  private log: Logger;
-  private apiUrl: string;
-  private username: string;
-  private password: string;
-  private additionalBroadcasts: string[];
-  private manualDeviceHosts: string[];
-  private excludeMacs: string[];
-  private includeMacs: string[];
+  private log!: Logger;
+  private apiUrl!: string;
+  private username!: string;
+  private password!: string;
+  private additionalBroadcasts!: string[];
+  private manualDeviceHosts!: string[];
+  private excludeMacs!: string[];
+  private includeMacs!: string[];
 
   constructor(private platform: KasaPythonPlatform) {
-    this.log = platform.log;
-    this.username = platform.config.username;
-    this.password = platform.config.password;
-    this.apiUrl = `http://127.0.0.1:${platform.port}`;
-    this.additionalBroadcasts = platform.config.discoveryOptions.additionalBroadcasts;
-    this.manualDeviceHosts = platform.config.discoveryOptions.manualDevices.map(d => d.host);
-    this.excludeMacs = platform.config.discoveryOptions.excludeMacAddresses;
-    this.includeMacs = platform.config.discoveryOptions.includeMacAddresses;
+    this.refreshConfigSnapshot();
+  }
+
+  private refreshConfigSnapshot(): void {
+    this.log = this.platform.log;
+    this.username = this.platform.config.username;
+    this.password = this.platform.config.password;
+    this.apiUrl = `http://127.0.0.1:${this.platform.port}`;
+    this.additionalBroadcasts = this.platform.config.discoveryOptions.additionalBroadcasts;
+    this.manualDeviceHosts = this.platform.config.discoveryOptions.manualDevices.map(d => d.host);
+    this.excludeMacs = this.platform.config.discoveryOptions.excludeMacAddresses;
+    this.includeMacs = this.platform.config.discoveryOptions.includeMacAddresses;
   }
 
   async discoverDevices(): Promise<void> {
-    this.log.info('Starting device discovery (SSE)...');
+    this.log.debug('Starting device discovery...');
     try {
       const authConfig = this.username && this.password
         ? { auth: { username: this.username, password: this.password } }
         : {};
-      const response = await axios.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
+      await axios.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
         `${this.apiUrl}/discover`,
         {
           additionalBroadcasts: this.additionalBroadcasts,
@@ -51,16 +53,9 @@ export default class DeviceManager {
         },
         authConfig,
       );
-      this.log.info('Discovery initiated:', Object.keys(response.data).length, 'potential entries');
 
-      const configPath = path.join(this.platform.storagePath, 'config.json');
-      const fileConfig = await this.readConfigFile(configPath);
-      const platformSection = fileConfig.platforms.find((p: PlatformConfig) => p.platform === 'KasaPython');
-      if (!platformSection) {
-        this.log.error('KasaPython configuration missing in config file.');
-      } else {
-        platformSection.manualDevices = platformSection.manualDevices || [];
-      }
+      const shouldPersistAliases = this.platform.config.discoveryOptions.manualDevices.length > 0;
+      const aliasesByHost = new Map<string, string>();
 
       const eventSource = new EventSource(`${this.apiUrl}/stream`);
       eventSource.onmessage = (event: MessageEvent) => {
@@ -68,7 +63,7 @@ export default class DeviceManager {
           const data = JSON.parse(event.data);
           this.log.debug('SSE event data:', data);
           if (data.status === 'discovery_complete') {
-            this.log.info('Device discovery complete.');
+            this.log.debug('Device discovery complete.');
             eventSource.close();
             return;
           }
@@ -82,9 +77,11 @@ export default class DeviceManager {
             last_seen: new Date(),
             offline: false,
           };
-          this.log.info(`Discovered device: ${device.sys_info.alias} (${device.sys_info.host})`);
+          this.log.debug(`Discovered device: ${device.sys_info.alias} (${device.sys_info.host})`);
           this.updateDeviceAlias(device.sys_info);
-          this.persistDiscoveredDevice(device, platformSection);
+          if (shouldPersistAliases) {
+            aliasesByHost.set(device.sys_info.host, device.sys_info.alias);
+          }
           deviceEventEmitter.emit('deviceDiscovered', device);
         } catch (error) {
           this.log.error('Error parsing discovery SSE event:', error);
@@ -98,41 +95,15 @@ export default class DeviceManager {
       await new Promise(resolve => setTimeout(resolve, 10000));
       eventSource.close();
 
-      if (platformSection) {
-        platformSection.manualDevices = platformSection.manualDevices.filter((entry: string | ConfigDevice) => {
-          if (typeof entry === 'string') {
-            return true;
-          }
-          if (!entry.host) {
-            this.log.warn(`Removing manual device without host: ${JSON.stringify(entry)}`);
-            return false;
-          }
-          return true;
-        });
-        if (this.needsManualDevicesNormalization(platformSection.manualDevices)) {
-          platformSection.manualDevices = this.normalizeManualDevices(platformSection.manualDevices);
+      if (shouldPersistAliases) {
+        const updatedConfig = await persistDiscoveredAliases(this.platform.storagePath, aliasesByHost);
+        if (updatedConfig) {
+          this.platform.config = updatedConfig;
+          this.refreshConfigSnapshot();
         }
-        await this.writeConfigFile(configPath, fileConfig);
-        this.platform.config = parseConfig(platformSection);
       }
     } catch (error) {
       this.handleAxiosError(error, 'discoverDevices');
-    }
-  }
-
-  private persistDiscoveredDevice(device: KasaDevice, platformConfig: PlatformConfig): void {
-    try {
-      if (platformConfig.manualDevices) {
-        const existing = platformConfig.manualDevices.find(
-          (d: ConfigDevice) => (d as ConfigDevice).host === device.sys_info.host,
-        ) as ConfigDevice | undefined;
-        if (existing) {
-          existing.host = device.sys_info.host;
-          existing.alias = device.sys_info.alias;
-        }
-      }
-    } catch (error) {
-      this.log.error('Error persisting discovered device:', error);
     }
   }
 
@@ -141,7 +112,6 @@ export default class DeviceManager {
       const response = await axios.post(`${this.apiUrl}/getSysInfo`, { host });
       const sysInfo: SysInfo = response.data.sys_info;
       if (!sysInfo) {
-        this.log.error(`No sys_info returned for host: ${host}`);
         return undefined;
       }
       this.updateDeviceAlias(sysInfo);
@@ -211,38 +181,6 @@ export default class DeviceManager {
         sysInfo.alias = `${replacement} ${sysInfo.alias.slice(-4)}`;
         break;
       }
-    }
-  }
-
-  private needsManualDevicesNormalization(manualDevices: (string | ConfigDevice)[]): boolean {
-    return manualDevices.length > 0 &&
-      (typeof manualDevices[0] === 'string' ||
-        manualDevices.some(entry => typeof entry !== 'string'));
-  }
-
-  private normalizeManualDevices(manualDevices: (string | ConfigDevice)[]): ConfigDevice[] {
-    return manualDevices.map(entry => {
-      if (typeof entry === 'string') {
-        return { host: entry, alias: 'Will Be Filled By Plug-In Automatically' };
-      } else if ('host' in entry && !('alias' in entry)) {
-        (entry as ConfigDevice).alias = 'Will Be Filled By Plug-In Automatically';
-      } else if ('breakoutChildDevices' in entry) {
-        delete entry.breakoutChildDevices;
-      }
-      return entry;
-    });
-  }
-
-  private async readConfigFile(configPath: string): Promise<PlatformConfig> {
-    const data = await fs.readFile(configPath, 'utf8');
-    return JSON.parse(data);
-  }
-
-  private async writeConfigFile(configPath: string, fileConfig: PlatformConfig): Promise<void> {
-    try {
-      await fs.writeFile(configPath, JSON.stringify(fileConfig, null, 2), 'utf8');
-    } catch (error) {
-      this.log.error(`Error writing config file: ${String(error)}`);
     }
   }
 

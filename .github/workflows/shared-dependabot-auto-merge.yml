@@ -13,7 +13,6 @@ env:
   GITHUB_REPOSITORY: ${{ github.repository }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   PULL_REQUEST_AUTHOR: ${{ github.event.pull_request.user.login }}
-  PULL_REQUEST_BRANCH: ${{ github.event.pull_request.base.ref }}
   PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
   PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
   PULL_REQUEST_URL: ${{ github.event.pull_request.html_url }}
@@ -34,10 +33,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
-      - name: Ensure jq
-        id: ensure-jq
-        uses: ./.github/actions/ensure-jq
 
       - name: Determine Safety from Labels
         id: safety
@@ -117,22 +112,11 @@ jobs:
         with:
           node-version: 24
 
-      - name: Update npm
-        id: update-npm
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install -g npm@latest
-
       - name: Setup Python 3.13
         id: setup-python
         uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-
-      - name: Ensure jq
-        id: ensure-jq
-        uses: ./.github/actions/ensure-jq
 
       - name: Fetch current labels for Pull Request
         id: fetch-labels
@@ -160,33 +144,46 @@ jobs:
           PULL_REQUEST_LABELS: ${{ steps.labels.outputs.path }}
         run: |
           set -euo pipefail
+          export PULL_REQUEST_BRANCH="$(gh pr view "$PULL_REQUEST_NUMBER" --json baseRefName --jq .baseRefName)"
           MAX_ATTEMPTS=${MAX_ATTEMPTS:-5}
           BASE_SLEEP=${BASE_SLEEP:-5}
           JITTER=${JITTER:-10}
           attempt=1
           echo "::notice::Starting sync+release_manager loop (max ${MAX_ATTEMPTS} attempts)"
           while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+            attempt_status=0
             echo "::notice::Attempt ${attempt} of ${MAX_ATTEMPTS}"
             echo "::notice::Syncing local beta -> origin/beta"
             git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
             if ! git fetch origin beta --depth=1; then
               echo "::warning::git fetch failed on attempt ${attempt}"
-              FETCH_OK=false
+              attempt_status=1
+            elif ! git checkout -B beta origin/beta; then
+              echo "::warning::git checkout failed on attempt ${attempt}"
+              attempt_status=1
+            elif ! git reset --hard origin/beta; then
+              echo "::warning::git reset failed on attempt ${attempt}"
+              attempt_status=1
+            elif ! git clean -fd; then
+              echo "::warning::git clean failed on attempt ${attempt}"
+              attempt_status=1
+            fi
+
+            if [ "$attempt_status" -eq 0 ]; then
+              echo "::notice::Running release_manager.py (MODE=${MODE})"
+              if ! python3 .github/scripts/release_manager.py; then
+                echo "::warning::release_manager.py failed on attempt ${attempt}"
+                attempt_status=1
+              fi
             else
-              FETCH_OK=true
+              echo "::notice::Skipping release_manager.py because sync failed on attempt ${attempt}"
             fi
-            if [ "$FETCH_OK" = "true" ]; then
-              git checkout -B beta origin/beta || true
-              git reset --hard origin/beta || true
-              git clean -fd || true
-            fi
-            echo "::notice::Running release_manager.py (MODE=${MODE})"
-            if python .github/scripts/release_manager.py; then
+
+            if [ "$attempt_status" -eq 0 ]; then
               echo "::notice::release_manager.py succeeded on attempt ${attempt}"
               exit 0
-            else
-              echo "::warning::release_manager.py failed on attempt ${attempt}"
             fi
+
             if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
               sleep_sec=$(( BASE_SLEEP * attempt + (RANDOM % JITTER) ))
               echo "::notice::Retrying in ${sleep_sec}s (including jitter) ..."

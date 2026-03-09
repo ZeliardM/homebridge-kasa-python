@@ -91,11 +91,10 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
     descriptor: CharacteristicDescriptor,
     value: CharacteristicValue,
   ) {
-    const context = this.buildChildDescriptorContext(child);
     if (!descriptor.applySet) {
       return;
     }
-    await this.executeChildDescriptorSet(service, child, descriptor, value, context);
+    await this.executeChildDescriptorSet(service, child, descriptor, value);
   }
 
   private getChildService(child: ChildDevice): Service | undefined {
@@ -109,7 +108,6 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
     child: ChildDevice,
     descriptor: CharacteristicDescriptor,
     value: CharacteristicValue,
-    context: DescriptorContext,
     isGrouped = false,
   ) {
     const lockKey = this.makeLockKey();
@@ -122,11 +120,17 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
       }
       try {
         this.isUpdating = true;
+        const context = this.buildChildDescriptorContext(child);
         await descriptor.applySet!(value, context);
 
         const postSetValue = descriptor.getCurrent(context);
 
-        this.updateValue(service, service.getCharacteristic(descriptor.type), context.alias, postSetValue as CharacteristicValue);
+        const char = service.getCharacteristic(descriptor.type);
+        if (descriptor.syncHomeKitValueAfterSet) {
+          this.updateValue(service, char, context.alias, postSetValue as CharacteristicValue);
+        } else {
+          this.log.info(`Set ${this.platform.lsc(service, char)} on ${context.alias} to ${postSetValue}`);
+        }
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
         this.log.error(`Child OnSet error (${child.alias}) ${descriptor.name}`, error);
@@ -166,19 +170,37 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
             child: previousChild,
             alias: child.alias,
           };
-          (previousContext.device as SysInfo).__snapshot = true;
 
-          const previousValue = previousChild ? descriptor.getCurrent(previousContext) : descriptor.getInitial(context);
-          const nextValue = descriptor.getCurrent(context);
-          this.updateIfChanged(
-            service,
-            service.getCharacteristic(descriptor.type),
-            context.alias,
-            previousValue as CharacteristicValue,
-            nextValue as CharacteristicValue,
-            descriptor.name,
-            forceUpdate,
-          );
+          if (descriptor.debouncePolls && descriptor.debouncePolls > 1) {
+            const characteristic = service.getCharacteristic(descriptor.type);
+            const hkValue: CharacteristicValue = characteristic.value !== null && characteristic.value !== undefined
+              ? characteristic.value as CharacteristicValue
+              : descriptor.getInitial(context) as CharacteristicValue;
+            const nextDeviceValue = descriptor.getCurrent(context) as CharacteristicValue;
+            const debounceKey = `${this.childKey(child)}:${descriptor.type.UUID}`;
+            const effectiveNext = this.resolveWithDebounce(debounceKey, hkValue, nextDeviceValue, descriptor.debouncePolls, forceUpdate);
+            this.updateIfChanged(
+              service,
+              characteristic,
+              context.alias,
+              hkValue,
+              effectiveNext,
+              descriptor.name,
+              forceUpdate,
+            );
+          } else {
+            const previousValue = previousChild ? descriptor.getCurrent(previousContext) : descriptor.getInitial(context);
+            const nextValue = descriptor.getCurrent(context);
+            this.updateIfChanged(
+              service,
+              service.getCharacteristic(descriptor.type),
+              context.alias,
+              previousValue as CharacteristicValue,
+              nextValue as CharacteristicValue,
+              descriptor.name,
+              forceUpdate,
+            );
+          }
         } catch (error) {
           this.log.error(`Child update diff error (${child.alias}) ${descriptor.name}`, error);
         }

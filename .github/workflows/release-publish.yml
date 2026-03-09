@@ -67,13 +67,6 @@ jobs:
         with:
           node-version: 24
 
-      - name: Update npm
-        id: update-npm
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install -g npm@latest
-
       - name: Setup Python 3.13
         id: setup-python
         uses: actions/setup-python@v6
@@ -89,7 +82,7 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
-          python .github/scripts/release_manager.py
+          python3 .github/scripts/release_manager.py
 
   build_lint_test:
     name: Build, Lint, and Test
@@ -124,13 +117,6 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      - name: Update npm
-        id: update-npm
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install -g npm@latest
-
       - name: Install Node Dependencies
         id: install-node-deps
         shell: bash
@@ -155,14 +141,33 @@ jobs:
           echo "::notice::Published on npm - ${{ steps.publish.outputs.NPM_VERSION }}"
 
   notify_discord:
-    name: Discord Webhooks
+    name: Discord Notification
+    runs-on: ubuntu-latest
     needs: publish
     if: needs.publish.result == 'success'
-    uses: ./.github/workflows/shared-discord-notify.yml
-    with:
-      title: ${{ github.event.release.prerelease && 'Kasa Python Beta Release' || 'Kasa Python Release' }}
-    secrets:
-      discord_webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
+    steps:
+      - name: Checkout Actions
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Setup Python 3.13
+        id: setup-python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Post Discord Notification
+        id: post
+        shell: bash
+        env:
+          DISCORD_TITLE: ${{ github.event.release.prerelease && 'Kasa Python Beta Release' || 'Kasa Python Release' }}
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/discord_tools.py
 
   fork-notice:
     name: Fork Notice
