@@ -32,6 +32,13 @@ export default class HomeKitDevicePowerStrip extends HomeKitParentDevice {
   protected buildChildDescriptors(_child: ChildDevice): CharacteristicDescriptor[] {
     const C = this.platform.Characteristic;
     const energyChars = this.platform.energyCharacteristics;
+    const syncGroup = 'outletState';
+    const supportsEnergy = !!(_child.energy || this.hasEnergy);
+    const includeEnergyCharacteristics = !!(
+      this.platform.config.energyOptions.enableEnergyMonitoring &&
+      energyChars &&
+      supportsEnergy
+    );
 
     const list: CharacteristicDescriptor[] = [
       buildOnDescriptor(
@@ -40,11 +47,12 @@ export default class HomeKitDevicePowerStrip extends HomeKitParentDevice {
           const idx = this.extractChildIndex(context.child ?? {});
           await this.deviceManager!.controlDevice(context.device.host, 'state', value, idx);
         },
+        supportsEnergy ? undefined : syncGroup,
       ),
-      buildOutletInUseDescriptor(C, this.hasEnergy),
+      buildOutletInUseDescriptor(C, supportsEnergy, syncGroup),
     ];
 
-    if (this.platform.config.enableEnergyMonitoring && energyChars && _child.energy) {
+    if (includeEnergyCharacteristics) {
       list.push(...buildEnergyDescriptors(energyChars));
     }
 

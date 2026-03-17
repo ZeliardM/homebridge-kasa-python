@@ -6,11 +6,14 @@ import type { EnergyCharacteristics } from './energyCharacteristics.js';
 export function buildOnDescriptor(
   C: typeof Characteristic,
   setState?: (value: CharacteristicValue, context: DescriptorContext) => Promise<void>,
+  syncGroup?: string,
 ): CharacteristicDescriptor {
   return {
     type: C.On,
     name: 'On',
     writable: true,
+    syncGroup,
+    syncHomeKitValueAfterSet: !!syncGroup,
     getInitial: context => (context.child ? context.child.state : context.device.state) ?? false,
     getCurrent: context => (context.child ? context.child.state : context.device.state) ?? false,
     applySet: setState
@@ -74,12 +77,15 @@ export function buildColorTemperatureDescriptor(
 export function buildHSVDescriptors(
   C: typeof Characteristic,
   enqueueHSV: (partial: { hue?: number; saturation?: number }, context: DescriptorContext) => Promise<void>,
+  syncGroup?: string,
 ): CharacteristicDescriptor[] {
   return [
     {
       type: C.Hue,
       name: 'Hue',
       writable: true,
+      syncGroup,
+      syncHomeKitValueAfterSet: !!syncGroup,
       getInitial: context => (context.child ? context.child.hsv?.hue : context.device.hsv?.hue) ?? 0,
       getCurrent: context => (context.child ? context.child.hsv?.hue : context.device.hsv?.hue) ?? 0,
       applySet: async (value, context) => enqueueHSV({ hue: Number(value) }, context),
@@ -88,6 +94,8 @@ export function buildHSVDescriptors(
       type: C.Saturation,
       name: 'Saturation',
       writable: true,
+      syncGroup,
+      syncHomeKitValueAfterSet: !!syncGroup,
       getInitial: context => (context.child ? context.child.hsv?.saturation : context.device.hsv?.saturation) ?? 0,
       getCurrent: context => (context.child ? context.child.hsv?.saturation : context.device.hsv?.saturation) ?? 0,
       applySet: async (value, context) => enqueueHSV({ saturation: Number(value) }, context),
@@ -97,19 +105,25 @@ export function buildHSVDescriptors(
 
 export function buildOutletInUseDescriptor(
   C: typeof Characteristic,
-  hasEnergy: boolean,
+  useEnergyState: boolean,
+  syncGroup?: string,
 ): CharacteristicDescriptor {
-  const energy = (context: DescriptorContext): boolean =>
-    ((context.child ? context.child.energy?.power : context.device.energy?.power) ?? 0) >= 1.0;
+  const energy = (context: DescriptorContext): boolean => {
+    const rawPower = context.child ? context.child.energy?.power : context.device.energy?.power;
+    const powerWatts = Number(rawPower ?? 0);
+    return Number.isFinite(powerWatts) && powerWatts > context.platform.config.energyOptions.powerThreshold;
+  };
   const state = (context: DescriptorContext): boolean =>
     (context.child ? context.child.state : context.device.state) ?? false;
   return {
     type: C.OutletInUse,
     name: 'OutletInUse',
     writable: false,
+    syncGroup: useEnergyState ? undefined : syncGroup,
     debouncePolls: 2,
-    getInitial: (context) => (hasEnergy ? energy(context) : state(context)),
-    getCurrent: (context) => (hasEnergy ? energy(context) : state(context)),
+    syncHomeKitValueAfterSet: !useEnergyState && !!syncGroup,
+    getInitial: (context) => (useEnergyState ? energy(context) : state(context)),
+    getCurrent: (context) => (useEnergyState ? energy(context) : state(context)),
   };
 }
 

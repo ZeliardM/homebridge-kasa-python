@@ -18,7 +18,7 @@ import HomeKitDevice from './devices/baseDevice.js';
 import create from './devices/create.js';
 import DeviceManager, { deviceEventEmitter } from './devices/deviceManager.js';
 import PythonChecker from './python/pythonChecker.js';
-import { ConfigParseError, loadPlatformConfigFromStorage } from './config.js';
+import { parseConfig } from './config.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { TaskQueue } from './taskQueue.js';
 import {
@@ -52,7 +52,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public readonly offlineAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
   public readonly Service: typeof Service;
   public readonly storagePath: string;
-  public config!: KasaPythonConfig;
+  public config: KasaPythonConfig;
   public deviceManager: DeviceManager | undefined;
   public energyCharacteristics: EnergyCharacteristics | undefined;
   public isShuttingDown: boolean = false;
@@ -62,7 +62,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public taskQueue: TaskQueue;
   public venvPythonExecutable: string = '';
   private readonly homekitDevicesById: Map<string, HomeKitDevice> = new Map();
-  private readonly pendingAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
   private deviceDiscoveredHandler?: (device: KasaDevice) => Promise<void>;
   private hideHomeKitMatter: boolean = true;
   private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
@@ -72,6 +71,10 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.Service = this.api.hap.Service;
     this.Characteristic = this.api.hap.Characteristic;
     this.storagePath = this.api.user.storagePath();
+    this.config = parseConfig(config);
+    this.energyCharacteristics = this.config.energyOptions.enableEnergyMonitoring
+      ? createEnergyCharacteristics(this.api.hap)
+      : undefined;
     this.periodicDeviceDiscoveryEmitter = new EventEmitter();
     this.taskQueue = new TaskQueue(this.log, () => this.isShuttingDown);
 
@@ -181,13 +184,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.log.debug('Finished launching');
 
     try {
-      this.log.debug('Loading configuration');
-      this.config = await loadPlatformConfigFromStorage(this.storagePath);
-      this.processPendingAccessories();
-      this.energyCharacteristics = this.config.enableEnergyMonitoring
-        ? createEnergyCharacteristics(this.api.hap)
-        : undefined;
-
       this.log.debug('Checking Python environment');
       await this.checkPython();
 
@@ -209,10 +205,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       const discoveredDeviceIds = new Set<string>();
       this.setupPeriodicDiscovery(discoveredDeviceIds);
     } catch (error) {
-      if (error instanceof ConfigParseError) {
-        this.log.error(`Invalid configuration. Startup halted until the config is fixed. ${error.message}`);
-        return;
-      }
       this.log.error('An error occurred during startup:', error);
     }
   }
@@ -479,15 +471,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
   }
 
-  private processPendingAccessories(): void {
-    for (const accessory of this.pendingAccessories.values()) {
-      this.restoreAccessory(accessory);
-    }
-    this.pendingAccessories.clear();
-  }
-
-  private restoreAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
-    this.log.debug(`Restoring Platform Accessory: [${accessory.displayName}] UUID: ${accessory.UUID}`);
+  configureAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
+    this.log.debug(`Configuring Platform Accessory: [${accessory.displayName}] UUID: ${accessory.UUID}`);
 
     if (!accessory.context.lastSeen && !accessory.context.offline) {
       this.log.debug(`Setting initial lastSeen and offline status for Platform Accessory: [${accessory.displayName}]`);
@@ -531,11 +516,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         `[${accessory.UUID}] is already in configuredAccessories.`,
       );
     }
-  }
-
-  configureAccessory(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
-    this.log.debug(`Configuring Platform Accessory: [${accessory.displayName}] UUID: ${accessory.UUID}`);
-    this.pendingAccessories.set(accessory.UUID, accessory);
   }
 
   private async foundDevice(device: KasaDevice): Promise<void> {

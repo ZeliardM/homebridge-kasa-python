@@ -10,14 +10,11 @@ import type KasaPythonPlatform from '../platform.js';
 import type { CharacteristicDescriptor, Plug } from './deviceTypes.js';
 
 export default class HomeKitDevicePlug extends HomeKitDevice {
-  private hasEnergy: boolean;
-
   constructor(
     platform: KasaPythonPlatform,
     public kasaDevice: Plug,
   ) {
     super(platform, kasaDevice, Categories.OUTLET, 'OUTLET');
-    this.hasEnergy = !!kasaDevice.sys_info.energy;
     this.setupPrimaryService();
   }
 
@@ -32,20 +29,28 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
   protected buildPrimaryDescriptors(): CharacteristicDescriptor[] {
     const C = this.platform.Characteristic;
     const energyChars = this.platform.energyCharacteristics;
+    const syncGroup = 'outletState';
+    const supportsEnergy = !!(this.kasaDevice.feature_info.energy || this.kasaDevice.sys_info.energy);
+    const includeEnergyCharacteristics = !!(
+      this.platform.config.energyOptions.enableEnergyMonitoring &&
+      energyChars &&
+      supportsEnergy
+    );
 
     const onDescriptor = buildOnDescriptor(
       C,
       async (value, context) => {
         await this.deviceManager!.controlDevice(context.device.host, 'state', value);
       },
+      supportsEnergy ? undefined : syncGroup,
     );
 
     const list: CharacteristicDescriptor[] = [
       onDescriptor,
-      buildOutletInUseDescriptor(C, this.hasEnergy),
+      buildOutletInUseDescriptor(C, supportsEnergy, syncGroup),
     ];
 
-    if (this.platform.config.enableEnergyMonitoring && energyChars && this.kasaDevice.sys_info.energy) {
+    if (includeEnergyCharacteristics) {
       list.push(...buildEnergyDescriptors(energyChars));
     }
 

@@ -17,6 +17,8 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
 
   private pendingHSV: { hue?: number; saturation?: number } = {};
   private hsvFlushTimer: NodeJS.Timeout | null = null;
+  private hsvFlushInProgress: boolean = false;
+  private hsvWaiters: Array<{ resolve: () => void; reject: (error?: unknown) => void }> = [];
 
   constructor(
     platform: KasaPythonPlatform,
@@ -39,6 +41,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
 
   protected buildPrimaryDescriptors(): CharacteristicDescriptor[] {
     const C = this.platform.Characteristic;
+    const hsvSyncGroup = 'hsv';
 
     const onDescriptor = buildOnDescriptor(
       C,
@@ -72,31 +75,72 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
         C,
         async (partial: { hue?: number; saturation?: number }, context: DescriptorContext) => {
           Object.assign(this.pendingHSV, partial);
-          if (this.hsvFlushTimer) {
-            clearTimeout(this.hsvFlushTimer);
-          }
-          const host = context.device.host;
-          const baseHue = this.kasaDevice.sys_info.hsv?.hue ?? 0;
-          const baseSat = this.kasaDevice.sys_info.hsv?.saturation ?? 0;
 
-          this.hsvFlushTimer = setTimeout(async () => {
-            const hue = this.pendingHSV.hue ?? baseHue;
-            const saturation = this.pendingHSV.saturation ?? baseSat;
-            try {
-              await this.deviceManager!.controlDevice(host, 'hsv', { hue, saturation });
-              context.device.hsv = { hue, saturation };
-              this.kasaDevice.sys_info.hsv = { hue, saturation };
-            } catch (error) {
-              this.log.error('HSV flush error', error);
-            } finally {
-              this.pendingHSV = {};
-            }
-          }, 40);
+          const promise = new Promise<void>((resolve, reject) => {
+            this.hsvWaiters.push({ resolve, reject });
+          });
+
+          this.scheduleHSVFlush(context.device.host);
+
+          await promise;
         },
+        hsvSyncGroup,
       ));
     }
 
     return list;
+  }
+
+  private scheduleHSVFlush(host: string): void {
+    if (this.hsvFlushInProgress) {
+      return;
+    }
+
+    if (this.hsvFlushTimer) {
+      clearTimeout(this.hsvFlushTimer);
+    }
+
+    this.hsvFlushTimer = setTimeout(() => {
+      void this.flushPendingHSV(host);
+    }, 40);
+  }
+
+  private async flushPendingHSV(host: string): Promise<void> {
+    if (this.hsvFlushInProgress) {
+      return;
+    }
+
+    const hasPendingHSV = this.pendingHSV.hue !== undefined || this.pendingHSV.saturation !== undefined;
+    if (!hasPendingHSV) {
+      return;
+    }
+
+    this.hsvFlushInProgress = true;
+    this.hsvFlushTimer = null;
+
+    const pendingHSV = { ...this.pendingHSV };
+    const waiters = this.hsvWaiters;
+    this.pendingHSV = {};
+    this.hsvWaiters = [];
+
+    const currentHSV = this.kasaDevice.sys_info.hsv ?? { hue: 0, saturation: 0 };
+    const hue = pendingHSV.hue ?? currentHSV.hue ?? 0;
+    const saturation = pendingHSV.saturation ?? currentHSV.saturation ?? 0;
+
+    try {
+      await this.deviceManager!.controlDevice(host, 'hsv', { hue, saturation });
+      this.kasaDevice.sys_info.hsv = { hue, saturation };
+      waiters.forEach(waiter => waiter.resolve());
+    } catch (error) {
+      waiters.forEach(waiter => waiter.reject(error));
+      throw error;
+    } finally {
+      this.hsvFlushInProgress = false;
+
+      if (this.pendingHSV.hue !== undefined || this.pendingHSV.saturation !== undefined) {
+        this.scheduleHSVFlush(host);
+      }
+    }
   }
 
   public identify(): void {

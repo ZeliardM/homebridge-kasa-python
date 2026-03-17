@@ -5,7 +5,6 @@ import { EventSource } from 'eventsource';
 import { EventEmitter } from 'node:events';
 
 import KasaPythonPlatform from '../platform.js';
-import { persistDiscoveredAliases } from '../config.js';
 import type { FeatureInfo, HSV, KasaDevice, SysInfo } from './deviceTypes.js';
 
 export const deviceEventEmitter = new EventEmitter();
@@ -54,9 +53,6 @@ export default class DeviceManager {
         authConfig,
       );
 
-      const shouldPersistAliases = this.platform.config.discoveryOptions.manualDevices.length > 0;
-      const aliasesByHost = new Map<string, string>();
-
       const eventSource = new EventSource(`${this.apiUrl}/stream`);
       eventSource.onmessage = (event: MessageEvent) => {
         try {
@@ -79,9 +75,6 @@ export default class DeviceManager {
           };
           this.log.debug(`Discovered device: ${device.sys_info.alias} (${device.sys_info.host})`);
           this.updateDeviceAlias(device.sys_info);
-          if (shouldPersistAliases) {
-            aliasesByHost.set(device.sys_info.host, device.sys_info.alias);
-          }
           deviceEventEmitter.emit('deviceDiscovered', device);
         } catch (error) {
           this.log.error('Error parsing discovery SSE event:', error);
@@ -94,14 +87,6 @@ export default class DeviceManager {
 
       await new Promise(resolve => setTimeout(resolve, 10000));
       eventSource.close();
-
-      if (shouldPersistAliases) {
-        const updatedConfig = await persistDiscoveredAliases(this.platform.storagePath, aliasesByHost);
-        if (updatedConfig) {
-          this.platform.config = updatedConfig;
-          this.refreshConfigSnapshot();
-        }
-      }
     } catch (error) {
       this.handleAxiosError(error, 'discoverDevices');
     }

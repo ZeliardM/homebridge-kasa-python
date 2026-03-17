@@ -36,6 +36,7 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
         ? (value: CharacteristicValue) => this.childOnSet(service!, child, descriptor, value)
         : undefined;
       this.registerCharacteristic(service!, descriptor.type, () => this.childOnGet(service!, child, descriptor), onSet);
+      this.seedCharacteristicValue(service!, descriptor, this.buildChildDescriptorContext(child), 'Child seed error');
     }
   }
 
@@ -110,8 +111,7 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
     value: CharacteristicValue,
     isGrouped = false,
   ) {
-    const lockKey = this.makeLockKey();
-    await this.withLock(lockKey, async () => {
+    const runSet = async () => {
       if (this.shouldSkipUpdate()) {
         return;
       }
@@ -123,13 +123,19 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
         const context = this.buildChildDescriptorContext(child);
         await descriptor.applySet!(value, context);
 
-        const postSetValue = descriptor.getCurrent(context);
+        const descriptors = this.childDescriptorMap.get(this.childKey(child)) ?? [];
+        const descriptorsToUpdate = descriptor.syncGroup
+          ? descriptors.filter(desc => desc.syncGroup === descriptor.syncGroup)
+          : [descriptor];
 
-        const char = service.getCharacteristic(descriptor.type);
-        if (descriptor.syncHomeKitValueAfterSet) {
-          this.updateValue(service, char, context.alias, postSetValue as CharacteristicValue);
-        } else {
-          this.log.info(`Set ${this.platform.lsc(service, char)} on ${context.alias} to ${postSetValue}`);
+        for (const desc of descriptorsToUpdate) {
+          const postSetValue = desc.getCurrent(context);
+          const char = service.getCharacteristic(desc.type);
+          if (desc.syncHomeKitValueAfterSet) {
+            this.updateValue(service, char, context.alias, postSetValue as CharacteristicValue);
+          } else {
+            this.log.info(`Set ${this.platform.lsc(service, char)} on ${context.alias} to ${postSetValue}`);
+          }
         }
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
@@ -142,7 +148,28 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
           this.updateEmitter.emit('updateComplete');
         }
       }
-    });
+    };
+
+    if (this.shouldBypassChildSetLock(child, descriptor)) {
+      await runSet();
+      return;
+    }
+
+    const lockKey = this.makeLockKey();
+    await this.withLock(lockKey, runSet);
+  }
+
+  private shouldBypassChildSetLock(child: ChildDevice, descriptor: CharacteristicDescriptor): boolean {
+    if (!descriptor.syncGroup) {
+      return false;
+    }
+
+    const descriptors = this.childDescriptorMap.get(this.childKey(child)) ?? [];
+    const writableDescriptorsInGroup = descriptors.filter(desc =>
+      desc.syncGroup === descriptor.syncGroup && desc.writable,
+    );
+
+    return writableDescriptorsInGroup.length > 1;
   }
 
   protected async updateAllServicesAndCharacteristics(forceUpdate: boolean): Promise<void> {
