@@ -675,9 +675,25 @@ def _escalate_beta_draft(
             content, existing_unpublished.tag(), target_version.tag()
         )
     old_tag = existing_unpublished.tag()
-    old_rel = common.gh_release(context.github_repository, context.github_token, tag=old_tag)
-    if old_rel and old_rel.get("id"):
-        common.gh_release_delete(context.github_repository, context.github_token, int(old_rel["id"]))
+    try:
+        found = False
+        for r in common.gh_releases(context.github_repository, context.github_token, max_pages=50):
+            if _release_matches_tag(r, old_tag):
+                rid = r.get("id")
+                if rid:
+                    ok = common.gh_release_delete(context.github_repository, context.github_token, int(rid))
+                    if ok:
+                        print(f"[release-manager] Deleted matching release id={rid} for {old_tag}")
+                    else:
+                        print(f"::warning::[release-manager] Failed to delete release id={rid} for tag {old_tag}")
+                else:
+                    print(f"::warning::[release-manager] Matching release found for {old_tag} but no id present: {r}")
+                found = True
+                break
+        if not found:
+            print(f"[release-manager] No matching release found to delete for {old_tag}")
+    except Exception as e:
+        print(f"::warning::[release-manager] Exception while trying to delete old draft {old_tag}: {e}")
     common.git_delete_tag(old_tag)
     print(
         f"[release-manager] Escalated draft {old_tag} -> {target_version.tag()} "
