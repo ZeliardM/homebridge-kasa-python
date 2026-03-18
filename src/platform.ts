@@ -63,6 +63,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public venvPythonExecutable: string = '';
   private readonly homekitDevicesById: Map<string, HomeKitDevice> = new Map();
   private deviceDiscoveredHandler?: (device: KasaDevice) => Promise<void>;
+  private discoveryInterval?: NodeJS.Timeout;
   private hideHomeKitMatter: boolean = true;
   private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
   private platformInitialization: Promise<void>;
@@ -98,6 +99,10 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       this.log.debug('KasaPython shutting down');
       if (!this.isShuttingDown) {
         this.isShuttingDown = true;
+      }
+      if (this.discoveryInterval) {
+        clearInterval(this.discoveryInterval);
+        this.log.debug('Cleared periodic device discovery interval');
       }
       this.log.debug('Stopping all polling tasks');
       for (const device of this.homekitDevicesById.values()) {
@@ -219,7 +224,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
 
     const deferredDiscoveryTask = deferAndCombine(discoveryTask, this.config.advancedOptions.waitTimeUpdate);
 
-    setInterval(() => {
+    this.discoveryInterval = setInterval(() => {
       try {
         this.taskQueue.addTask(deferredDiscoveryTask);
       } catch (err) {
