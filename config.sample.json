@@ -14,7 +14,7 @@
       "username": "Username",
       "password": "Password",
       "enableEnergyMonitoring": true,
-      "powerThreshold": 1.0,
+      "powerThreshold": 2,
       "logEnergyMonitoring": false,
       "hideHomeKitMatter": true,
       "pollingInterval": 5,

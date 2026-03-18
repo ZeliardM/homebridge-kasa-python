@@ -66,7 +66,7 @@ npm install -g homebridge-kasa-python
 ## Energy Notes
 - Enable Energy Monitoring adds the extra HomeKit energy monitoring characteristics (Volts, Amperes, Watts, and KiloWattHours) for supported devices.
 - OutletInUse for devices that support energy reporting is based on the device reported power usage, even when Enable Energy Monitoring is disabled.
-- Outlet In Use Power Threshold defaults to 1.0 Watts and can be set as low as 0.001 in the configuration.
+- Outlet In Use Power Threshold defaults to 2 Watts and can be set as low as 0.001 in the configuration.
 - OutletInUse is true when reported power is greater than the configured threshold and false when the reported power is less than or equal to the configured threshold.
 - OutletInUse updates from energy reporting are debounced across two consecutive polling updates to help reduce noise from very small changes in reported power.
 - Log Energy Monitoring Events enables logging of the extra energy characteristics only.

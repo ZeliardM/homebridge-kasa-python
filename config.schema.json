@@ -51,9 +51,8 @@
         "title": "Outlet In Use Power Threshold (Watts)",
         "type": "number",
         "description": "Power threshold used to mark OutletInUse as true on devices with energy reporting support. Values must be at least 0.001 and may use up to three decimal places.",
-        "default": 1.0,
-        "minimum": 0.001,
-        "multipleOf": 0.001
+        "default": 2,
+        "minimum": 0.001
       },
       "logEnergyMonitoring": {
         "title": "Log Energy Monitoring Events",

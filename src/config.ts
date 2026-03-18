@@ -89,7 +89,7 @@ export const defaultConfig: KasaPythonConfig = {
   password: '',
   energyOptions: {
     enableEnergyMonitoring: false,
-    powerThreshold: 1.0,
+    powerThreshold: 2,
     logEnergyMonitoring: false,
   },
   homekitOptions: {
