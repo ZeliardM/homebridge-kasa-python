@@ -8,6 +8,7 @@
 
 ### Bug Fixes
 
+- [bug] Fix release_manager.py handling of escalated drafts [1cd9b00](https://github.com/ZeliardM/homebridge-kasa-python/commit/1cd9b004c826e1c8a7edb540504d6f40b5a15689) (@ZeliardM)
 - [bug] Fix powerThreshold typing in config [ffb09af](https://github.com/ZeliardM/homebridge-kasa-python/commit/ffb09af3e0c543aa4f323bd70c12579db24e7f0a) (@ZeliardM)
 
 ### Other Changes
