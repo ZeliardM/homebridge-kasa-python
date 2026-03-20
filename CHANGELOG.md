@@ -1,4 +1,12 @@
 # Changelog
+## [v3.2.0-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.0-beta.1)
+
+### Other Changes
+
+- npm-dev(deps-dev): bump eslint from 10.0.3 to 10.1.0 [#267](https://github.com/ZeliardM/homebridge-kasa-python/pull/267) (@dependabot[bot])
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.2.0-beta.0...v3.2.0-beta.1
+
 ## [v3.2.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.0-beta.0) (2026-03-18)
 
 ### Featured Changes
