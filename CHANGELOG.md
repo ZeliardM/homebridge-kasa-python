@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.2.0-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.0-beta.1)
 
+### Featured Changes
+
+- [feature] Update Dependabot handling [64023ea](https://github.com/ZeliardM/homebridge-kasa-python/commit/64023ea133fc1b2d1f19e3485f515fcff3e1659b) (@ZeliardM)
+
 ### Other Changes
 
 - [other] Update dependencies [b132938](https://github.com/ZeliardM/homebridge-kasa-python/commit/b1329383b5d159adc311cce536123c62f0fd6b70) (@ZeliardM)
