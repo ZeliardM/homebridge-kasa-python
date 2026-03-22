@@ -12,6 +12,7 @@
 ### Other Changes
 
 - [other] Update dependencies [b132938](https://github.com/ZeliardM/homebridge-kasa-python/commit/b1329383b5d159adc311cce536123c62f0fd6b70) (@ZeliardM)
+- Bump flatted from 3.3.3 to 3.4.2 in the npm_and_yarn group across 1 directory [#268](https://github.com/ZeliardM/homebridge-kasa-python/pull/268) (@dependabot[bot])
 - npm-dev(deps-dev): bump eslint from 10.0.3 to 10.1.0 [#267](https://github.com/ZeliardM/homebridge-kasa-python/pull/267) (@dependabot[bot])
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.2.0-beta.0...v3.2.0-beta.1
