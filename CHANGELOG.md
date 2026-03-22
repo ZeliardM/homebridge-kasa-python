@@ -5,6 +5,10 @@
 
 - [feature] Update Dependabot handling [64023ea](https://github.com/ZeliardM/homebridge-kasa-python/commit/64023ea133fc1b2d1f19e3485f515fcff3e1659b) (@ZeliardM)
 
+### Bug Fixes
+
+- [bug] Update beta escalation handling [84304fd](https://github.com/ZeliardM/homebridge-kasa-python/commit/84304fd0379e0a28e0c5e039b63decc7d9f641e3) (@ZeliardM)
+
 ### Other Changes
 
 - [other] Update dependencies [b132938](https://github.com/ZeliardM/homebridge-kasa-python/commit/b1329383b5d159adc311cce536123c62f0fd6b70) (@ZeliardM)
