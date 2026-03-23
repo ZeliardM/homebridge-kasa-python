@@ -1,6 +1,6 @@
 # Changelog
 
-## [v3.2.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.0)
+## [v3.2.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.0) (2026-03-23)
 
 ### Featured Changes
 
@@ -16,6 +16,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for release v3.2.0 [release] (@github-actions)
 - [other] Update dependencies [b132938](https://github.com/ZeliardM/homebridge-kasa-python/commit/b1329383b5d159adc311cce536123c62f0fd6b70) (@ZeliardM)
 - [other] Update README.md [7854292](https://github.com/ZeliardM/homebridge-kasa-python/commit/785429223edbd156f959952e0ef26c56b9bdd5ad) (@ZeliardM)
 - Bump flatted from 3.3.3 to 3.4.2 in the npm_and_yarn group across 1 directory [#268](https://github.com/ZeliardM/homebridge-kasa-python/pull/268) (@dependabot[bot])
