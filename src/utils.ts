@@ -222,11 +222,16 @@ export async function runCommand(
 }
 
 export function satisfiesVersion(currentVersion: string, requiredVersion: string): boolean {
+  const parseVersionParts = (version: string): [number, number, number] => {
+    const [major = '0', minor = '0', patch = '0'] = version.replace('^', '').replace('v', '').split('.');
+    return [Number(major) || 0, Number(minor) || 0, Number(patch) || 0];
+  };
+
   const versions = requiredVersion.split('||').map(v => v.trim());
+  const [currentMajor, currentMinor, currentPatch] = parseVersionParts(currentVersion);
 
   return versions.some(version => {
-    const [requiredMajor, requiredMinor, requiredPatch] = version.replace('^', '').split('.').map(Number);
-    const [currentMajor, currentMinor, currentPatch] = currentVersion.replace('v', '').split('.').map(Number);
+    const [requiredMajor, requiredMinor, requiredPatch] = parseVersionParts(version);
 
     if (currentMajor > requiredMajor) {
       return true;

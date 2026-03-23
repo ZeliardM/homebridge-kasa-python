@@ -15,19 +15,12 @@
   <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/latest"><img src="https://img.shields.io/npm/v/homebridge-kasa-python/latest?label=npm%40latest&color=blue" alt="latest npm version"></a>
   <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40latest-3.11%2C%203.12%2C%203.13-blue" alt="latest PyPI pyversions"></a>
   <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/beta"><img src="https://img.shields.io/npm/v/homebridge-kasa-python/beta?label=npm%40beta&color=red" alt="beta npm version"></a>
-  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40latest-3.11%2C%203.12%2C%203.13-red" alt="beta PyPI pyversions"></a>
+  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40beta-3.11%2C%203.12%2C%203.13-red" alt="beta PyPI pyversions"></a>
   <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/latest"><img src="https://img.shields.io/npm/dt/homebridge-kasa-python?color=brightgreen" alt="npm downloads total"></a>
   <a href="https://www.paypal.me/ZeliardM/USD/"><img src="https://img.shields.io/badge/donate-paypal-orange" alt="donate paypal"></a>
   <a href="https://github.com/sponsors/ZeliardM"><img src="https://img.shields.io/badge/donate-github-orange" alt="donate github"></a>
   <a href="https://github.com/homebridge/homebridge/wiki/Verified-Plugins"><img src="https://img.shields.io/badge/homebridge-verified-blueviolet" alt="homebridge verified"></a>
 </p>
-
-<div align="center">
-
-> ## IMPORTANT!!!
->Python Supported Versions: 3.11, 3.12, and 3.13.
-
-</div>
 
 This is a [Homebridge](https://github.com/homebridge/homebridge) plug-in based on the Python-Kasa API Library to interact with TP-Link Kasa/Tapo Devices.
 
@@ -35,23 +28,106 @@ This plug-in will automatically discover your TP-Link Kasa/Tapo Devices on your 
 
 Automatic Discovery may be possible only for some devices. If your device is not discovered automatically, try adding the IP Address into the Manual Devices List. Some newer devices require the Username and Password for your TP-Link Kasa/Tapo Cloud Account. Credentials can be enabled and provided in the plug-in settings.
 
-### Current Supported and Tested Devices
--   I currently have used this plug-in with the HS300 (US) Power Strip and the KP115 (US) Plug. All other devices are yet to be tested and fully supported. If you have a device that is a plug or power strip and it does work as expected in HomeKit, please let me know and I can add it to the list of tested and supported devices. I don't have a lot of devices so cannot fully test everything.
+## Requirements
+- Homebridge Supported Versions: 1.8.0 and 2.0.0-beta.0 or later.
+- Node.js Supported Versions: 20, 22, and 24.
+- Python Supported Versions: 3.11, 3.12, and 3.13.
+- A supported Kasa/Tapo device.
+- Enabling Third Party Compatibility in the Tapo/Kasa App can improve device compatibility.
 
-### Features
+## Current Supported and Tested Devices
+- I currently have used this plug-in with the HS300 (US) Power Strip and the KP115 (US) Plug. All other devices are yet to be tested and fully supported. If you have a device that is a plug, power strip, wall switch, bulb, or light strip and it does work as expected in HomeKit, please let me know and I can add it to the list of tested and supported devices. I don't have a lot of devices so cannot fully test everything.
 
--   Automatically discover TP-Link Kasa/Tapo Devices locally only on your network.
--   Currently only Plugs, Power Strips, Wall Switches, Bulbs, and Light Strips are supported by the plug-in and added to Homebridge.
--   This plug-in will by default filter out Native HomeKit/Matter Devices, this can be disabled to implement all supported devices on the network if desired.
--   Change Device States for Plugs, Change Device States for Power Strips, Change Device State and Supports Dimming for Wall Switches, Change Device State and Supports Hue, Saturation, and Value (HSV) and Color Temperature Adjustments, and Dimming for Bulbs and Light Strips that support those options. The KS240 Dual Fan and Light Dimmer Wall Switch is also supported if Native HomeKit/Matter Device Filtering is Disabled.
--   Supported Devices from the API are listed below, Devices with an asterisks ('*') next to the specific firmware will require the Username and Password for your TP-Link Kasa/Tapo Cloud Account to connect and function correctly. If your device is not listed below, it does not mean it won't work, but there may be issues. </p>*NOTE - Not All Devices Listed Below Are Supported By This Plug-In. These Devices Are Supported By The Python-Kasa API Library And Could Be Supported By The Plug-In In The Future.*</p>
+## Features
+- Automatically discover TP-Link Kasa/Tapo Devices locally only on your network.
+- Currently Plugs, Power Strips, Wall Switches, Bulbs, and Light Strips are supported by the plug-in and added to Homebridge.
+- This plug-in will by default filter out Native HomeKit/Matter Devices, this can be disabled to implement all supported devices on the network if desired.
+- Change Device States for Plugs, Change Device States for Power Strips, Change Device State and Supports Dimming for Wall Switches, Change Device State and Supports Hue, Saturation, and Value (HSV) and Color Temperature Adjustments, and Dimming for Bulbs and Light Strips that support those options. The KS240 Dual Fan and Light Dimmer Wall Switch is also supported if Native HomeKit/Matter Device Filtering is Disabled.
+- OutletInUse on devices that support energy monitoring can follow real device power usage even when the extra HomeKit energy characteristics are not enabled.
+- Energy monitoring characteristics (Volts, Amperes, Watts, and KiloWattHours) can be enabled separately for supported devices.
+- Supported Devices from the API are listed below, Devices with an asterisks ('*') next to the specific firmware will require the Username and Password for your TP-Link Kasa/Tapo Cloud Account to connect and function correctly. If your device is not listed below, it does not mean it won't work, but there may be issues. </p>*NOTE - Not All Devices Listed Below Are Supported By This Plug-In. These Devices Are Supported By The Python-Kasa API Library And Could Be Supported By The Plug-In In The Future.*</p>
+
+## Installation
+- Install from the Homebridge UI or with npm.
+- Most users can install the plug-in, click Save, and restart Homebridge.
+- On first startup, or any time the Python requirements change, the plug-in will verify Python, create/update the virtual environment, and install/update the required Python packages automatically.
+
+```bash
+npm install -g homebridge-kasa-python
+```
+
+## Configuration Notes
+- Enable Credentials only if your devices require authentication. Some newer Kasa/Tapo devices will not work without the TP-Link Kasa/Tapo Cloud Account Username and Password.
+- Manual Devices now only require the device host or IP Address. If discovery is not working, try the Manual Devices List and Additional Broadcast Addresses before assuming a device is unsupported.
+- Hide HomeKit or Matter Devices is enabled by default so supported native HomeKit/Matter devices are not duplicated in Homebridge.
+- Wait Time Update controls how long similar commands are combined before being sent to a device.
+- Advanced Python Logging only shows detailed Python-side logs when Homebridge Debug Mode is enabled.
+
+## Energy Notes
+- Enable Energy Monitoring adds the extra HomeKit energy monitoring characteristics (Volts, Amperes, Watts, and KiloWattHours) for supported devices.
+- OutletInUse for devices that support energy reporting is based on the device reported power usage, even when Enable Energy Monitoring is disabled.
+- Outlet In Use Power Threshold defaults to 2 Watts and can be set as low as 0.001 in the configuration.
+- OutletInUse is true when reported power is greater than the configured threshold and false when the reported power is less than or equal to the configured threshold.
+- OutletInUse updates from energy reporting are debounced across two consecutive polling updates to help reduce noise from very small changes in reported power.
+- Log Energy Monitoring Events enables logging of the extra energy characteristics only.
+
+## Example Configuration
+```json
+{
+  "bridge": {
+    "name": "Homebridge",
+    "username": "11:22:33:AA:BB:CC",
+    "port": 12345,
+    "pin": "001-02-003"
+  },
+  "description": "This is an example configuration file.",
+  "platforms": [
+    {
+      "platform": "KasaPython",
+      "name": "KasaPython",
+      "enableCredentials": true,
+      "username": "Username",
+      "password": "Password",
+      "enableEnergyMonitoring": true,
+      "powerThreshold": 1.0,
+      "logEnergyMonitoring": false,
+      "hideHomeKitMatter": true,
+      "pollingInterval": 5,
+      "discoveryPollingInterval": 300,
+      "offlineInterval": 7,
+      "waitTimeUpdate": 100,
+      "pythonPath": "/usr/bin/python3",
+      "advancedPythonLogging": false,
+      "additionalBroadcasts": [
+        "192.168.1.255",
+        "192.168.2.255"
+      ],
+      "manualDevices": [
+        {
+          "host": "192.168.1.100"
+        },
+        {
+          "host": "192.168.2.100"
+        }
+      ],
+      "excludeMacAddresses": [
+        "AA:BB:CC:11:22:33",
+        "CC:BB:AA:33:22:11"
+      ],
+      "includeMacAddresses": [
+        "DD:EE:FF:44:55:66",
+        "FF:EE:DD:66:55:44"
+      ]
+    }
+  ],
+  "accessories": []
+}
+```
 
 ## Kasa devices
-
 Some newer Kasa devices require authentication. These are marked with [*] in the list below.<br>Hub-Connected Devices may work across TAPO/KASA branded hubs even if they don't work across the native apps.
 
 ### Plugs
-
 - **EP10**
   - Hardware: 1.0 (US) / Firmware: 1.0.2
 - **EP25**
@@ -91,7 +167,6 @@ Some newer Kasa devices require authentication. These are marked with [*] in the
   - Hardware: 1.0 (US) / Firmware: 1.0.0
 
 ### Power Strips
-
 - **EP40**
   - Hardware: 1.0 (US) / Firmware: 1.0.2
 - **EP40M**
@@ -116,7 +191,6 @@ Some newer Kasa devices require authentication. These are marked with [*] in the
   - Hardware: 3.0 (US) / Firmware: 1.0.4
 
 ### Wall Switches
-
 - **ES20M**
   - Hardware: 1.0 (US) / Firmware: 1.0.11
   - Hardware: 1.0 (US) / Firmware: 1.0.8
@@ -164,7 +238,6 @@ Some newer Kasa devices require authentication. These are marked with [*] in the
   - Hardware: 1.0 (US) / Firmware: 1.0.7[*]
 
 ### Bulbs
-
 - **KL110**
   - Hardware: 1.0 (US) / Firmware: 1.8.11
 - **KL110B**
@@ -195,7 +268,6 @@ Some newer Kasa devices require authentication. These are marked with [*] in the
   - Hardware: 1.0 (US) / Firmware: 1.8.11
 
 ### Light Strips
-
 - **KL400L5**
   - Hardware: 1.0 (US) / Firmware: 1.0.5
   - Hardware: 1.0 (US) / Firmware: 1.0.8
@@ -211,26 +283,21 @@ Some newer Kasa devices require authentication. These are marked with [*] in the
   - Hardware: 2.0 (US) / Firmware: 1.0.9
 
 ### Hubs
-
 - **KH100**
   - Hardware: 1.0 (EU) / Firmware: 1.2.3[*]
   - Hardware: 1.0 (EU) / Firmware: 1.5.12[*]
   - Hardware: 1.0 (UK) / Firmware: 1.5.6[*]
 
 ### Hub-Connected Devices
-
 - **KE100**
   - Hardware: 1.0 (EU) / Firmware: 2.4.0[*]
   - Hardware: 1.0 (EU) / Firmware: 2.8.0[*]
   - Hardware: 1.0 (UK) / Firmware: 2.8.0[*]
 
-
 ## Tapo devices
-
 All Tapo devices require authentication.<br>Hub-Connected Devices may work across TAPO/KASA branded hubs even if they don't work across the native apps.
 
 ### Plugs
-
 - **P100**
   - Hardware: 1.0.0 (US) / Firmware: 1.1.3
   - Hardware: 1.0.0 (US) / Firmware: 1.3.7
@@ -259,7 +326,6 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (US) / Firmware: 1.0.3
 
 ### Power Strips
-
 - **P210M**
   - Hardware: 1.0 (US) / Firmware: 1.0.3
 - **P300**
@@ -277,7 +343,6 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (US) / Firmware: 1.0.2
 
 ### Wall Switches
-
 - **S210**
   - Hardware: 1.0 (EU) / Firmware: 1.9.0
 - **S220**
@@ -296,7 +361,6 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (US) / Firmware: 1.2.2
 
 ### Bulbs
-
 - **L430C**
   - Hardware: 1.0 (EU) / Firmware: 1.0.4
 - **L430P**
@@ -320,7 +384,6 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (EU) / Firmware: 1.1.2
 
 ### Light Strips
-
 - **L900-10**
   - Hardware: 1.0 (EU) / Firmware: 1.0.17
   - Hardware: 1.0 (US) / Firmware: 1.0.11
@@ -337,7 +400,6 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (US) / Firmware: 1.1.2
 
 ### Cameras
-
 - **C100**
   - Hardware: 4.0 / Firmware: 1.3.14
 - **C110**
@@ -363,7 +425,6 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 3.0 / Firmware: 1.3.11
 
 ### Doorbells and chimes
-
 - **D100C**
   - Hardware: 1.0 (US) / Firmware: 1.1.3
 - **D130**
@@ -372,14 +433,12 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.20 (EU) / Firmware: 1.1.19
 
 ### Vacuums
-
 - **RV20 Max Plus**
   - Hardware: 1.0 (EU) / Firmware: 1.0.7
 - **RV30 Max**
   - Hardware: 1.0 (US) / Firmware: 1.2.0
 
 ### Hubs
-
 - **H100**
   - Hardware: 1.0 (AU) / Firmware: 1.5.23
   - Hardware: 1.0 (EU) / Firmware: 1.2.3
@@ -391,7 +450,6 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (US) / Firmware: 1.3.6
 
 ### Hub-Connected Devices
-
 - **S200B**
   - Hardware: 1.0 (EU) / Firmware: 1.11.0
   - Hardware: 1.0 (US) / Firmware: 1.12.0
@@ -414,5 +472,5 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (EU) / Firmware: 1.7.0
   - Hardware: 1.0 (US) / Firmware: 1.8.0
 
-### Credits
--   Huge thanks to rytilahti and all the developers at python-kasa for the [Python-Kasa API](https://github.com/python-kasa/python-kasa), plasticrake for the [Unofficial API documentation](https://github.com/plasticrake/tplink-smarthome-api), and maxileith for [Excellent Python Implementation](https://github.com/maxileith/homebridge-appletv-enhanced).
+## Credits
+- Huge thanks to rytilahti and all the developers at python-kasa for the [Python-Kasa API](https://github.com/python-kasa/python-kasa), plasticrake for the [Unofficial API documentation](https://github.com/plasticrake/tplink-smarthome-api), and maxileith for [Excellent Python Implementation](https://github.com/maxileith/homebridge-appletv-enhanced).

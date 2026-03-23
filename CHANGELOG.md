@@ -1,4 +1,43 @@
 # Changelog
+## [v3.2.0-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.0-beta.1) (2026-03-22)
+
+### Featured Changes
+
+- [feature] Update Dependabot handling [64023ea](https://github.com/ZeliardM/homebridge-kasa-python/commit/64023ea133fc1b2d1f19e3485f515fcff3e1659b) (@ZeliardM)
+
+### Bug Fixes
+
+- [bug] Update beta escalation handling [84304fd](https://github.com/ZeliardM/homebridge-kasa-python/commit/84304fd0379e0a28e0c5e039b63decc7d9f641e3) (@ZeliardM)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.2.0-beta.1 [beta-release] (@github-actions)
+- [other] Update dependencies [b132938](https://github.com/ZeliardM/homebridge-kasa-python/commit/b1329383b5d159adc311cce536123c62f0fd6b70) (@ZeliardM)
+- Bump flatted from 3.3.3 to 3.4.2 in the npm_and_yarn group across 1 directory [#268](https://github.com/ZeliardM/homebridge-kasa-python/pull/268) (@dependabot[bot])
+- npm-dev(deps-dev): bump eslint from 10.0.3 to 10.1.0 [#267](https://github.com/ZeliardM/homebridge-kasa-python/pull/267) (@dependabot[bot])
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.2.0-beta.0...v3.2.0-beta.1
+
+## [v3.2.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.0-beta.0) (2026-03-18)
+
+### Featured Changes
+
+- [enhancement] Improve discoveryInterval handling and shutdown [ca2fa52](https://github.com/ZeliardM/homebridge-kasa-python/commit/ca2fa522e1c7ab62a03ca50d10a343a1036b4294) (@ZeliardM)
+- [feature] Code refactor and clean-up [5b9082d](https://github.com/ZeliardM/homebridge-kasa-python/commit/5b9082de37ab5b8b6491e73e4561eb3eba5f9e84) (@ZeliardM)
+
+### Bug Fixes
+
+- [bug] Fix release_manager.py handling of escalated drafts [1cd9b00](https://github.com/ZeliardM/homebridge-kasa-python/commit/1cd9b004c826e1c8a7edb540504d6f40b5a15689) (@ZeliardM)
+- [bug] Fix powerThreshold typing in config [ffb09af](https://github.com/ZeliardM/homebridge-kasa-python/commit/ffb09af3e0c543aa4f323bd70c12579db24e7f0a) (@ZeliardM)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.2.0-beta.0 [beta-release] (@github-actions)
+- [other] Update README.md [7854292](https://github.com/ZeliardM/homebridge-kasa-python/commit/785429223edbd156f959952e0ef26c56b9bdd5ad) (@ZeliardM)
+- npm-dev(deps-dev): bump typescript-eslint from 8.56.1 to 8.57.0 [#266](https://github.com/ZeliardM/homebridge-kasa-python/pull/266) (@dependabot[bot])
+- npm-dev(deps-dev): bump @types/node from 25.3.5 to 25.5.0 [#265](https://github.com/ZeliardM/homebridge-kasa-python/pull/265) (@dependabot[bot])
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.1.0...v3.2.0-beta.0
 
 ## [v3.1.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.1.0) (2026-03-09)
 

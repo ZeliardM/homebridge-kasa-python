@@ -415,6 +415,18 @@ def _collect_section_categories(block: str) -> dict[str, list[str]]:
             cats[current].append(line)
     return cats
 
+def _section_compare_from(block: str, target_tag: str | None = None) -> str | None:
+    for line in block.splitlines():
+        if not line.startswith("**Full Changelog**"):
+            continue
+        match = re.search(r"/compare/(.+?)\.\.\.([^\s)]+)", line)
+        if not match:
+            continue
+        compare_from, compare_to = match.groups()
+        if target_tag is None or compare_to == target_tag:
+            return compare_from
+    return None
+
 def _pr_sort_key(line: str) -> int:
     m = re.search(r"#(\d+)\]", line)
     if not m:
@@ -469,15 +481,17 @@ def _build_release_body(version: Version, changelog: str, prev_stable: Version |
     block = _find_section_block(changelog, version.tag())
     cats = _collect_section_categories(block)
     is_beta = version.is_beta()
-    if is_beta:
-        if version.beta == 0:
-            fallback, _ = _latest_versions(changelog)
-            compare_from = fallback.tag() if fallback else "v0.0.0"
+    compare_from = _section_compare_from(block, version.tag())
+    if compare_from is None:
+        if is_beta:
+            if version.beta == 0:
+                fallback, _ = _latest_versions(changelog)
+                compare_from = fallback.tag() if fallback else "v0.0.0"
+            else:
+                prev_version = Version(version.major, version.minor, version.patch, version.beta - 1)
+                compare_from = prev_version.tag()
         else:
-            prev_version = Version(version.major, version.minor, version.patch, version.beta - 1)
-            compare_from = prev_version.tag()
-    else:
-        compare_from = prev_stable.tag() if prev_stable else "v0.0.0"
+            compare_from = prev_stable.tag() if prev_stable else "v0.0.0"
     ordered = [c for c in CATEGORY_ORDER if c in cats] + [
         c for c in cats if c not in CATEGORY_ORDER
     ]
@@ -675,9 +689,25 @@ def _escalate_beta_draft(
             content, existing_unpublished.tag(), target_version.tag()
         )
     old_tag = existing_unpublished.tag()
-    old_rel = common.gh_release(context.github_repository, context.github_token, tag=old_tag)
-    if old_rel and old_rel.get("id"):
-        common.gh_release_delete(context.github_repository, context.github_token, int(old_rel["id"]))
+    try:
+        found = False
+        for r in common.gh_releases(context.github_repository, context.github_token, max_pages=50):
+            if _release_matches_tag(r, old_tag):
+                rid = r.get("id")
+                if rid:
+                    ok = common.gh_release_delete(context.github_repository, context.github_token, int(rid))
+                    if ok:
+                        print(f"[release-manager] Deleted matching release id={rid} for {old_tag}")
+                    else:
+                        print(f"::warning::[release-manager] Failed to delete release id={rid} for tag {old_tag}")
+                else:
+                    print(f"::warning::[release-manager] Matching release found for {old_tag} but no id present: {r}")
+                found = True
+                break
+        if not found:
+            print(f"[release-manager] No matching release found to delete for {old_tag}")
+    except Exception as e:
+        print(f"::warning::[release-manager] Exception while trying to delete old draft {old_tag}: {e}")
     common.git_delete_tag(old_tag)
     print(
         f"[release-manager] Escalated draft {old_tag} -> {target_version.tag()} "
@@ -702,14 +732,18 @@ def _create_beta_entry(
     )
     compare_from = None
     if replace and existing_unpublished:
-        content, old_tag = _escalate_beta_draft(
+        existing_block = _find_section_block(content, existing_unpublished.tag())
+        compare_from = _section_compare_from(
+            existing_block,
+            existing_unpublished.tag(),
+        ) or _beta_compare_from(existing_unpublished, latest_stable)
+        content, _ = _escalate_beta_draft(
             context,
             content,
             existing_unpublished,
             target_version,
             reason=reason,
         )
-        compare_from = old_tag
         latest_stable, _ = _latest_versions(content)
     if compare_from is None:
         compare_from = _beta_compare_from(target_version, latest_stable)

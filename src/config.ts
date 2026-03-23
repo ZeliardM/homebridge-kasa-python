@@ -1,9 +1,3 @@
-import type { PlatformConfig } from 'homebridge';
-
-import fs from 'node:fs/promises';
-import path from 'node:path';
-
-import { PLATFORM_NAME } from './settings.js';
 import { isObjectLike } from './utils.js';
 import type { ConfigDevice } from './devices/deviceTypes.js';
 
@@ -44,6 +38,8 @@ export interface KasaPythonConfigInput {
   username?: string;
   password?: string;
   enableEnergyMonitoring?: boolean;
+  powerThreshold?: number;
+  logEnergyMonitoring?: boolean;
   hideHomeKitMatter?: boolean;
   pollingInterval?: number;
   discoveryPollingInterval?: number;
@@ -55,7 +51,6 @@ export interface KasaPythonConfigInput {
   waitTimeUpdate?: number;
   pythonPath?: string;
   advancedPythonLogging?: boolean;
-  logEnergyMonitoring?: boolean;
 }
 
 export type KasaPythonConfig = {
@@ -63,7 +58,11 @@ export type KasaPythonConfig = {
   enableCredentials: boolean;
   username: string;
   password: string;
-  enableEnergyMonitoring: boolean;
+  energyOptions: {
+    enableEnergyMonitoring: boolean;
+    powerThreshold: number;
+    logEnergyMonitoring: boolean;
+  };
   homekitOptions: {
     hideHomeKitMatter: boolean;
   };
@@ -80,7 +79,6 @@ export type KasaPythonConfig = {
     waitTimeUpdate: number;
     pythonPath?: string;
     advancedPythonLogging: boolean;
-    logEnergyMonitoring: boolean;
   };
 };
 
@@ -89,7 +87,11 @@ export const defaultConfig: KasaPythonConfig = {
   enableCredentials: false,
   username: '',
   password: '',
-  enableEnergyMonitoring: false,
+  energyOptions: {
+    enableEnergyMonitoring: false,
+    powerThreshold: 2,
+    logEnergyMonitoring: false,
+  },
   homekitOptions: {
     hideHomeKitMatter: true,
   },
@@ -106,46 +108,36 @@ export const defaultConfig: KasaPythonConfig = {
     waitTimeUpdate: 100,
     pythonPath: '',
     advancedPythonLogging: false,
-    logEnergyMonitoring: false,
   },
 };
 
-const MISSING_ALIAS_PLACEHOLDER = 'Will Be Filled By Plug-In Automatically';
-
-type LegacyConfigDevice = ConfigDevice & { breakoutChildDevices?: boolean };
-type HomebridgeConfigFile = { platforms?: PlatformConfig[] } & Record<string, unknown>;
+type LegacyConfigDevice = {
+  host?: unknown;
+  alias?: unknown;
+  breakoutChildDevices?: boolean;
+};
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-export function migrateManualDevices(
-  manualDevices: (string | ConfigDevice)[] | undefined | null,
-): { manualDevices: ConfigDevice[]; changed: boolean } {
+function normalizeManualDevices(manualDevices: (string | ConfigDevice)[] | undefined | null): ConfigDevice[] {
   if (!manualDevices || manualDevices.length === 0) {
-    return { manualDevices: [], changed: false };
+    return [];
   }
 
-  let changed = false;
-  const migratedDevices = manualDevices.map(device => {
+  return manualDevices.flatMap(device => {
     if (typeof device === 'string') {
-      changed = true;
-      return { host: device, alias: MISSING_ALIAS_PLACEHOLDER };
+      return isNonEmptyString(device) ? [{ host: device }] : [];
     }
 
     const migratedDevice = device as LegacyConfigDevice;
-    const alias = isNonEmptyString(migratedDevice.alias) ? migratedDevice.alias : MISSING_ALIAS_PLACEHOLDER;
-    if (alias !== migratedDevice.alias || 'breakoutChildDevices' in migratedDevice) {
-      changed = true;
+    if (!isNonEmptyString(migratedDevice.host)) {
+      return [];
     }
 
-    return {
-      host: migratedDevice.host,
-      alias,
-    };
+    return [{ host: migratedDevice.host }];
   });
-
-  return { manualDevices: migratedDevices, changed };
 }
 
 function validateManualDevices(
@@ -165,8 +157,6 @@ function validateManualDevices(
     if (typeof entry === 'string') {
       if (!isNonEmptyString(entry)) {
         errors.push(`\`manualDevices[${index}]\` should not be an empty string.`);
-      } else {
-        errors.push(`\`manualDevices[${index}]\` should be an object with \`host\` and \`alias\`.`);
       }
       return;
     }
@@ -180,14 +170,6 @@ function validateManualDevices(
     if (!isNonEmptyString(device.host)) {
       errors.push(`\`manualDevices[${index}].host\` should be a non-empty string.`);
     }
-
-    if (!isNonEmptyString(device.alias)) {
-      errors.push(`\`manualDevices[${index}].alias\` should be a non-empty string.`);
-    }
-
-    if ('breakoutChildDevices' in device) {
-      errors.push(`\`manualDevices[${index}]\` uses unsupported legacy field \`breakoutChildDevices\`.`);
-    }
   });
 }
 
@@ -199,6 +181,8 @@ function validateConfig(config: Record<string, unknown>): string[] {
   validateType(config, 'username', 'string', errors);
   validateType(config, 'password', 'string', errors);
   validateType(config, 'enableEnergyMonitoring', 'boolean', errors);
+  validateType(config, 'powerThreshold', 'number', errors);
+  validateType(config, 'logEnergyMonitoring', 'boolean', errors);
   validateType(config, 'hideHomeKitMatter', 'boolean', errors);
   validateType(config, 'pollingInterval', 'number', errors);
   validateType(config, 'discoveryPollingInterval', 'number', errors);
@@ -221,9 +205,28 @@ function validateConfig(config: Record<string, unknown>): string[] {
   validateType(config, 'waitTimeUpdate', 'number', errors);
   validateType(config, 'pythonPath', 'string', errors);
   validateType(config, 'advancedPythonLogging', 'boolean', errors);
-  validateType(config, 'logEnergyMonitoring', 'boolean', errors);
+
+  validatePowerThreshold(config.powerThreshold, errors);
 
   return errors;
+}
+
+function validatePowerThreshold(value: unknown, errors: string[]): void {
+  if (value === undefined) {
+    return;
+  }
+
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return;
+  }
+
+  if (value < 0.001) {
+    errors.push('`powerThreshold` should be at least 0.001.');
+  }
+
+  if (Math.abs(Math.round(value * 1000) - (value * 1000)) > Number.EPSILON * 1000) {
+    errors.push('`powerThreshold` should use no more than three decimal places.');
+  }
 }
 
 function validateType(
@@ -238,17 +241,17 @@ function validateType(
 }
 
 export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
+  if (!isObjectLike(config)) {
+    throw new ConfigParseError('Error parsing config');
+  }
+
   const errors = validateConfig(config);
   if (errors.length > 0) {
     throw new ConfigParseError('Error parsing config', errors);
   }
 
-  if (!isObjectLike(config)) {
-    throw new ConfigParseError('Error parsing config');
-  }
-
   const parsedConfig = { ...defaultConfig, ...config } as KasaPythonConfigInput;
-  const strictManualDevices = (parsedConfig.manualDevices as ConfigDevice[] | undefined)
+  const normalizedManualDevices = normalizeManualDevices(parsedConfig.manualDevices)
     ?? defaultConfig.discoveryOptions.manualDevices;
 
   return {
@@ -256,7 +259,11 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     enableCredentials: parsedConfig.enableCredentials ?? defaultConfig.enableCredentials,
     username: parsedConfig.username ?? defaultConfig.username,
     password: parsedConfig.password ?? defaultConfig.password,
-    enableEnergyMonitoring: parsedConfig.enableEnergyMonitoring ?? defaultConfig.enableEnergyMonitoring,
+    energyOptions: {
+      enableEnergyMonitoring: parsedConfig.enableEnergyMonitoring ?? defaultConfig.energyOptions.enableEnergyMonitoring,
+      powerThreshold: parsedConfig.powerThreshold ?? defaultConfig.energyOptions.powerThreshold,
+      logEnergyMonitoring: parsedConfig.logEnergyMonitoring ?? defaultConfig.energyOptions.logEnergyMonitoring,
+    },
     homekitOptions: {
       hideHomeKitMatter: parsedConfig.hideHomeKitMatter ?? defaultConfig.homekitOptions.hideHomeKitMatter,
     },
@@ -265,7 +272,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
       discoveryPollingInterval: (parsedConfig.discoveryPollingInterval ?? defaultConfig.discoveryOptions.discoveryPollingInterval) * 1000,
       offlineInterval: (parsedConfig.offlineInterval ?? defaultConfig.discoveryOptions.offlineInterval) * 24 * 60 * 60 * 1000,
       additionalBroadcasts: parsedConfig.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
-      manualDevices: strictManualDevices,
+      manualDevices: normalizedManualDevices,
       excludeMacAddresses: parsedConfig.excludeMacAddresses ?? defaultConfig.discoveryOptions.excludeMacAddresses,
       includeMacAddresses: parsedConfig.includeMacAddresses ?? defaultConfig.discoveryOptions.includeMacAddresses,
     },
@@ -273,88 +280,6 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
       waitTimeUpdate: parsedConfig.waitTimeUpdate ?? defaultConfig.advancedOptions.waitTimeUpdate,
       pythonPath: parsedConfig.pythonPath ?? defaultConfig.advancedOptions.pythonPath,
       advancedPythonLogging: parsedConfig.advancedPythonLogging ?? defaultConfig.advancedOptions.advancedPythonLogging,
-      logEnergyMonitoring: parsedConfig.logEnergyMonitoring ?? defaultConfig.advancedOptions.logEnergyMonitoring,
     },
   };
-}
-
-function getConfigPath(storagePath: string): string {
-  return path.join(storagePath, 'config.json');
-}
-
-async function readHomebridgeConfig(storagePath: string): Promise<HomebridgeConfigFile> {
-  const data = await fs.readFile(getConfigPath(storagePath), 'utf8');
-  return JSON.parse(data) as HomebridgeConfigFile;
-}
-
-async function writeHomebridgeConfig(storagePath: string, fileConfig: HomebridgeConfigFile): Promise<void> {
-  await fs.writeFile(getConfigPath(storagePath), JSON.stringify(fileConfig, null, 2), 'utf8');
-}
-
-function getPlatformSection(fileConfig: HomebridgeConfigFile, platformName: string): PlatformConfig | undefined {
-  return fileConfig.platforms?.find(platformConfig => platformConfig.platform === platformName);
-}
-
-export async function loadPlatformConfigFromStorage(storagePath: string): Promise<KasaPythonConfig> {
-  const fileConfig = await readHomebridgeConfig(storagePath);
-  const platformSection = getPlatformSection(fileConfig, PLATFORM_NAME);
-  if (!platformSection) {
-    throw new ConfigParseError('KasaPython configuration missing in config file.');
-  }
-
-  const { manualDevices, changed } = migrateManualDevices(platformSection.manualDevices as (string | ConfigDevice)[] | undefined);
-  if (platformSection.manualDevices !== undefined) {
-    platformSection.manualDevices = manualDevices;
-  }
-
-  const parsedConfig = parseConfig(platformSection);
-  if (changed) {
-    await writeHomebridgeConfig(storagePath, fileConfig);
-  }
-
-  return parsedConfig;
-}
-
-export async function persistDiscoveredAliases(
-  storagePath: string,
-  aliasesByHost: Map<string, string>,
-): Promise<KasaPythonConfig | undefined> {
-  if (aliasesByHost.size === 0) {
-    return undefined;
-  }
-
-  const fileConfig = await readHomebridgeConfig(storagePath);
-  const platformSection = getPlatformSection(fileConfig, PLATFORM_NAME);
-  if (!platformSection) {
-    throw new ConfigParseError('KasaPython configuration missing in config file.');
-  }
-
-  const manualDevices = platformSection.manualDevices;
-  if (!Array.isArray(manualDevices) || manualDevices.length === 0) {
-    return undefined;
-  }
-
-  let changed = false;
-  for (const entry of manualDevices) {
-    if (!isObjectLike(entry)) {
-      continue;
-    }
-
-    const device = entry as Record<string, unknown>;
-    const host = typeof device.host === 'string' ? device.host : undefined;
-    const nextAlias = host ? aliasesByHost.get(host) : undefined;
-    if (!nextAlias || device.alias === nextAlias) {
-      continue;
-    }
-
-    device.alias = nextAlias;
-    changed = true;
-  }
-
-  if (!changed) {
-    return undefined;
-  }
-
-  await writeHomebridgeConfig(storagePath, fileConfig);
-  return parseConfig(platformSection);
 }

@@ -94,11 +94,51 @@ jobs:
             echo "::warning::Failed to retarget base to beta for PR #$PULL_REQUEST_NUMBER (base was '$BASE')."
           fi
 
+  refresh-dependabot-branch:
+    name: Refresh Retargeted Dependabot Branch
+    runs-on: ubuntu-latest
+    needs: retarget-base
+    if: needs.retarget-base.result == 'success' && github.actor == 'dependabot[bot]'
+    outputs:
+      refreshed: ${{ steps.refresh.outputs.refreshed }}
+      status: ${{ steps.refresh.outputs.status }}
+      reason: ${{ steps.refresh.outputs.reason }}
+    steps:
+      - name: Checkout Actions
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 24
+        id: setup-node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Setup Python 3.13
+        id: setup-python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Refresh Dependabot Branch from Beta
+        id: refresh
+        shell: bash
+        env:
+          ORIGINAL_PULL_REQUEST_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/refresh_dependabot_pr.py
+
   label:
     name: Clear & Apply Labels
     runs-on: ubuntu-latest
-    needs: retarget-base
-    if: needs.retarget-base.result == 'success'
+    needs: [retarget-base, refresh-dependabot-branch]
+    if: >
+      needs.retarget-base.result == 'success' &&
+      (needs.refresh-dependabot-branch.result == 'success' || needs.refresh-dependabot-branch.result == 'skipped') &&
+      needs.refresh-dependabot-branch.outputs.refreshed != 'true'
     steps:
       - name: Checkout Actions
         id: checkout

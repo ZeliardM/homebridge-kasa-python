@@ -100,7 +100,6 @@ export interface DeviceConfig {
 
 export interface ConfigDevice {
   host: string;
-  alias: string;
 }
 
 export const Plugs = [
@@ -137,6 +136,7 @@ export interface CharacteristicDescriptor {
   type: WithUUID<new () => Characteristic>;
   name?: string;
   writable?: boolean;
+  syncGroup?: string;
   debouncePolls?: number;
   syncHomeKitValueAfterSet?: boolean;
   getInitial(context: DescriptorContext): CharacteristicValue;

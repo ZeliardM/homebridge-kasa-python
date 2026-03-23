@@ -267,8 +267,6 @@ export default abstract class HomeKitDevice {
   }
 
   public updateAfterPeriodicDiscovery(force = false): void {
-    // Data was already provided by the caller (kasaDevice was just assigned),
-    // so skip the getSysInfo fetch to avoid a redundant device round-trip.
     void this.refreshAndUpdateCharacteristics(force, true);
   }
 
@@ -287,6 +285,7 @@ export default abstract class HomeKitDevice {
         () => this.genericOnGet(descriptor),
         descriptor.writable ? (value: CharacteristicValue) => this.genericOnSet(descriptor, value) : undefined,
       );
+      this.seedCharacteristicValue(this.primaryService, descriptor, this.buildDescriptorContext(), 'Seed error');
     }
   }
 
@@ -318,6 +317,20 @@ export default abstract class HomeKitDevice {
       child,
       alias: child ? child.alias : this.name,
     };
+  }
+
+  protected seedCharacteristicValue(
+    service: Service,
+    descriptor: CharacteristicDescriptor,
+    context: DescriptorContext,
+    errorPrefix: string,
+  ): void {
+    try {
+      const characteristic = service.getCharacteristic(descriptor.type);
+      characteristic.updateValue(descriptor.getInitial(context));
+    } catch (error) {
+      this.log.error(`${errorPrefix} for ${descriptor.name ?? descriptor.type.UUID}`, error);
+    }
   }
 
   protected updateDeviceField<K extends keyof SysInfo>(key: K, value: SysInfo[K]): void {
@@ -354,8 +367,7 @@ export default abstract class HomeKitDevice {
     value: CharacteristicValue,
     isGrouped = false,
   ): Promise<void> {
-    const lockKey = this.makeLockKey();
-    await this.withLock(lockKey, async () => {
+    const runSet = async () => {
       if (this.shouldSkipUpdate()) {
         return;
       }
@@ -367,19 +379,24 @@ export default abstract class HomeKitDevice {
         const context = this.buildDescriptorContext();
         await descriptor.applySet!(value, context);
 
-        const postSetValue = descriptor.getCurrent(context);
+        const descriptorsToUpdate = descriptor.syncGroup
+          ? this.primaryDescriptors.filter(desc => desc.syncGroup === descriptor.syncGroup)
+          : [descriptor];
 
         if (this.primaryService) {
-          const char = this.primaryService.getCharacteristic(descriptor.type);
-          if (descriptor.syncHomeKitValueAfterSet) {
-            this.updateValue(
-              this.primaryService,
-              char,
-              context.alias,
-              postSetValue as CharacteristicValue,
-            );
-          } else {
-            this.log.info(`Set ${this.platform.lsc(this.primaryService, char)} on ${context.alias} to ${postSetValue}`);
+          for (const desc of descriptorsToUpdate) {
+            const postSetValue = desc.getCurrent(context);
+            const char = this.primaryService.getCharacteristic(desc.type);
+            if (desc.syncHomeKitValueAfterSet) {
+              this.updateValue(
+                this.primaryService,
+                char,
+                context.alias,
+                postSetValue as CharacteristicValue,
+              );
+            } else {
+              this.log.info(`Set ${this.platform.lsc(this.primaryService, char)} on ${context.alias} to ${postSetValue}`);
+            }
           }
         }
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
@@ -393,7 +410,27 @@ export default abstract class HomeKitDevice {
           this.updateEmitter.emit('updateComplete');
         }
       }
-    });
+    };
+
+    if (this.shouldBypassSetLock(descriptor)) {
+      await runSet();
+      return;
+    }
+
+    const lockKey = this.makeLockKey();
+    await this.withLock(lockKey, runSet);
+  }
+
+  private shouldBypassSetLock(descriptor: CharacteristicDescriptor): boolean {
+    if (!descriptor.syncGroup) {
+      return false;
+    }
+
+    const writableDescriptorsInGroup = this.primaryDescriptors.filter(desc =>
+      desc.syncGroup === descriptor.syncGroup && desc.writable,
+    );
+
+    return writableDescriptorsInGroup.length > 1;
   }
 
   protected async updateAllServicesAndCharacteristics(forceUpdate: boolean): Promise<void> {
@@ -498,15 +535,26 @@ export default abstract class HomeKitDevice {
     label?: string,
     force = false,
   ): void {
-    const needsInit = characteristic.value === undefined || characteristic.value === null;
+    const currentValue = characteristic.value as Nullable<CharacteristicValue>;
+    const needsInit = currentValue === undefined || currentValue === null;
+    const homeKitValueChanged = needsInit || currentValue !== nextValue;
+    const snapshotChanged = previousValue !== nextValue;
+    const shouldUpdate = force || needsInit || snapshotChanged;
     const isEnergyCharacteristic = this.isEnergyMonitoringCharacteristic(characteristic);
-    if (force || needsInit || previousValue !== nextValue) {
-      if (label) {
-        if (!isEnergyCharacteristic || (isEnergyCharacteristic && this.platform.config.advancedOptions.logEnergyMonitoring)) {
-          this.log.debug(`[${alias}] Updating ${label}: ${previousValue} → ${nextValue}`);
+
+    if (shouldUpdate) {
+      if (label && homeKitValueChanged) {
+        if (!isEnergyCharacteristic || (isEnergyCharacteristic && this.platform.config.energyOptions.logEnergyMonitoring)) {
+          this.log.debug(`Updating ${label}: ${previousValue} → ${nextValue}`);
         }
       }
-      this.updateValue(service, characteristic, alias, nextValue as unknown as Nullable<CharacteristicValue>);
+      this.updateValue(
+        service,
+        characteristic,
+        alias,
+        nextValue as unknown as Nullable<CharacteristicValue>,
+        homeKitValueChanged,
+      );
     }
   }
 
@@ -521,9 +569,10 @@ export default abstract class HomeKitDevice {
     characteristic: Characteristic,
     deviceAlias: string,
     value: Nullable<CharacteristicValue> | Error | HapStatusError,
+    logUpdate = true,
   ): void {
     const isEnergyCharacteristic = this.isEnergyMonitoringCharacteristic(characteristic);
-    if (!isEnergyCharacteristic || (isEnergyCharacteristic && this.platform.config.advancedOptions.logEnergyMonitoring)) {
+    if (logUpdate && (!isEnergyCharacteristic || (isEnergyCharacteristic && this.platform.config.energyOptions.logEnergyMonitoring))) {
       this.log.info(`Updating ${this.platform.lsc(service, characteristic)} on ${deviceAlias} to ${value}`);
     }
     characteristic.updateValue(value);

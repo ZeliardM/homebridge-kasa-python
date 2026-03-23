@@ -47,6 +47,19 @@
         "description": "Enable to add energy monitoring characteristics (Volts, Amperes, Watts, KiloWattHours) to supported devices.",
         "default": false
       },
+      "powerThreshold": {
+        "title": "Outlet In Use Power Threshold (Watts)",
+        "type": "number",
+        "description": "Power threshold used to mark OutletInUse as true on devices with energy reporting support. Values must be at least 0.001 and may use up to three decimal places.",
+        "default": 2,
+        "minimum": 0.001
+      },
+      "logEnergyMonitoring": {
+        "title": "Log Energy Monitoring Events",
+        "type": "boolean",
+        "description": "Enable logging of power/energy monitoring characteristic updates (Volts, Amperes, Watts, KiloWattHours).",
+        "default": false
+      },
       "hideHomeKitMatter": {
         "title": "Hide HomeKit or Matter Devices",
         "type": "boolean",
@@ -90,14 +103,6 @@
             "host": {
               "type": "string",
               "title": "Host"
-            },
-            "alias": {
-              "type": "string",
-              "title": "Alias",
-              "readonly": true,
-              "condition": {
-                "functionBody": "return model.manualDevices && model.manualDevices[arrayIndices] && model.manualDevices[arrayIndices].host && model.manualDevices[arrayIndices].host !== '';"
-              }
             }
           }
         },
@@ -139,12 +144,6 @@
         "type": "boolean",
         "description": "Enable detailed logging for Python scripts. Only shows logs when Debug Mode in Homebridge is enabled.",
         "default": false
-      },
-      "logEnergyMonitoring": {
-        "title": "Log Energy Monitoring Events",
-        "type": "boolean",
-        "description": "Enable logging of power/energy monitoring characteristic updates (Volts, Amperes, Watts, KiloWattHours).",
-        "default": false
       }
     }
   },
@@ -165,7 +164,17 @@
       "type": "help",
       "helpvalue": "Username and Password will be required for specific devices only."
     },
-    "enableEnergyMonitoring",
+    {
+      "type": "fieldset",
+      "title": "Energy (Optional)",
+      "description": "Configure energy-based Outlet In Use handling and optional energy characteristics.",
+      "expandable": true,
+      "items": [
+        "enableEnergyMonitoring",
+        "powerThreshold",
+        "logEnergyMonitoring"
+      ]
+    },
     {
       "type": "fieldset",
       "title": "HomeKit (Optional)",
@@ -210,8 +219,7 @@
               "key": "manualDevices",
               "type": "array",
               "items": [
-                "manualDevices[].host",
-                "manualDevices[].alias"
+                "manualDevices[].host"
               ]
             },
             {
@@ -262,8 +270,7 @@
       "items": [
         "waitTimeUpdate",
         "pythonPath",
-        "advancedPythonLogging",
-        "logEnergyMonitoring"
+        "advancedPythonLogging"
       ]
     }
   ]
