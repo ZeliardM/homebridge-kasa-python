@@ -1,4 +1,11 @@
 # Changelog
+## [v3.2.1-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.1-beta.0)
+
+### Other Changes
+
+- pip(deps): bump anyio from 4.12.1 to 4.13.0 [#272](https://github.com/ZeliardM/homebridge-kasa-python/pull/272) (@dependabot[bot])
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.2.0...v3.2.1-beta.0
 
 ## [v3.2.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.0) (2026-03-23)
 
