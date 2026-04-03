@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- pip(deps): bump uvicorn from 0.42.0 to 0.43.0 [#282](https://github.com/ZeliardM/homebridge-kasa-python/pull/282) (@dependabot[bot])
 - npm-dev(deps-dev): bump typescript-eslint from 8.57.1 to 8.57.2 [#275](https://github.com/ZeliardM/homebridge-kasa-python/pull/275) (@dependabot[bot])
 - pip(deps): bump anyio from 4.12.1 to 4.13.0 [#272](https://github.com/ZeliardM/homebridge-kasa-python/pull/272) (@dependabot[bot])
 
