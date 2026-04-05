@@ -95,15 +95,16 @@ export default class DeviceManager {
   async getSysInfo(host: string): Promise<SysInfo | undefined> {
     try {
       const response = await axios.post(`${this.apiUrl}/getSysInfo`, { host });
-      const sysInfo: SysInfo = response.data.sys_info;
+      const sysInfo: SysInfo | undefined = response.data?.sys_info;
       if (!sysInfo) {
+        this.log.debug(`[getSysInfo] No sys_info payload returned for host ${host}`);
         return undefined;
       }
       this.updateDeviceAlias(sysInfo);
       return sysInfo;
     } catch (error) {
       this.handleAxiosError(error, 'getSysInfo');
-      throw error;
+      return undefined;
     }
   }
 
