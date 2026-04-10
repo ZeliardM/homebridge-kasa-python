@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- [other] Workflow fixes for dependabot auto-merge [d1ca8b2](https://github.com/ZeliardM/homebridge-kasa-python/commit/d1ca8b27175dc98bb5ae60a5cb63252d28ad5298) (@ZeliardM)
 - npm-dev(deps-dev): bump typescript-eslint from 8.57.2 to 8.58.1 [#293](https://github.com/ZeliardM/homebridge-kasa-python/pull/293) (@dependabot[bot])
 - npm-dev(deps-dev): bump @types/node from 25.5.2 to 25.6.0 [#292](https://github.com/ZeliardM/homebridge-kasa-python/pull/292) (@dependabot[bot])
 - npm-dev(deps-dev): bump eslint from 10.1.0 to 10.2.0 [#290](https://github.com/ZeliardM/homebridge-kasa-python/pull/290) (@dependabot[bot])
