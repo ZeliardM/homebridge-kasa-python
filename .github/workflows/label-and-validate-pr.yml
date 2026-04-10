@@ -164,7 +164,7 @@ jobs:
         id: metadata
         if: contains(github.event.pull_request.user.login, 'dependabot')
         continue-on-error: true
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
         with:
           github-token: "${{ env.GITHUB_TOKEN }}"
 
