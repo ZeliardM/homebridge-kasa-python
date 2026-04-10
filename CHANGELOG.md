@@ -4,6 +4,7 @@
 ### Other Changes
 
 - npm-dev(deps-dev): bump typescript-eslint from 8.57.2 to 8.58.1 [#293](https://github.com/ZeliardM/homebridge-kasa-python/pull/293) (@dependabot[bot])
+- npm-dev(deps-dev): bump @types/node from 25.5.2 to 25.6.0 [#292](https://github.com/ZeliardM/homebridge-kasa-python/pull/292) (@dependabot[bot])
 - npm-dev(deps-dev): bump eslint from 10.1.0 to 10.2.0 [#290](https://github.com/ZeliardM/homebridge-kasa-python/pull/290) (@dependabot[bot])
 - pip(deps): bump uvicorn from 0.43.0 to 0.44.0 [#289](https://github.com/ZeliardM/homebridge-kasa-python/pull/289) (@dependabot[bot])
 - npm-dev(deps-dev): bump @types/node from 25.5.0 to 25.5.2 [#283](https://github.com/ZeliardM/homebridge-kasa-python/pull/283) (@dependabot[bot])
