@@ -6,6 +6,7 @@
 - [other] Release Workflow Version Handling Fixes [c2132b2](https://github.com/ZeliardM/homebridge-kasa-python/commit/c2132b26988909cf6a8dbc02c6f3923839ed7741) (@ZeliardM)
 - [other] Dependabot workflow fixes [ea20de9](https://github.com/ZeliardM/homebridge-kasa-python/commit/ea20de94954a68667857c7760af71890522d6546) (@ZeliardM)
 - [other] Workflow fixes for dependabot auto-merge [d1ca8b2](https://github.com/ZeliardM/homebridge-kasa-python/commit/d1ca8b27175dc98bb5ae60a5cb63252d28ad5298) (@ZeliardM)
+- npm-dev(deps-dev): bump homebridge from 2.0.0-beta.87 to 2.0.0-beta.89 [#295](https://github.com/ZeliardM/homebridge-kasa-python/pull/295) (@dependabot[bot])
 - npm-dev(deps-dev): bump typescript-eslint from 8.57.2 to 8.58.1 [#293](https://github.com/ZeliardM/homebridge-kasa-python/pull/293) (@dependabot[bot])
 - npm-dev(deps-dev): bump @types/node from 25.5.2 to 25.6.0 [#292](https://github.com/ZeliardM/homebridge-kasa-python/pull/292) (@dependabot[bot])
 - npm(deps): bump axios from 1.13.6 to 1.15.0 [#291](https://github.com/ZeliardM/homebridge-kasa-python/pull/291) (@dependabot[bot])
