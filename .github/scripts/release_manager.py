@@ -522,6 +522,62 @@ def _latest_versions(changelog: str) -> tuple[Version | None, Version | None]:
     latest_beta = max(beta, key=_version_sort_key) if beta else None
     return latest_stable, latest_beta
 
+def _release_version(rel: dict) -> Version | None:
+    if not isinstance(rel, dict):
+        return None
+    for key in ("tag_name", "name"):
+        raw = str(rel.get(key) or "").strip()
+        if not raw:
+            continue
+        try:
+            version = Version.parse(raw)
+        except Exception:
+            continue
+        if not version.is_beta():
+            return version
+    return None
+
+def _latest_published_stable_release(context: Context) -> Version | None:
+    if not context.github_repository or not context.github_token:
+        return None
+    try:
+        published: list[Version] = []
+        for rel in common.gh_releases(
+            context.github_repository, context.github_token, max_pages=50
+        ):
+            if not isinstance(rel, dict):
+                continue
+            if rel.get("draft") or rel.get("prerelease"):
+                continue
+            version = _release_version(rel)
+            if version is not None:
+                published.append(version)
+        latest = max(published, key=_version_sort_key) if published else None
+        if latest is not None:
+            print(
+                "[release-manager] latest published stable release -> "
+                f"{latest.tag()}"
+            )
+        return latest
+    except Exception as e:
+        print(
+            "[release-manager] Warning: unable to read published stable releases: "
+            f"{e}"
+        )
+        return None
+
+def _effective_latest_stable(context: Context, changelog: str) -> Version | None:
+    changelog_stable, _ = _latest_versions(changelog)
+    published_stable = _latest_published_stable_release(context)
+    if published_stable is not None:
+        if changelog_stable is not None and changelog_stable != published_stable:
+            print(
+                "[release-manager] using published stable baseline "
+                f"{published_stable.tag()} instead of changelog {changelog_stable.tag()}"
+            )
+        return published_stable
+    return changelog_stable
+
 def _section_is_published(content: str, tag: str) -> bool:
     prefix = f"## [{tag}]"
     for l in content.splitlines():
@@ -580,6 +636,14 @@ def _bump_base(latest_stable: Version | None, bump: str) -> Version:
         return base.bump_minor()
     return base.bump_patch()
 
+def _draft_is_stale_for_latest_stable(
+    draft: Version,
+    latest_stable: Version | None,
+) -> bool:
+    if latest_stable is None:
+        return False
+    return draft.base() <= latest_stable.base()
+
 def _decide_beta_target(
     content: str,
     latest_stable: Version | None,
@@ -601,6 +665,16 @@ def _decide_beta_target(
         f"bump={required_bump}, required_base={required_base.tag()}"
     )
     if existing_unpublished:
+        if _draft_is_stale_for_latest_stable(existing_unpublished, latest_stable):
+            target = Version(
+                required_base.major, required_base.minor, required_base.patch, 0
+            )
+            print(
+                "[release-manager] _decide_beta_target: replacing stale draft "
+                f"{existing_unpublished.tag()} -> {target.tag()} after stable "
+                f"{latest_stable.tag() if latest_stable else 'None'}"
+            )
+            return target, True, existing_unpublished
         draft_base = existing_unpublished.base()
         draft_bump = _base_bump_level(latest_stable, draft_base)
         if draft_bump == "patch":
@@ -724,7 +798,7 @@ def _create_beta_entry(
     *,
     reason: str,
 ) -> tuple[str, Version]:
-    latest_stable, _ = _latest_versions(content)
+    latest_stable = _effective_latest_stable(context, content)
     target_version, replace, existing_unpublished = _decide_beta_target(
         content,
         latest_stable,
@@ -732,11 +806,14 @@ def _create_beta_entry(
     )
     compare_from = None
     if replace and existing_unpublished:
-        existing_block = _find_section_block(content, existing_unpublished.tag())
-        compare_from = _section_compare_from(
-            existing_block,
-            existing_unpublished.tag(),
-        ) or _beta_compare_from(existing_unpublished, latest_stable)
+        if _draft_is_stale_for_latest_stable(existing_unpublished, latest_stable):
+            compare_from = _beta_compare_from(target_version, latest_stable)
+        else:
+            existing_block = _find_section_block(content, existing_unpublished.tag())
+            compare_from = _section_compare_from(
+                existing_block,
+                existing_unpublished.tag(),
+            ) or _beta_compare_from(existing_unpublished, latest_stable)
         content, _ = _escalate_beta_draft(
             context,
             content,
@@ -744,7 +821,6 @@ def _create_beta_entry(
             target_version,
             reason=reason,
         )
-        latest_stable, _ = _latest_versions(content)
     if compare_from is None:
         compare_from = _beta_compare_from(target_version, latest_stable)
     if f"## [{target_version.tag()}]" in content:

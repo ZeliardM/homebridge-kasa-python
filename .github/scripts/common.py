@@ -236,8 +236,8 @@ def git_commit_files(files: Sequence[str], message: str) -> None:
         return
     if run(["git", "diff", "--cached", "--quiet"], check=False).returncode == 0:
         return
-    run(["git", "commit", "-m", message], check=False)
-    run(["git", "push"], check=False)
+    run(["git", "commit", "-m", message], check=True)
+    run(["git", "push"], check=True)
 
 def git_delete_tag(tag: str) -> None:
     try:

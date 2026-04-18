@@ -57,7 +57,7 @@ jobs:
     name: Retarget Pull Request Base to Beta
     runs-on: ubuntu-latest
     needs: prepare
-    if: needs.prepare.result == 'success' && github.actor != 'github-actions[bot]'
+    if: needs.prepare.result == 'success'
     steps:
       - name: Checkout Actions
         id: checkout
@@ -98,7 +98,7 @@ jobs:
     name: Refresh Retargeted Dependabot Branch
     runs-on: ubuntu-latest
     needs: retarget-base
-    if: needs.retarget-base.result == 'success' && github.actor == 'dependabot[bot]'
+    if: needs.retarget-base.result == 'success' && contains(github.event.pull_request.user.login, 'dependabot')
     outputs:
       refreshed: ${{ steps.refresh.outputs.refreshed }}
       status: ${{ steps.refresh.outputs.status }}
@@ -137,8 +137,7 @@ jobs:
     needs: [retarget-base, refresh-dependabot-branch]
     if: >
       needs.retarget-base.result == 'success' &&
-      (needs.refresh-dependabot-branch.result == 'success' || needs.refresh-dependabot-branch.result == 'skipped') &&
-      needs.refresh-dependabot-branch.outputs.refreshed != 'true'
+      (needs.refresh-dependabot-branch.result == 'success' || needs.refresh-dependabot-branch.result == 'skipped')
     steps:
       - name: Checkout Actions
         id: checkout
@@ -163,8 +162,9 @@ jobs:
 
       - name: Fetch Dependabot Metadata
         id: metadata
-        if: github.actor == 'dependabot[bot]'
-        uses: dependabot/fetch-metadata@v2
+        if: contains(github.event.pull_request.user.login, 'dependabot')
+        continue-on-error: true
+        uses: dependabot/fetch-metadata@v3
         with:
           github-token: "${{ env.GITHUB_TOKEN }}"
 
@@ -212,6 +212,43 @@ jobs:
             args+=("-f" "labels[]=$lbl")
           done
           gh api "${args[@]}"
+
+      - name: Apply Fallback Dependabot Labels
+        id: apply-dependabot-fallback-labels
+        if: contains(github.event.pull_request.user.login, 'dependabot') && steps.metadata.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(gh pr view "$PULL_REQUEST_NUMBER" --json files --jq '.files[].path')
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No changed files found for fallback Dependabot labeling."
+            exit 0
+          fi
+
+          lockfile_only=true
+          for file in "${files[@]}"; do
+            case "$file" in
+              package-lock.json|requirements.txt|uv.lock|poetry.lock|Pipfile.lock)
+                ;;
+              *)
+                lockfile_only=false
+                break
+                ;;
+            esac
+          done
+
+          if [ "$lockfile_only" != "true" ]; then
+            printf 'Dependabot metadata unavailable and file set is not lockfile-only: %s\n' "${files[*]}"
+            exit 0
+          fi
+
+          echo "Applying fallback labels for lockfile-only Dependabot PR."
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/$GITHUB_REPOSITORY/issues/$PULL_REQUEST_NUMBER/labels" \
+            -f "labels[]=dependency-lockfile" \
+            -f "labels[]=auto-merge"
 
   validate-pr:
     name: Validate Pull Request
@@ -289,7 +326,7 @@ jobs:
   dependabot-auto-merge:
     name: Dependabot Auto-Merge
     needs: validate-pr
-    if: needs.validate-pr.result == 'success' && needs.validate-pr.outputs.ok == 'true' && github.actor == 'dependabot[bot]'
+    if: needs.validate-pr.result == 'success' && needs.validate-pr.outputs.ok == 'true' && contains(github.event.pull_request.user.login, 'dependabot')
     uses: ./.github/workflows/shared-dependabot-auto-merge.yml
 
   fork-notice:

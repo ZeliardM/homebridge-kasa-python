@@ -80,7 +80,38 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr merge --auto --squash "$PULL_REQUEST_URL"
+          max_attempts=6
+          sleep_seconds=10
+          attempt=1
+          tmp_err="$(mktemp)"
+          while [ "$attempt" -le "$max_attempts" ]; do
+            echo "::notice::Dependabot merge attempt ${attempt}/${max_attempts}"
+            if gh pr merge --squash "$PULL_REQUEST_URL" 2>"$tmp_err"; then
+              exit 0
+            fi
+
+            err_text="$(cat "$tmp_err")"
+            pr_state="$(gh pr view "$PULL_REQUEST_URL" --json state --jq .state 2>/dev/null || echo UNKNOWN)"
+            mergeable="$(gh pr view "$PULL_REQUEST_URL" --json mergeable --jq .mergeable 2>/dev/null || echo UNKNOWN)"
+            merge_state="$(gh pr view "$PULL_REQUEST_URL" --json mergeStateStatus --jq .mergeStateStatus 2>/dev/null || echo UNKNOWN)"
+
+            printf '%s\n' "$err_text"
+            echo "::notice::PR state=${pr_state}, mergeable=${mergeable}, mergeStateStatus=${merge_state}"
+
+            if [ "$pr_state" = "MERGED" ]; then
+              exit 0
+            fi
+
+            if printf '%s\n' "$err_text" | grep -qi 'Pull request is in unstable status'; then
+              if [ "$attempt" -lt "$max_attempts" ]; then
+                sleep "$sleep_seconds"
+                attempt=$((attempt + 1))
+                continue
+              fi
+            fi
+
+            exit 1
+          done
 
       - name: Set Merge Result Output
         id: merge_output
@@ -88,7 +119,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ steps.auto_merge.outcome }}" = "success" ]; then
+          pr_state="$(gh pr view "$PULL_REQUEST_URL" --json state --jq .state 2>/dev/null || echo UNKNOWN)"
+          if [ "$pr_state" = "MERGED" ] || [ "${{ steps.auto_merge.outcome }}" = "success" ]; then
             echo "is_merged=true" >> "$GITHUB_OUTPUT"
           else
             echo "is_merged=false" >> "$GITHUB_OUTPUT"
