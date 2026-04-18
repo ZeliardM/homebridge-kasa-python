@@ -33,6 +33,8 @@ import {
   waitForServer,
 } from './utils.js';
 import { createEnergyCharacteristics } from './devices/energyCharacteristics.js';
+import { EveHomeKitTypes } from 'homebridge-lib/EveHomeKitTypes';
+import Fakegato from 'fakegato-history';
 import type { KasaPythonConfig } from './config.js';
 import type { KasaDevice } from './devices/deviceTypes.js';
 import type { EnergyCharacteristics } from './devices/energyCharacteristics.js';
@@ -41,6 +43,8 @@ export type KasaPythonAccessoryContext = {
   deviceId?: string;
   lastSeen?: Date;
   offline?: boolean;
+  lastActivation?: number;
+  totalConsumption?: number;
 };
 
 let packageConfig: { name: string; version: string; engines: { node: string } };
@@ -61,6 +65,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public port: number = 0;
   public taskQueue: TaskQueue;
   public venvPythonExecutable: string = '';
+  public HistoryService;
+  public eve;
   private readonly homekitDevicesById: Map<string, HomeKitDevice> = new Map();
   private deviceDiscoveredHandler?: (device: KasaDevice) => Promise<void>;
   private discoveryInterval?: NodeJS.Timeout;
@@ -78,6 +84,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       : undefined;
     this.periodicDeviceDiscoveryEmitter = new EventEmitter();
     this.taskQueue = new TaskQueue(this.log, () => this.isShuttingDown);
+    this.HistoryService = Fakegato(this.api);
+    this.eve = new EveHomeKitTypes(this.api);
 
     this.periodicDeviceDiscoveryEmitter.setMaxListeners(255);
     this.setupDeviceEventEmitter('firstDiscovery');

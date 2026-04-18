@@ -51,6 +51,7 @@ export interface KasaPythonConfigInput {
   waitTimeUpdate?: number;
   pythonPath?: string;
   advancedPythonLogging?: boolean;
+  enableEveHistoryView?: boolean;
 }
 
 export type KasaPythonConfig = {
@@ -62,6 +63,7 @@ export type KasaPythonConfig = {
     enableEnergyMonitoring: boolean;
     powerThreshold: number;
     logEnergyMonitoring: boolean;
+    enableEveHistoryView: boolean;
   };
   homekitOptions: {
     hideHomeKitMatter: boolean;
@@ -91,6 +93,7 @@ export const defaultConfig: KasaPythonConfig = {
     enableEnergyMonitoring: false,
     powerThreshold: 2,
     logEnergyMonitoring: false,
+    enableEveHistoryView: false,
   },
   homekitOptions: {
     hideHomeKitMatter: true,
@@ -187,6 +190,7 @@ function validateConfig(config: Record<string, unknown>): string[] {
   validateType(config, 'pollingInterval', 'number', errors);
   validateType(config, 'discoveryPollingInterval', 'number', errors);
   validateType(config, 'offlineInterval', 'number', errors);
+  validateType(config, 'enableEveHistoryView', 'boolean', errors);
 
   if (config.additionalBroadcasts !== undefined && !Array.isArray(config.additionalBroadcasts)) {
     errors.push('`additionalBroadcasts` should be an array of strings.');
@@ -263,6 +267,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
       enableEnergyMonitoring: parsedConfig.enableEnergyMonitoring ?? defaultConfig.energyOptions.enableEnergyMonitoring,
       powerThreshold: parsedConfig.powerThreshold ?? defaultConfig.energyOptions.powerThreshold,
       logEnergyMonitoring: parsedConfig.logEnergyMonitoring ?? defaultConfig.energyOptions.logEnergyMonitoring,
+      enableEveHistoryView: parsedConfig.enableEveHistoryView ?? defaultConfig.energyOptions.enableEveHistoryView,
     },
     homekitOptions: {
       hideHomeKitMatter: parsedConfig.hideHomeKitMatter ?? defaultConfig.homekitOptions.hideHomeKitMatter,

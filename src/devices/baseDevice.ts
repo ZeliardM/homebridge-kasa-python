@@ -303,6 +303,7 @@ export default abstract class HomeKitDevice {
     onGet: () => Promise<CharacteristicValue>,
     onSet?: (value: CharacteristicValue) => Promise<void>,
   ): void {
+    service.addOptionalCharacteristic(type);
     const characteristic = service.getCharacteristic(type) ?? service.addCharacteristic(type);
     characteristic.onGet(onGet);
     if (onSet) {
