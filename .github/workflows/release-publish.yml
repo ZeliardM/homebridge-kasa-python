@@ -140,6 +140,37 @@ jobs:
           set -euo pipefail
           echo "::notice::Published on npm - ${{ steps.publish.outputs.NPM_VERSION }}"
 
+  sync_latest_to_beta:
+    name: Sync latest to beta
+    runs-on: ubuntu-latest
+    needs: publish
+    if: >
+      needs.publish.result == 'success' &&
+      github.event.release.prerelease == false &&
+      github.event.release.target_commitish == 'latest'
+    steps:
+      - name: Checkout beta
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: beta
+
+      - name: Setup Python 3.13
+        id: setup-python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Sync latest into beta
+        id: sync
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/sync_latest_to_beta.py
+
   notify_discord:
     name: Discord Notification
     runs-on: ubuntu-latest
