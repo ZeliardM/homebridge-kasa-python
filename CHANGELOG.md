@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- [other] Improve Workflow Release Handling [5050983](https://github.com/ZeliardM/homebridge-kasa-python/commit/5050983c17b86fffd8f15601589323fe1a21faba) (@ZeliardM)
 - [other] Release Workflow Version Handling Fixes [c2132b2](https://github.com/ZeliardM/homebridge-kasa-python/commit/c2132b26988909cf6a8dbc02c6f3923839ed7741) (@ZeliardM)
 - [other] Dependabot workflow fixes [ea20de9](https://github.com/ZeliardM/homebridge-kasa-python/commit/ea20de94954a68667857c7760af71890522d6546) (@ZeliardM)
 - [other] Workflow fixes for dependabot auto-merge [d1ca8b2](https://github.com/ZeliardM/homebridge-kasa-python/commit/d1ca8b27175dc98bb5ae60a5cb63252d28ad5298) (@ZeliardM)
