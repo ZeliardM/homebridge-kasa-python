@@ -1,5 +1,9 @@
 # Changelog
-## [v3.2.1-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.1-beta.0)
+## [v3.3.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.0)
+
+### Featured Changes
+
+- [enhancement] Add L530EA Support [53cd544](https://github.com/ZeliardM/homebridge-kasa-python/commit/53cd5449872d77e2c75b2d5217101e7d60b37e2f) (@ZeliardM)
 
 ### Other Changes
 
@@ -22,7 +26,7 @@
 - npm-dev(deps-dev): bump typescript from 5.9.3 to 6.0.2 [#274](https://github.com/ZeliardM/homebridge-kasa-python/pull/274) (@dependabot[bot])
 - pip(deps): bump anyio from 4.12.1 to 4.13.0 [#272](https://github.com/ZeliardM/homebridge-kasa-python/pull/272) (@dependabot[bot])
 
-**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.2.0...v3.2.1-beta.0
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.2.0...v3.3.0-beta.0
 
 ## [v3.2.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.0) (2026-03-23)
 
