@@ -1,8 +1,13 @@
 # Changelog
-## [v3.2.1-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.1-beta.0)
+## [v3.3.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.0)
+
+### Featured Changes
+
+- [enhancement] Add L530EA Support [53cd544](https://github.com/ZeliardM/homebridge-kasa-python/commit/53cd5449872d77e2c75b2d5217101e7d60b37e2f) (@ZeliardM)
 
 ### Other Changes
 
+- [other] Improve Workflow Release Handling [5050983](https://github.com/ZeliardM/homebridge-kasa-python/commit/5050983c17b86fffd8f15601589323fe1a21faba) (@ZeliardM)
 - [other] Release Workflow Version Handling Fixes [c2132b2](https://github.com/ZeliardM/homebridge-kasa-python/commit/c2132b26988909cf6a8dbc02c6f3923839ed7741) (@ZeliardM)
 - [other] Dependabot workflow fixes [ea20de9](https://github.com/ZeliardM/homebridge-kasa-python/commit/ea20de94954a68667857c7760af71890522d6546) (@ZeliardM)
 - [other] Workflow fixes for dependabot auto-merge [d1ca8b2](https://github.com/ZeliardM/homebridge-kasa-python/commit/d1ca8b27175dc98bb5ae60a5cb63252d28ad5298) (@ZeliardM)
@@ -21,7 +26,7 @@
 - npm-dev(deps-dev): bump typescript from 5.9.3 to 6.0.2 [#274](https://github.com/ZeliardM/homebridge-kasa-python/pull/274) (@dependabot[bot])
 - pip(deps): bump anyio from 4.12.1 to 4.13.0 [#272](https://github.com/ZeliardM/homebridge-kasa-python/pull/272) (@dependabot[bot])
 
-**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.2.0...v3.2.1-beta.0
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.2.0...v3.3.0-beta.0
 
 ## [v3.2.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.0) (2026-03-23)
 
