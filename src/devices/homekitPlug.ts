@@ -12,6 +12,7 @@ import type { CharacteristicDescriptor, Plug } from './deviceTypes.js';
 export default class HomeKitDevicePlug extends HomeKitDevice {
   /* eslint @typescript-eslint/no-explicit-any: 0 */
   private historyService: any;
+  private eveKeepAliveInterval?: NodeJS.Timeout = undefined;
 
   constructor(
     platform: KasaPythonPlatform,
@@ -71,8 +72,8 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
     });
 
     // logging on/off status
-    const On = outlet?.getCharacteristic(Characteristic.On);
-    On?.on('change', async (event) => {
+    const on = outlet?.getCharacteristic(Characteristic.On);
+    on?.on('change', async (event) => {
       if (event.newValue !== event.oldValue) {
         const accessory = this.homebridgeAccessory;
         accessory.context.lastActivation = Math.round(new Date().valueOf() / 1000);
@@ -84,7 +85,7 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
     });
     this.historyService?.addEntry({
       time: Math.round(new Date().valueOf() / 1000),
-      status: On?.value ? 1 : 0,
+      status: on?.value ? 1 : 0,
     });
 
     // LockPhysicalControls characteristic
@@ -167,6 +168,23 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
           api.hap.Perms.NOTIFY,
           api.hap.Perms.HIDDEN,
         ],
+      });
+
+      // keep alive every 10 minutes just in case.
+      this.eveKeepAliveInterval = setInterval(() => {
+        const accessory = this.homebridgeAccessory;
+        const outlet = accessory.getService(Service.Outlet);
+        const on = outlet?.getCharacteristic(Characteristic.On);
+        this.historyService?.addEntry({
+          time: Math.round(new Date().valueOf() / 1000),
+          status: on?.value ? 1 : 0,
+        });
+      }, 10 * 60 * 1000);
+      api.on('shutdown', () => {
+        if (this.eveKeepAliveInterval) {
+          clearInterval(this.eveKeepAliveInterval);
+	  this.eveKeepAliveInterval = undefined;
+        }
       });
     }
   }
