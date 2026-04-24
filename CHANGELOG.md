@@ -13,6 +13,7 @@
 - [other] Workflow fixes for dependabot auto-merge [d1ca8b2](https://github.com/ZeliardM/homebridge-kasa-python/commit/d1ca8b27175dc98bb5ae60a5cb63252d28ad5298) (@ZeliardM)
 - npm-dev(deps-dev): bump homebridge from 2.0.0-beta.99 to 2.0.0-beta.101 [#301](https://github.com/ZeliardM/homebridge-kasa-python/pull/301) (@dependabot[bot])
 - pip(deps): bump tzdata from 2026.1 to 2026.2 [#300](https://github.com/ZeliardM/homebridge-kasa-python/pull/300) (@dependabot[bot])
+- pip(deps): bump uvicorn from 0.45.0 to 0.46.0 [#299](https://github.com/ZeliardM/homebridge-kasa-python/pull/299) (@dependabot[bot])
 - npm-dev(deps-dev): bump homebridge from 2.0.0-beta.87 to 2.0.0-beta.89 [#295](https://github.com/ZeliardM/homebridge-kasa-python/pull/295) (@dependabot[bot])
 - npm-dev(deps-dev): bump typescript-eslint from 8.57.2 to 8.58.1 [#293](https://github.com/ZeliardM/homebridge-kasa-python/pull/293) (@dependabot[bot])
 - npm-dev(deps-dev): bump @types/node from 25.5.2 to 25.6.0 [#292](https://github.com/ZeliardM/homebridge-kasa-python/pull/292) (@dependabot[bot])
