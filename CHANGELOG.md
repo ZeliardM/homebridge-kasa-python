@@ -3,6 +3,7 @@
 
 ### Featured Changes
 
+- [enhancement] Improve polling error handling [039257d](https://github.com/ZeliardM/homebridge-kasa-python/commit/039257d01f429e653b9d8281a6e5e8d029a8410f) (@ZeliardM)
 - [enhancement] Add L530EA Support [53cd544](https://github.com/ZeliardM/homebridge-kasa-python/commit/53cd5449872d77e2c75b2d5217101e7d60b37e2f) (@ZeliardM)
 
 ### Other Changes
