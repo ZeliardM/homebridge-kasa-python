@@ -95,15 +95,16 @@ export default class DeviceManager {
   async getSysInfo(host: string): Promise<SysInfo | undefined> {
     try {
       const response = await axios.post(`${this.apiUrl}/getSysInfo`, { host });
-      const sysInfo: SysInfo = response.data.sys_info;
+      const sysInfo: SysInfo | undefined = response.data?.sys_info;
       if (!sysInfo) {
+        this.log.debug(`[getSysInfo] No sys_info payload returned for host ${host}`);
         return undefined;
       }
       this.updateDeviceAlias(sysInfo);
       return sysInfo;
     } catch (error) {
-      this.handleAxiosError(error, 'getSysInfo');
-      throw error;
+      this.handleAxiosError(error, 'getSysInfo', 'debug');
+      return undefined;
     }
   }
 
@@ -169,26 +170,30 @@ export default class DeviceManager {
     }
   }
 
-  private handleAxiosError(error: unknown, context: string): void {
+  private handleAxiosError(error: unknown, context: string, level: 'debug' | 'error' = 'error'): void {
+    const writeLog = level === 'debug'
+      ? this.log.debug.bind(this.log)
+      : this.log.error.bind(this.log);
+
     if (axios.isAxiosError(error)) {
       if (error.response) {
         const statusCode = error.response.status;
         const message = error.response.data?.error || error.response.statusText || 'Unknown error';
-        this.log.error(`[${context}] HTTP ${statusCode}: ${message}`);
+        writeLog(`[${context}] HTTP ${statusCode}: ${message}`);
       } else if (error.code === 'ECONNREFUSED') {
-        this.log.error(`[${context}] Connection refused (device API offline?)`);
+        writeLog(`[${context}] Connection refused (device API offline?)`);
       } else if (error.code === 'ETIMEDOUT') {
-        this.log.error(`[${context}] Connection timed out (network issue)`);
+        writeLog(`[${context}] Connection timed out (network issue)`);
       } else {
-        this.log.error(`[${context}] Axios error: ${error.message}`);
+        writeLog(`[${context}] Axios error: ${error.message}`);
       }
     } else if (error instanceof Error) {
-      this.log.error(`[${context}] Error: ${error.message}`);
+      writeLog(`[${context}] Error: ${error.message}`);
       if (error.stack) {
         this.log.debug(error.stack);
       }
     } else {
-      this.log.error(`[${context}] Unknown error: ${JSON.stringify(error)}`);
+      writeLog(`[${context}] Unknown error: ${JSON.stringify(error)}`);
     }
   }
 }

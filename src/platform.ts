@@ -256,16 +256,22 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       return;
     }
     this.periodicDeviceDiscovering = true;
+    let discoverySucceeded = false;
     discoveredDeviceIds.clear();
     this.log.debug('Cleared discoveredDeviceIds set before discovery.');
     try {
       if (this.deviceManager) {
         await this.deviceManager.discoverDevices();
+        discoverySucceeded = true;
       }
     } catch (error) {
       this.log.error('Error during periodic device discovery:', error);
     } finally {
-      this.handleOfflineDevices(discoveredDeviceIds);
+      if (discoverySucceeded) {
+        this.handleOfflineDevices(discoveredDeviceIds);
+      } else {
+        this.log.warn('Skipping offline accessory reconciliation because periodic discovery did not complete successfully');
+      }
       this.periodicDeviceDiscovering = false;
       this.periodicDeviceDiscoveryEmitter.emit('periodicDeviceDiscoveryComplete');
       this.log.debug('Finished periodic device discovery');
@@ -315,6 +321,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     const offlineInterval = this.config.discoveryOptions.offlineInterval;
     if (timeSinceLastSeen > offlineInterval) {
       this.log.debug(`Accessory [${accessory.displayName}] is offline and outside the offline interval. Removing.`);
+      this.removeTrackedDevice(accessory.context.deviceId, accessory.UUID);
       this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       this.configuredAccessories.delete(uuid);
     } else if (!accessory.context.offline) {
@@ -345,8 +352,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         const comingOnline = existingDevice.kasaDevice.offline && !device.offline;
         existingDevice.kasaDevice.sys_info = device.sys_info;
         existingDevice.kasaDevice.feature_info = device.feature_info;
-        existingDevice.kasaDevice.last_seen = device.last_seen;
-        existingDevice.kasaDevice.offline = device.offline;
+        existingDevice.markDeviceReachable(device.last_seen);
         if (comingOnline) {
           this.log.debug(`Device [${device.sys_info.device_id}] was offline and is now online. Updating and restarting polling.`);
           existingDevice.updateAfterPeriodicDiscovery(true);
@@ -531,9 +537,17 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       return;
     }
 
-    if (this.homekitDevicesById.has(deviceId)) {
-      this.log.debug(`HomeKit device already added: [${deviceAlias}] ${deviceType} [${deviceId}]`);
-      return;
+    const existingDevice = this.homekitDevicesById.get(deviceId);
+    if (existingDevice) {
+      if (!this.configuredAccessories.has(existingDevice.homebridgeAccessory.UUID)) {
+        this.log.warn(
+          `HomeKit device [${deviceAlias}] ${deviceType} [${deviceId}] is missing its accessory. Recreating it.`,
+        );
+        this.removeTrackedDevice(deviceId, existingDevice.homebridgeAccessory.UUID);
+      } else {
+        this.log.debug(`HomeKit device already added: [${deviceAlias}] ${deviceType} [${deviceId}]`);
+        return;
+      }
     }
 
     this.log.info(`Adding HomeKit device: [${deviceAlias}] ${deviceType} [${deviceId}] at host [${deviceHost}]`);
@@ -549,5 +563,28 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private async createHomeKitDevice(kasaDevice: KasaDevice): Promise<HomeKitDevice | undefined> {
     this.log.debug('Creating HomeKit device for:', kasaDevice.sys_info);
     return await create(this, kasaDevice);
+  }
+
+  private removeTrackedDevice(deviceId: string | undefined, accessoryUuid: string): void {
+    if (!deviceId) {
+      return;
+    }
+
+    const trackedDevice = this.homekitDevicesById.get(deviceId);
+    if (!trackedDevice) {
+      return;
+    }
+
+    if (trackedDevice.homebridgeAccessory.UUID !== accessoryUuid) {
+      this.log.debug(
+        `Skipping tracked device cleanup for [${deviceId}] because UUIDs do not match ` +
+        `(${trackedDevice.homebridgeAccessory.UUID} !== ${accessoryUuid}).`,
+      );
+      return;
+    }
+
+    this.homekitDevicesById.delete(deviceId);
+    trackedDevice.removeFromPlatform();
+    this.log.debug(`Removed tracked HomeKit device for [${deviceId}].`);
   }
 }

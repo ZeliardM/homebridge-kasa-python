@@ -80,7 +80,7 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
       return value;
     } catch (error) {
       this.log.error(`Child OnGet error (${child.alias}) ${descriptor.name}`, error);
-      this.kasaDevice.offline = true;
+      this.setOfflineState(true);
       await this.stopPolling();
       return this.defaultValueForCharacteristic(descriptor.type);
     }
@@ -140,7 +140,7 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
         this.log.error(`Child OnSet error (${child.alias}) ${descriptor.name}`, error);
-        this.kasaDevice.offline = true;
+        this.setOfflineState(true);
         await this.stopPolling();
       } finally {
         if (!isGrouped) {

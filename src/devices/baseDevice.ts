@@ -26,6 +26,8 @@ import type {
 } from './deviceTypes.js';
 import type { KasaPythonAccessoryContext } from '../platform.js';
 
+const MAX_CONSECUTIVE_POLL_FAILURES = 2;
+
 export default abstract class HomeKitDevice {
   readonly log: Logger;
   protected deviceManager: DeviceManager | undefined;
@@ -38,10 +40,15 @@ export default abstract class HomeKitDevice {
   private static locks: Map<string, Promise<unknown>> = new Map();
   private pendingChanges: Map<string, { pendingValue: CharacteristicValue; count: number }> = new Map();
 
-  protected getSysInfoDeferred: () => Promise<void>;
+  protected getSysInfoDeferred: () => Promise<boolean>;
 
   private primaryDescriptors: CharacteristicDescriptor[] = [];
   private primaryService?: Service;
+  private consecutivePollFailures = 0;
+  private removedFromPlatform = false;
+  private readonly periodicDiscoveryCompleteHandler = () => {
+    this.updateEmitter.emit('periodicDeviceDiscoveryComplete');
+  };
 
   constructor(
     readonly platform: KasaPythonPlatform,
@@ -53,9 +60,7 @@ export default abstract class HomeKitDevice {
     this.log = prefixLogger(platform.log, `[${this.name}]`);
     this.homebridgeAccessory = this.initializeAccessory();
     this.homebridgeAccessory.on(PlatformAccessoryEvent.IDENTIFY, () => this.identify());
-    platform.periodicDeviceDiscoveryEmitter.on('periodicDeviceDiscoveryComplete', () => {
-      this.updateEmitter.emit('periodicDeviceDiscoveryComplete');
-    });
+    platform.periodicDeviceDiscoveryEmitter.on('periodicDeviceDiscoveryComplete', this.periodicDiscoveryCompleteHandler);
 
     this.getSysInfoDeferred = deferAndCombine(
       this.fetchSysInfoInternal.bind(this),
@@ -163,7 +168,7 @@ export default abstract class HomeKitDevice {
   }
 
   protected shouldSkipUpdate(): boolean {
-    return this.kasaDevice.offline || this.platform.isShuttingDown;
+    return this.removedFromPlatform || this.platform.isShuttingDown;
   }
 
   protected async waitForUpdateOrDiscovery(): Promise<void> {
@@ -182,26 +187,42 @@ export default abstract class HomeKitDevice {
     }
   }
 
-  protected async getSysInfo(): Promise<void> {
-    await this.getSysInfoDeferred();
+  protected async getSysInfo(): Promise<boolean> {
+    return await this.getSysInfoDeferred();
   }
 
-  private async fetchSysInfoInternal(): Promise<void> {
+  private async fetchSysInfoInternal(): Promise<boolean> {
     if (!this.deviceManager) {
       this.log.warn('Device manager not available');
-      return;
+      return false;
     }
     const host = this.kasaDevice.sys_info?.host;
     if (!host) {
       this.log.warn('No host in sys_info');
-      return;
+      return false;
     }
     const updatedSysInfo = await this.deviceManager.getSysInfo(host);
     if (!updatedSysInfo) {
-      throw new Error(`No sys_info returned for ${host}. Marking offline and stopping polling.`);
+      this.recordPollCommunicationFailure(host);
+      return false;
     }
     this.kasaDevice.sys_info = updatedSysInfo;
+    const previousFailures = this.consecutivePollFailures;
+    const wasOffline = this.kasaDevice.offline;
+    this.markDeviceReachable(new Date());
+    if (wasOffline) {
+      this.log.warn(
+        `Recovered communication with ${updatedSysInfo.alias ?? host} after ` +
+        `${previousFailures} consecutive poll failures.`,
+      );
+    } else if (previousFailures > 0) {
+      this.log.debug(
+        `Recovered communication with ${updatedSysInfo.alias ?? host} after ` +
+        `${previousFailures} failed poll attempt(s).`,
+      );
+    }
     this.log.debug(`Updated sys_info: ${updatedSysInfo.alias ?? host}`);
+    return true;
   }
 
   protected async refreshAndUpdateCharacteristics(forceUpdate: boolean, skipFetch = false): Promise<void> {
@@ -218,20 +239,23 @@ export default abstract class HomeKitDevice {
       if (this.isUpdating || this.platform.periodicDeviceDiscovering) {
         await this.waitForUpdateOrDiscovery();
       }
+      if (this.shouldSkipUpdate()) {
+        await this.stopPolling();
+        return;
+      }
       this.isUpdating = true;
       try {
         if (!skipFetch) {
-          await this.getSysInfo();
+          const didUpdateSysInfo = await this.getSysInfo();
+          if (!didUpdateSysInfo || this.shouldSkipUpdate()) {
+            return;
+          }
         }
         await this.updateAllServicesAndCharacteristics(forceUpdate);
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
-        if (error instanceof Error && error.message.startsWith('No sys_info returned for ')) {
-          this.log.warn(`Poll update failed: ${error.message}`);
-        } else {
-          this.log.error('Error during poll update:', error);
-        }
-        this.kasaDevice.offline = true;
+        this.log.error('Error during poll update:', error);
+        this.setOfflineState(true);
         await this.stopPolling();
       } finally {
         this.isUpdating = false;
@@ -264,6 +288,23 @@ export default abstract class HomeKitDevice {
         this.updateEmitter.once('updateComplete', resolve);
       });
     }
+  }
+
+  public removeFromPlatform(): void {
+    this.removedFromPlatform = true;
+    void this.stopPolling();
+    this.platform.periodicDeviceDiscoveryEmitter.off(
+      'periodicDeviceDiscoveryComplete',
+      this.periodicDiscoveryCompleteHandler,
+    );
+    this.updateEmitter.emit('periodicDeviceDiscoveryComplete');
+  }
+
+  public markDeviceReachable(lastSeen: Date): void {
+    this.consecutivePollFailures = 0;
+    this.kasaDevice.last_seen = lastSeen;
+    this.homebridgeAccessory.context.lastSeen = lastSeen;
+    this.setOfflineState(false);
   }
 
   public updateAfterPeriodicDiscovery(force = false): void {
@@ -349,7 +390,7 @@ export default abstract class HomeKitDevice {
       return value;
     } catch (error) {
       this.log.error(`OnGet error for ${descriptor.name ?? descriptor.type.UUID}`, error);
-      this.kasaDevice.offline = true;
+      this.setOfflineState(true);
       await this.stopPolling();
       return this.defaultValueForCharacteristic(descriptor.type);
     }
@@ -402,7 +443,7 @@ export default abstract class HomeKitDevice {
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
         this.log.error(`OnSet error for ${descriptor.name ?? descriptor.type.UUID}`, error);
-        this.kasaDevice.offline = true;
+        this.setOfflineState(true);
         await this.stopPolling();
       } finally {
         if (!isGrouped) {
@@ -589,6 +630,39 @@ export default abstract class HomeKitDevice {
       uuid === this.platform.energyCharacteristics.Watts.UUID ||
       uuid === this.platform.energyCharacteristics.KiloWattHours.UUID
     );
+  }
+
+  protected setOfflineState(offline: boolean): void {
+    const offlineStatusChanged =
+      this.kasaDevice.offline !== offline || this.homebridgeAccessory.context.offline !== offline;
+
+    this.kasaDevice.offline = offline;
+    this.homebridgeAccessory.context.offline = offline;
+
+    if (offlineStatusChanged) {
+      this.platform.api.updatePlatformAccessories([this.homebridgeAccessory]);
+    }
+  }
+
+  private recordPollCommunicationFailure(host: string): void {
+    this.consecutivePollFailures += 1;
+    const markedOffline = this.consecutivePollFailures >= MAX_CONSECUTIVE_POLL_FAILURES;
+
+    if (markedOffline) {
+      this.setOfflineState(true);
+    }
+
+    const message = markedOffline
+      ? `No sys_info returned for ${host} after ${this.consecutivePollFailures} consecutive poll failures. ` +
+        'Marking device offline but continuing to poll for recovery.'
+      : `No sys_info returned for ${host} (${this.consecutivePollFailures}/${MAX_CONSECUTIVE_POLL_FAILURES} ` +
+        'failed polls before marking offline).';
+
+    if (this.consecutivePollFailures <= MAX_CONSECUTIVE_POLL_FAILURES) {
+      this.log.warn(`Poll update failed: ${message}`);
+    } else {
+      this.log.debug(`Poll update still failing: ${message}`);
+    }
   }
 
   public abstract initialize(): Promise<void>;
