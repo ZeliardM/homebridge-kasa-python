@@ -1,5 +1,5 @@
 # Changelog
-## [v3.3.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.0)
+## [v3.3.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.0) (2026-04-25)
 
 ### Featured Changes
 
@@ -8,6 +8,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v3.3.0-beta.0 [beta-release] (@github-actions)
 - [other] Improve Workflow Release Handling [5050983](https://github.com/ZeliardM/homebridge-kasa-python/commit/5050983c17b86fffd8f15601589323fe1a21faba) (@ZeliardM)
 - [other] Release Workflow Version Handling Fixes [c2132b2](https://github.com/ZeliardM/homebridge-kasa-python/commit/c2132b26988909cf6a8dbc02c6f3923839ed7741) (@ZeliardM)
 - [other] Dependabot workflow fixes [ea20de9](https://github.com/ZeliardM/homebridge-kasa-python/commit/ea20de94954a68667857c7760af71890522d6546) (@ZeliardM)
