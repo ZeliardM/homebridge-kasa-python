@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.3.0-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.1)
 
+### Featured Changes
+
+- [enhancement] Add AdaptiveLighting Features [5bad6d5](https://github.com/ZeliardM/homebridge-kasa-python/commit/5bad6d53313b58b91859f404696d6c3711d35178) (@ZeliardM)
+
 ### Other Changes
 
 - npm-dev(deps-dev): bump eslint from 10.2.1 to 10.3.0 [#306](https://github.com/ZeliardM/homebridge-kasa-python/pull/306) (@dependabot[bot])
