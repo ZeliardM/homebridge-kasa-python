@@ -59,6 +59,7 @@ export default class HomeKitDeviceSwitchWithChildren extends HomeKitParentDevice
             const idx = this.extractChildIndex(context.child ?? {});
             await this.deviceManager!.controlDevice(context.device.host, 'state', value, idx);
           },
+          { debouncePolls: 2 },
         ),
         buildBrightnessDescriptor(
           C,

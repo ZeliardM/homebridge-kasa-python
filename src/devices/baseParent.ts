@@ -206,6 +206,12 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
             const nextDeviceValue = descriptor.getCurrent(context) as CharacteristicValue;
             const debounceKey = `${this.childKey(child)}:${descriptor.type.UUID}`;
             const effectiveNext = this.resolveWithDebounce(debounceKey, hkValue, nextDeviceValue, descriptor.debouncePolls, forceUpdate);
+            if (!forceUpdate && effectiveNext !== nextDeviceValue && hkValue !== nextDeviceValue) {
+              this.log.debug(
+                `Debouncing ${descriptor.name ?? descriptor.type.UUID} on ${context.alias}: ` +
+                `keeping ${hkValue}, observed ${nextDeviceValue}`,
+              );
+            }
             this.updateIfChanged(
               service,
               characteristic,

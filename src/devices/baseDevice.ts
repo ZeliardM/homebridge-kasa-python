@@ -42,8 +42,8 @@ export default abstract class HomeKitDevice {
 
   protected getSysInfoDeferred: () => Promise<boolean>;
 
-  private primaryDescriptors: CharacteristicDescriptor[] = [];
-  private primaryService?: Service;
+  protected primaryDescriptors: CharacteristicDescriptor[] = [];
+  protected primaryService?: Service;
   private consecutivePollFailures = 0;
   private removedFromPlatform = false;
   private readonly periodicDiscoveryCompleteHandler = () => {
@@ -496,6 +496,12 @@ export default abstract class HomeKitDevice {
           const nextDeviceValue = descriptor.getCurrent(context) as CharacteristicValue;
           const debounceKey = `primary:${descriptor.type.UUID}`;
           const effectiveNext = this.resolveWithDebounce(debounceKey, hkValue, nextDeviceValue, descriptor.debouncePolls, forceUpdate);
+          if (!forceUpdate && effectiveNext !== nextDeviceValue && hkValue !== nextDeviceValue) {
+            this.log.debug(
+              `Debouncing ${descriptor.name ?? descriptor.type.UUID}: ` +
+              `keeping ${hkValue}, observed ${nextDeviceValue}`,
+            );
+          }
           this.updateIfChanged(
             this.primaryService,
             characteristic,

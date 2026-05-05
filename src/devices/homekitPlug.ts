@@ -42,7 +42,7 @@ export default class HomeKitDevicePlug extends HomeKitDevice {
       async (value, context) => {
         await this.deviceManager!.controlDevice(context.device.host, 'state', value);
       },
-      supportsEnergy ? undefined : syncGroup,
+      { syncGroup: supportsEnergy ? undefined : syncGroup },
     );
 
     const list: CharacteristicDescriptor[] = [

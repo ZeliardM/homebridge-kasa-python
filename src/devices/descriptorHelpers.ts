@@ -3,17 +3,23 @@ import type { Characteristic, CharacteristicValue, WithUUID } from 'homebridge';
 import type { CharacteristicDescriptor, DescriptorContext, Energy } from './deviceTypes.js';
 import type { EnergyCharacteristics } from './energyCharacteristics.js';
 
+type OnDescriptorOptions = {
+  syncGroup?: string;
+  debouncePolls?: number;
+};
+
 export function buildOnDescriptor(
   C: typeof Characteristic,
   setState?: (value: CharacteristicValue, context: DescriptorContext) => Promise<void>,
-  syncGroup?: string,
+  options: OnDescriptorOptions = {},
 ): CharacteristicDescriptor {
   return {
     type: C.On,
     name: 'On',
     writable: true,
-    syncGroup,
-    syncHomeKitValueAfterSet: !!syncGroup,
+    syncGroup: options.syncGroup,
+    debouncePolls: options.debouncePolls,
+    syncHomeKitValueAfterSet: !!options.syncGroup,
     getInitial: context => (context.child ? context.child.state : context.device.state) ?? false,
     getCurrent: context => (context.child ? context.child.state : context.device.state) ?? false,
     applySet: setState
@@ -43,10 +49,13 @@ export function buildBrightnessDescriptor(
     applySet: async (value, context) => {
       const brightness = Number(value);
       await setBrightness(brightness, context);
+      const state = brightness > 0;
       if (context.child) {
         context.child.brightness = brightness;
+        context.child.state = state;
       } else {
         context.device.brightness = brightness;
+        context.device.state = state;
       }
     },
   };

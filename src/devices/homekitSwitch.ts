@@ -38,6 +38,7 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
         async (value, context) => {
           await this.deviceManager!.controlDevice(context.device.host, 'state', value);
         },
+        this.hasBrightness ? { debouncePolls: 2 } : undefined,
       ),
     ];
 
