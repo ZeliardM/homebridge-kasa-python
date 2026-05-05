@@ -1,4 +1,12 @@
 # Changelog
+## [v3.3.0-beta.2](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.2)
+
+### Other Changes
+
+- [other] Update build, lint, test workflow [d983d96](https://github.com/ZeliardM/homebridge-kasa-python/commit/d983d962c3757610a58ccfd409ef6f631d616a9f) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.1...v3.3.0-beta.2
+
 ## [v3.3.0-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.1) (2026-05-05)
 
 ### Featured Changes
