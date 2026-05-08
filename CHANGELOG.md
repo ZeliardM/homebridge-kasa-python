@@ -1,4 +1,12 @@
 # Changelog
+## [v3.3.0-beta.3](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.3)
+
+### Other Changes
+
+- npm-dev(deps-dev): bump homebridge from 2.0.0 to 2.0.1 [#310](https://github.com/ZeliardM/homebridge-kasa-python/pull/310) (@dependabot[bot])
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.2...v3.3.0-beta.3
+
 ## [v3.3.0-beta.2](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.2) (2026-05-05)
 
 ### Other Changes
