@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- npm-dev(deps-dev): bump @types/node from 25.6.0 to 25.6.2 [#311](https://github.com/ZeliardM/homebridge-kasa-python/pull/311) (@dependabot[bot])
 - npm-dev(deps-dev): bump homebridge from 2.0.0 to 2.0.1 [#310](https://github.com/ZeliardM/homebridge-kasa-python/pull/310) (@dependabot[bot])
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.2...v3.3.0-beta.3
