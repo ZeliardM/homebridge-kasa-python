@@ -78,7 +78,7 @@
     }
   ],
   "dependencies": {
-    "axios": "^1.16.0",
+    "axios": "^1.16.1",
     "eventsource": "^4.1.0"
   },
   "overrides": {
