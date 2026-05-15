@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- npm(deps): bump axios from 1.16.0 to 1.16.1 [#318](https://github.com/ZeliardM/homebridge-kasa-python/pull/318) (@dependabot[bot])
 - pip(deps): bump uvicorn from 0.46.0 to 0.47.0 [#313](https://github.com/ZeliardM/homebridge-kasa-python/pull/313) (@dependabot[bot])
 - npm-dev(deps-dev): bump @types/node from 25.6.0 to 25.6.2 [#311](https://github.com/ZeliardM/homebridge-kasa-python/pull/311) (@dependabot[bot])
 - npm-dev(deps-dev): bump homebridge from 2.0.0 to 2.0.1 [#310](https://github.com/ZeliardM/homebridge-kasa-python/pull/310) (@dependabot[bot])
