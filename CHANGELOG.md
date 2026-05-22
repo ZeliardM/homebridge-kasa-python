@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- npm-dev(deps-dev): bump @types/node from 25.6.2 to 25.9.1 [#320](https://github.com/ZeliardM/homebridge-kasa-python/pull/320) (@dependabot[bot])
 - npm-dev(deps-dev): bump typescript-eslint from 8.59.2 to 8.59.4 [#319](https://github.com/ZeliardM/homebridge-kasa-python/pull/319) (@dependabot[bot])
 - npm(deps): bump axios from 1.16.0 to 1.16.1 [#318](https://github.com/ZeliardM/homebridge-kasa-python/pull/318) (@dependabot[bot])
 - npm-dev(deps-dev): bump eslint from 10.3.0 to 10.4.0 [#317](https://github.com/ZeliardM/homebridge-kasa-python/pull/317) (@dependabot[bot])
