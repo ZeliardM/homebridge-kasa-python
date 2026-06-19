@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- pip(deps): bump anyio from 4.13.0 to 4.14.0 [#333](https://github.com/ZeliardM/homebridge-kasa-python/pull/333) (@dependabot[bot])
 - npm-dev(deps-dev): bump eslint from 10.4.1 to 10.5.0 [#331](https://github.com/ZeliardM/homebridge-kasa-python/pull/331) (@dependabot[bot])
 - npm-dev(deps-dev): bump @types/node from 25.9.1 to 25.9.3 [#329](https://github.com/ZeliardM/homebridge-kasa-python/pull/329) (@dependabot[bot])
 - npm-dev(deps-dev): bump homebridge from 2.0.2 to 2.1.0 [#327](https://github.com/ZeliardM/homebridge-kasa-python/pull/327) (@dependabot[bot])
