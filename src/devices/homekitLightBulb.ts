@@ -8,6 +8,7 @@ import {
   buildHSVDescriptors,
   buildOnDescriptor,
 } from './descriptorHelpers.js';
+import MatterLightBulb from './matterLightBulb.js';
 import type KasaPythonPlatform from '../platform.js';
 import type { CharacteristicDescriptor, DescriptorContext, LightBulb } from './deviceTypes.js';
 
@@ -17,6 +18,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
   private hasColorTemp: boolean;
   private hasHSV: boolean;
   private adaptiveLightingController?: AdaptiveLightingController;
+  private matter?: MatterLightBulb;
 
   private pendingHSV: { hue?: number; saturation?: number } = {};
   private hsvFlushTimer: NodeJS.Timeout | null = null;
@@ -33,9 +35,17 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     this.hasHSV = !!kasaDevice.feature_info.hsv;
     this.setupPrimaryService();
     this.setupAdaptiveLighting();
+    if (MatterLightBulb.isSupported(platform.api)) {
+      this.matter = new MatterLightBulb(platform, kasaDevice, {
+        hasBrightness: this.hasBrightness,
+        hasColorTemp: this.hasColorTemp,
+        hasHSV: this.hasHSV,
+      });
+    }
   }
 
   public async initialize(): Promise<void> {
+    await this.matter?.register();
     await this.startPolling();
   }
 
@@ -103,6 +113,9 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     const previousSaturation = this.previousSnapshot?.sys_info.hsv?.saturation;
 
     await super.updateAllServicesAndCharacteristics(forceUpdate);
+
+    // Mirror the freshly-polled state into Matter (no-op unless Matter is enabled).
+    this.matter?.sync();
 
     if (!this.adaptiveLightingController?.isAdaptiveLightingActive() || forceUpdate) {
       return;
