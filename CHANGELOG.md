@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- npm(deps): bump axios from 1.16.1 to 1.18.1 [#341](https://github.com/ZeliardM/homebridge-kasa-python/pull/341) (@dependabot[bot])
 - pip(deps): bump anyio from 4.14.0 to 4.14.1 [#338](https://github.com/ZeliardM/homebridge-kasa-python/pull/338) (@dependabot[bot])
 - pip(deps): bump anyio from 4.13.0 to 4.14.0 [#333](https://github.com/ZeliardM/homebridge-kasa-python/pull/333) (@dependabot[bot])
 - npm-dev(deps-dev): bump eslint from 10.4.1 to 10.5.0 [#331](https://github.com/ZeliardM/homebridge-kasa-python/pull/331) (@dependabot[bot])
