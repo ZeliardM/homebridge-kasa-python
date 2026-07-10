@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- pip(deps): bump tzdata from 2026.2 to 2026.3 [#347](https://github.com/ZeliardM/homebridge-kasa-python/pull/347) (@dependabot[bot])
 - pip(deps): bump uvicorn from 0.49.0 to 0.51.0 [#346](https://github.com/ZeliardM/homebridge-kasa-python/pull/346) (@dependabot[bot])
 - npm(deps): bump axios from 1.16.1 to 1.18.1 [#341](https://github.com/ZeliardM/homebridge-kasa-python/pull/341) (@dependabot[bot])
 - pip(deps): bump anyio from 4.14.0 to 4.14.1 [#338](https://github.com/ZeliardM/homebridge-kasa-python/pull/338) (@dependabot[bot])
