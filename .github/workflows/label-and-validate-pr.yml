@@ -112,7 +112,7 @@ jobs:
 
       - name: Setup Node 24
         id: setup-node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 
