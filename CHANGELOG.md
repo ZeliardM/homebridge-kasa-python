@@ -4,6 +4,7 @@
 ### Other Changes
 
 - npm-dev(deps-dev): bump homebridge from 2.1.0 to 2.1.1 [#353](https://github.com/ZeliardM/homebridge-kasa-python/pull/353) (@dependabot[bot])
+- npm-dev(deps-dev): bump eslint from 10.5.0 to 10.7.0 [#351](https://github.com/ZeliardM/homebridge-kasa-python/pull/351) (@dependabot[bot])
 - pip(deps): bump anyio from 4.14.1 to 4.14.2 [#350](https://github.com/ZeliardM/homebridge-kasa-python/pull/350) (@dependabot[bot])
 - pip(deps): bump tzdata from 2026.2 to 2026.3 [#347](https://github.com/ZeliardM/homebridge-kasa-python/pull/347) (@dependabot[bot])
 - pip(deps): bump uvicorn from 0.49.0 to 0.51.0 [#346](https://github.com/ZeliardM/homebridge-kasa-python/pull/346) (@dependabot[bot])
