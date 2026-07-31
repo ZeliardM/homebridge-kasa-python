@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Stale
         id: stale
-        uses: actions/stale@v10
+        uses: actions/stale@v11
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           days-before-issue-stale: 60
