@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- pip(deps): bump quart from 0.21.0 to 0.22.0 [#373](https://github.com/ZeliardM/homebridge-kasa-python/pull/373) (@dependabot[bot])
 - pip(deps): bump uvicorn from 0.52.1 to 0.52.3 [#371](https://github.com/ZeliardM/homebridge-kasa-python/pull/371) (@dependabot[bot])
 - npm-dev(deps-dev): bump typescript-eslint from 8.65.0 to 8.66.0 [#366](https://github.com/ZeliardM/homebridge-kasa-python/pull/366) (@dependabot[bot])
 - pip(deps): bump uvicorn from 0.51.0 to 0.52.1 [#365](https://github.com/ZeliardM/homebridge-kasa-python/pull/365) (@dependabot[bot])
