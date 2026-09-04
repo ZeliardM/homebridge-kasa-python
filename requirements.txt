@@ -1,5 +1,5 @@
 anyio==4.14.2
 python-kasa==0.10.2
-quart==0.22.0
+quart==0.23.1
 tzdata==2026.3
 uvicorn==0.52.4
