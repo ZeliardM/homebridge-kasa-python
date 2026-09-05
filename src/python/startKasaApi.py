@@ -13,7 +13,9 @@ def start_api(port: int, hideHomeKitMatter: bool):
 
         uvicorn.run(
             "kasaApi:app",
-            host="0.0.0.0",
+            # The Node.js plugin is the only intended caller. Keep the helper
+            # off the LAN; Homebridge talks to it through 127.0.0.1.
+            host="127.0.0.1",
             port=port,
             loop="asyncio",
             workers=1,
