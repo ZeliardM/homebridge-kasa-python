@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- pip(deps): bump anyio from 4.14.2 to 4.15.1 [#378](https://github.com/ZeliardM/homebridge-kasa-python/pull/378) (@dependabot[bot])
 - pip(deps): bump quart from 0.22.0 to 0.23.1 [#377](https://github.com/ZeliardM/homebridge-kasa-python/pull/377) (@dependabot[bot])
 - pip(deps): bump uvicorn from 0.52.3 to 0.52.4 [#374](https://github.com/ZeliardM/homebridge-kasa-python/pull/374) (@dependabot[bot])
 - pip(deps): bump quart from 0.21.0 to 0.22.0 [#373](https://github.com/ZeliardM/homebridge-kasa-python/pull/373) (@dependabot[bot])
