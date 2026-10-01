@@ -187,7 +187,14 @@ async def discover_devices(
         await close_all_connections()
         log("All existing device connections closed.")
 
+    discovered_hosts: set[str] = set()
+
     async def on_discovered(device: Device):
+        if device.host in discovered_hosts:
+            log("Device already discovered this run, skipping", host=device.host, alias=device.alias)
+            await safe_disconnect(device)
+            return
+        discovered_hosts.add(device.host)
         log("Discovered device", host=device.host, alias=device.alias)
         try:
             await device.update()
@@ -253,8 +260,6 @@ async def discover_devices(
             log(f"Discovering on broadcast: {e}", level="ERROR", host=broadcast)
 
     async def discover_manual_device(host: str):
-        if host in device_config_cache:
-            return
         log("Discovering manual device", host=host)
         device = None
         try:
