@@ -79,7 +79,7 @@
   ],
   "dependencies": {
     "axios": "^1.18.1",
-    "eventsource": "^4.1.0"
+    "eventsource": "^5.0.0"
   },
   "overrides": {
     "node-persist": "^4.0.4"
