@@ -29,7 +29,7 @@ jobs:
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -61,7 +61,7 @@ jobs:
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.PULL_REQUEST_BASE_SHA }}
           fetch-depth: 0
@@ -106,7 +106,7 @@ jobs:
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -141,7 +141,7 @@ jobs:
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.PULL_REQUEST_BASE_SHA }}
           fetch-depth: 0
@@ -260,7 +260,7 @@ jobs:
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.PULL_REQUEST_BASE_SHA }}
           fetch-depth: 0
