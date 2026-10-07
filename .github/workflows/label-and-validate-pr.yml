@@ -29,7 +29,7 @@ jobs:
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -61,7 +61,7 @@ jobs:
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.PULL_REQUEST_BASE_SHA }}
           fetch-depth: 0
@@ -106,19 +106,19 @@ jobs:
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup Node 24
         id: setup-node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 
       - name: Setup Python 3.13
         id: setup-python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.13'
 
@@ -141,7 +141,7 @@ jobs:
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.PULL_REQUEST_BASE_SHA }}
           fetch-depth: 0
@@ -155,7 +155,7 @@ jobs:
 
       - name: Apply Labels
         id: apply-labels
-        uses: actions/labeler@v6
+        uses: actions/labeler@v7
         with:
           repo-token: ${{ env.GITHUB_TOKEN }}
           configuration-path: .github/labeler.yml
@@ -260,7 +260,7 @@ jobs:
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.PULL_REQUEST_BASE_SHA }}
           fetch-depth: 0
