@@ -29,7 +29,7 @@ This plug-in will automatically discover your TP-Link Kasa/Tapo Devices on your 
 Automatic Discovery may be possible only for some devices. If your device is not discovered automatically, try adding the IP Address into the Manual Devices List. Some newer devices require the Username and Password for your TP-Link Kasa/Tapo Cloud Account. Credentials can be enabled and provided in the plug-in settings.
 
 ## Requirements
-- Homebridge Supported Versions: 1.8.0 and 2.0.0-beta.0 or later.
+- Homebridge Supported Versions: 1.11.2 or later, and 2.0.0 or later.
 - Node.js Supported Versions: 22.12 or later, 24, and 26.
 - Python Supported Versions: 3.11, 3.12, and 3.13.
 - A supported Kasa/Tapo device.
