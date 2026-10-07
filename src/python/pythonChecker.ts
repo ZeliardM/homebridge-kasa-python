@@ -8,7 +8,7 @@ import { delay, prefixLogger, runCommand } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
 
 const __dirname: string = path.dirname(fileURLToPath(import.meta.url));
-const SUPPORTED_PYTHON_VERSIONS: string[] = ['3.11', '3.12', '3.13'];
+const SUPPORTED_PYTHON_VERSIONS: string[] = ['3.11', '3.12', '3.13', '3.14'];
 
 class PythonChecker {
   private readonly log: Logger;
@@ -29,6 +29,7 @@ class PythonChecker {
     this.log = prefixLogger(this.platform.log, '[Python Check]');
     this.advancedPythonLogging = this.platform.config.advancedOptions?.advancedPythonLogging ?? false;
     this.pythonExecutables = [
+      'python3.14',
       'python3.13',
       'python3.12',
       'python3.11',
@@ -92,8 +93,8 @@ class PythonChecker {
         }
       }
     }
-    this.log.error('No supported Python version found. Install Python 3.11, 3.12, or 3.13 and restart Homebridge.');
-    throw new Error('No supported Python version found. Install Python 3.11, 3.12, or 3.13 and restart Homebridge.');
+    this.log.error('No supported Python version found. Install Python 3.11, 3.12, 3.13, or 3.14 and restart Homebridge.');
+    throw new Error('No supported Python version found. Install Python 3.11, 3.12, 3.13, or 3.14 and restart Homebridge.');
   }
 
   private async getPythonVersion(executablePath: string): Promise<string | null> {
