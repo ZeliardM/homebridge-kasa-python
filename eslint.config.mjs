@@ -1,6 +1,6 @@
 import js from '@eslint/js';
 import stylistic from '@stylistic/eslint-plugin';
-import tsParser from '@typescript-eslint/parser';
+import tseslint from 'typescript-eslint';
 import path from 'node:path';
 import { FlatCompat } from '@eslint/eslintrc';
 import { fileURLToPath } from 'node:url';
@@ -21,7 +21,7 @@ export default [{
   'plugin:@typescript-eslint/recommended',
 ), {
   languageOptions: {
-    parser: tsParser,
+    parser: tseslint.parser,
     ecmaVersion: 2018,
     sourceType: 'module',
   },
