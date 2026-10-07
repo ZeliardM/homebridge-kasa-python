@@ -20,6 +20,7 @@ class PythonChecker {
   private readonly venvConfigPath: string;
   private readonly requirementsPath: string = path.join(__dirname, '..', '..', 'requirements.txt');
   private pythonExecutable: string = '';
+  private pythonVersion: string = '';
   private venvPipExecutable: string = '';
   private venvPythonExecutable: string = '';
 
@@ -139,6 +140,7 @@ class PythonChecker {
 
   private setPythonExecutables(pythonPath: string, version: string): void {
     this.pythonExecutable = pythonPath;
+    this.pythonVersion = version;
     const majorMinor = version;
     if (process.platform === 'win32') {
       this.venvPythonExecutable = path.join(this.venvPath, 'Scripts', 'python.exe');
@@ -264,8 +266,44 @@ class PythonChecker {
       !this.advancedPythonLogging,
     );
     const installed = this.stringToObject(freezeStdout);
-    const required = this.stringToObject(fs.readFileSync(this.requirementsPath, 'utf8'));
+    const required = this.stringToObject(this.applicableRequirements(fs.readFileSync(this.requirementsPath, 'utf8')));
     return Object.keys(required).every(pkg => installed[pkg] === required[pkg]);
+  }
+
+  private applicableRequirements(value: string): string {
+    return value.split('\n').flatMap(line => {
+      const [requirement, marker] = line.split(';').map(x => x.trim());
+      return !marker || this.pythonVersionMarkerMatches(marker) ? [requirement] : [];
+    }).join('\n');
+  }
+
+  private pythonVersionMarkerMatches(marker: string): boolean {
+    const match = marker.match(/^python_version\s*(<=|>=|==|!=|<|>)\s*["'](\d+(?:\.\d+)*)["']$/);
+    if (!match) {
+      return true;
+    }
+    const [, operator, version] = match;
+    const comparison = this.compareVersions(this.pythonVersion, version);
+    switch (operator) {
+      case '<': return comparison < 0;
+      case '<=': return comparison <= 0;
+      case '>': return comparison > 0;
+      case '>=': return comparison >= 0;
+      case '==': return comparison === 0;
+      default: return comparison !== 0;
+    }
+  }
+
+  private compareVersions(a: string, b: string): number {
+    const left = a.split('.').map(Number);
+    const right = b.split('.').map(Number);
+    for (let i = 0; i < Math.max(left.length, right.length); i++) {
+      const difference = (left[i] ?? 0) - (right[i] ?? 0);
+      if (difference !== 0) {
+        return difference;
+      }
+    }
+    return 0;
   }
 
   private stringToObject(value: string): Record<string, string> {
