@@ -13,9 +13,9 @@
 <p align="center">
   <a href="https://github.com/ZeliardM/homebridge-kasa-python/blob/latest/LICENSE"><img src="https://img.shields.io/npm/l/homebridge-kasa-python?color=yellow" alt="mit license"></a>
   <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/latest"><img src="https://img.shields.io/npm/v/homebridge-kasa-python/latest?label=npm%40latest&color=blue" alt="latest npm version"></a>
-  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40latest-3.11%2C%203.12%2C%203.13-blue" alt="latest PyPI pyversions"></a>
+  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40latest-3.11%2C%203.12%2C%203.13%2C%203.14-blue" alt="latest PyPI pyversions"></a>
   <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/beta"><img src="https://img.shields.io/npm/v/homebridge-kasa-python/beta?label=npm%40beta&color=red" alt="beta npm version"></a>
-  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40beta-3.11%2C%203.12%2C%203.13-red" alt="beta PyPI pyversions"></a>
+  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40beta-3.11%2C%203.12%2C%203.13%2C%203.14-red" alt="beta PyPI pyversions"></a>
   <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/latest"><img src="https://img.shields.io/npm/dt/homebridge-kasa-python?color=brightgreen" alt="npm downloads total"></a>
   <a href="https://www.paypal.me/ZeliardM/USD/"><img src="https://img.shields.io/badge/donate-paypal-orange" alt="donate paypal"></a>
   <a href="https://github.com/sponsors/ZeliardM"><img src="https://img.shields.io/badge/donate-github-orange" alt="donate github"></a>
@@ -29,9 +29,9 @@ This plug-in will automatically discover your TP-Link Kasa/Tapo Devices on your 
 Automatic Discovery may be possible only for some devices. If your device is not discovered automatically, try adding the IP Address into the Manual Devices List. Some newer devices require the Username and Password for your TP-Link Kasa/Tapo Cloud Account. Credentials can be enabled and provided in the plug-in settings.
 
 ## Requirements
-- Homebridge Supported Versions: 1.8.0 and 2.0.0-beta.0 or later.
-- Node.js Supported Versions: 20, 22, and 24.
-- Python Supported Versions: 3.11, 3.12, and 3.13.
+- Homebridge Supported Versions: 1.11.2 or later, and 2.0.0 or later.
+- Node.js Supported Versions: 22.12 or later, 24, and 26.
+- Python Supported Versions: 3.11, 3.12, 3.13, and 3.14.
 - A supported Kasa/Tapo device.
 - Enabling Third Party Compatibility in the Tapo/Kasa App can improve device compatibility.
 

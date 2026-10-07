@@ -1,5 +1,6 @@
 anyio==4.15.1
-python-kasa==0.10.2
-quart==0.23.1
-tzdata==2026.4
+python-kasa==0.11.0.1
+quart==0.22.0; python_version < "3.13"
+quart==0.23.1; python_version >= "3.13"
+tzdata==2026.5
 uvicorn==0.54.0
