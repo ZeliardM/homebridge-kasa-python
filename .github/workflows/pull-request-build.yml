@@ -1,0 +1,15 @@
+---
+name: Pull Request Build
+
+on:
+  pull_request:
+    branches: [beta]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  build_lint_test:
+    name: Build, Lint, and Test
+    uses: ./.github/workflows/shared-build-lint-test.yml
