@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.3.0-beta.3](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.3)
 
+### Featured Changes
+
+- [feature] Update all dependencies, move to python-kasa 0.11.0.1, and fix strip discovery [#386](https://github.com/ZeliardM/homebridge-kasa-python/pull/386) (@ZeliardM)
+
 ### Other Changes
 
 - pip(deps): bump uvicorn from 0.53.0 to 0.54.0 [#385](https://github.com/ZeliardM/homebridge-kasa-python/pull/385) (@dependabot[bot])
