@@ -136,6 +136,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [retarget-base, refresh-dependabot-branch]
     if: >
+      !cancelled() &&
       needs.retarget-base.result == 'success' &&
       (needs.refresh-dependabot-branch.result == 'success' || needs.refresh-dependabot-branch.result == 'skipped')
     steps:
@@ -254,7 +255,7 @@ jobs:
     name: Validate Pull Request
     runs-on: ubuntu-latest
     needs: label
-    if: needs.label.result == 'success'
+    if: ${{ !cancelled() && needs.label.result == 'success' }}
     outputs:
       ok: ${{ steps.validate-pr.outputs.ok }}
     steps:
