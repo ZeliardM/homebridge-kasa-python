@@ -14,6 +14,7 @@ from kasa import (
     Module,
     UnsupportedDeviceError,
 )
+from kasa.iot import IotDevice
 from quart import jsonify, request, Response, Quart
 from typing import Any
 
@@ -190,7 +191,15 @@ async def discover_devices(
     async def on_discovered(device: Device):
         log("Discovered device", host=device.host, alias=device.alias)
         try:
-            await device.update()
+            if isinstance(device, IotDevice):
+                # Discovery picks the iot class from the device family alone, so a
+                # strip discovered over KLAP comes back as a plug. Connecting reads
+                # sysinfo first and picks the class from it.
+                discovered = device
+                device = await Device.connect(config=discovered.config)
+                await safe_disconnect(discovered)
+            else:
+                await device.update()
             result = await process_device(device)
             if result is not None:
                 await device_queue.put(result)
