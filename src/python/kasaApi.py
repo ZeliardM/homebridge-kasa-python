@@ -214,7 +214,8 @@ async def discover_devices(
             return None
         try:
             if hide_homekit_matter:
-                homekit_component = device.modules.get(Module.HomeKit)
+                iot_homekit_module = device.modules.get(Module.IotHomeKit)
+                homekit_component = device.modules.get(Module.HomeKit) or (iot_homekit_module and iot_homekit_module.info)
                 matter_component = device.modules.get(Module.Matter)
                 if homekit_component or matter_component:
                     if homekit_component:
