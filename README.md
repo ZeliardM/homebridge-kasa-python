@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/ZeliardM/homebridge-kasa-python/blob/latest/LICENSE"><img src="https://img.shields.io/npm/l/homebridge-kasa-python?color=yellow" alt="mit license"></a>
   <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/latest"><img src="https://img.shields.io/npm/v/homebridge-kasa-python/latest?label=npm%40latest&color=blue" alt="latest npm version"></a>
-  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40latest-3.11%2C%203.12%2C%203.13-blue" alt="latest PyPI pyversions"></a>
+  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40latest-3.11%2C%203.12%2C%203.13%2C%203.14-blue" alt="latest PyPI pyversions"></a>
   <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/beta"><img src="https://img.shields.io/npm/v/homebridge-kasa-python/beta?label=npm%40beta&color=red" alt="beta npm version"></a>
   <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40beta-3.11%2C%203.12%2C%203.13%2C%203.14-red" alt="beta PyPI pyversions"></a>
   <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/latest"><img src="https://img.shields.io/npm/dt/homebridge-kasa-python?color=brightgreen" alt="npm downloads total"></a>
