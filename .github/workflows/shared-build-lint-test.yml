@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         node-version: ${{ fromJson('["22","24","26"]') }}
-        python-version: ${{ fromJson('["3.11","3.12","3.13"]') }}
+        python-version: ${{ fromJson('["3.11","3.12","3.13","3.14"]') }}
     steps:
       - name: Checkout Actions
         id: checkout
