@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.3.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.4)
 
+### Featured Changes
+
+- [feature] Add four device models, a broadcast discovery option, and HomeKit state fixes [#387](https://github.com/ZeliardM/homebridge-kasa-python/pull/387) (@ZeliardM)
+
 ### Bug Fixes
 
 - Fix manual devices never being rediscovered after going offline [#384](https://github.com/ZeliardM/homebridge-kasa-python/pull/384) (@aashishvanand)
