@@ -44,6 +44,7 @@ export interface KasaPythonConfigInput {
   pollingInterval?: number;
   discoveryPollingInterval?: number;
   offlineInterval?: number;
+  disableBroadcast?: boolean;
   additionalBroadcasts?: string[];
   manualDevices?: (string | ConfigDevice)[];
   excludeMacAddresses?: string[];
@@ -70,6 +71,7 @@ export type KasaPythonConfig = {
     pollingInterval: number;
     discoveryPollingInterval: number;
     offlineInterval: number;
+    disableBroadcast: boolean;
     additionalBroadcasts: string[];
     manualDevices: ConfigDevice[];
     excludeMacAddresses: string[];
@@ -99,6 +101,7 @@ export const defaultConfig: KasaPythonConfig = {
     pollingInterval: 5,
     discoveryPollingInterval: 300,
     offlineInterval: 7,
+    disableBroadcast: false,
     additionalBroadcasts: [],
     manualDevices: [],
     excludeMacAddresses: [],
@@ -187,6 +190,7 @@ function validateConfig(config: Record<string, unknown>): string[] {
   validateType(config, 'pollingInterval', 'number', errors);
   validateType(config, 'discoveryPollingInterval', 'number', errors);
   validateType(config, 'offlineInterval', 'number', errors);
+  validateType(config, 'disableBroadcast', 'boolean', errors);
 
   if (config.additionalBroadcasts !== undefined && !Array.isArray(config.additionalBroadcasts)) {
     errors.push('`additionalBroadcasts` should be an array of strings.');
@@ -271,6 +275,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
       pollingInterval: (parsedConfig.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
       discoveryPollingInterval: (parsedConfig.discoveryPollingInterval ?? defaultConfig.discoveryOptions.discoveryPollingInterval) * 1000,
       offlineInterval: (parsedConfig.offlineInterval ?? defaultConfig.discoveryOptions.offlineInterval) * 24 * 60 * 60 * 1000,
+      disableBroadcast: parsedConfig.disableBroadcast ?? defaultConfig.discoveryOptions.disableBroadcast,
       additionalBroadcasts: parsedConfig.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
       manualDevices: normalizedManualDevices,
       excludeMacAddresses: parsedConfig.excludeMacAddresses ?? defaultConfig.discoveryOptions.excludeMacAddresses,

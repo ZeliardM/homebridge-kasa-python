@@ -59,6 +59,7 @@ npm install -g homebridge-kasa-python
 ## Configuration Notes
 - Enable Credentials only if your devices require authentication. Some newer Kasa/Tapo devices will not work without the TP-Link Kasa/Tapo Cloud Account Username and Password.
 - Manual Devices now only require the device host or IP Address. If discovery is not working, try the Manual Devices List and Additional Broadcast Addresses before assuming a device is unsupported.
+- Disable Broadcast Discovery turns off broadcast discovery, including Additional Broadcast Addresses, so only the devices in the Manual Devices List are discovered, each directly by its IP address. Devices that are not in the list are no longer found and are removed after the Offline Interval.
 - Hide HomeKit or Matter Devices is enabled by default so supported native HomeKit/Matter devices are not duplicated in Homebridge.
 - Wait Time Update controls how long similar commands are combined before being sent to a device.
 - Advanced Python Logging only shows detailed Python-side logs when Homebridge Debug Mode is enabled.
@@ -95,6 +96,7 @@ npm install -g homebridge-kasa-python
       "pollingInterval": 5,
       "discoveryPollingInterval": 300,
       "offlineInterval": 7,
+      "disableBroadcast": false,
       "waitTimeUpdate": 100,
       "pythonPath": "/usr/bin/python3",
       "advancedPythonLogging": false,
@@ -169,6 +171,7 @@ Some newer Kasa devices require authentication. These are marked with [*] in the
 ### Power Strips
 - **EP40**
   - Hardware: 1.0 (US) / Firmware: 1.0.2
+- **EP40A**
 - **EP40M**
   - Hardware: 1.0 (US) / Firmware: 1.1.0[*]
 - **HS107**
@@ -322,6 +325,7 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (US) / Firmware: 1.2.0
 - **TP10**
   - Hardware: 1.0 (IT) / Firmware: 1.2.5
+- **TP11**
 - **TP15**
   - Hardware: 1.0 (US) / Firmware: 1.0.3
 
@@ -359,6 +363,7 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.6 (US) / Firmware: 1.0.4
 - **TS15**
   - Hardware: 1.0 (US) / Firmware: 1.2.2
+- **TS25**
 
 ### Bulbs
 - **L430C**
@@ -370,6 +375,7 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
 - **L510E**
   - Hardware: 3.0 (US) / Firmware: 1.0.5
   - Hardware: 3.0 (US) / Firmware: 1.1.2
+- **L520**
 - **L530B**
   - Hardware: 3.0 (EU) / Firmware: 1.1.9
 - **L530E**

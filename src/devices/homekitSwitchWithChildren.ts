@@ -56,6 +56,9 @@ export default class HomeKitDeviceSwitchWithChildren extends HomeKitParentDevice
         buildOnDescriptor(
           C,
           async (value, context) => {
+            if (this.shouldSkipTurnOn(String(context.child?.id), value)) {
+              return;
+            }
             const idx = this.extractChildIndex(context.child ?? {});
             await this.deviceManager!.controlDevice(context.device.host, 'state', value, idx);
           },
@@ -66,6 +69,9 @@ export default class HomeKitDeviceSwitchWithChildren extends HomeKitParentDevice
           async (value, context) => {
             const idx = this.extractChildIndex(context.child ?? {});
             await this.deviceManager!.controlDevice(context.device.host, 'brightness', value, idx);
+            if (value > 0) {
+              this.noteTurnedOnByBrightness(String(context.child?.id));
+            }
           },
         ),
       );

@@ -27,6 +27,7 @@ import type {
 import type { KasaPythonAccessoryContext } from '../platform.js';
 
 const MAX_CONSECUTIVE_POLL_FAILURES = 2;
+const TURN_ON_BY_BRIGHTNESS_WINDOW_MS = 1000;
 
 export default abstract class HomeKitDevice {
   readonly log: Logger;
@@ -46,6 +47,9 @@ export default abstract class HomeKitDevice {
   protected primaryService?: Service;
   private consecutivePollFailures = 0;
   private removedFromPlatform = false;
+  private refreshAllAfterRecovery = false;
+  private writeGeneration = 0;
+  private turnedOnByBrightnessAt: Map<string, number> = new Map();
   private readonly periodicDiscoveryCompleteHandler = () => {
     this.updateEmitter.emit('periodicDeviceDiscoveryComplete');
   };
@@ -201,7 +205,13 @@ export default abstract class HomeKitDevice {
       this.log.warn('No host in sys_info');
       return false;
     }
+    const generation = this.writeGeneration;
     const updatedSysInfo = await this.deviceManager.getSysInfo(host);
+    if (generation !== this.writeGeneration) {
+      // A write started while this read was in flight, so the reading may predate it.
+      this.log.debug('Discarding sys_info read that started before a write');
+      return false;
+    }
     if (!updatedSysInfo) {
       this.recordPollCommunicationFailure(host);
       return false;
@@ -225,7 +235,7 @@ export default abstract class HomeKitDevice {
     return true;
   }
 
-  protected async refreshAndUpdateCharacteristics(forceUpdate: boolean, skipFetch = false): Promise<void> {
+  protected async refreshAndUpdateCharacteristics(forceUpdate: boolean): Promise<void> {
     const deviceKey = this.kasaDevice.sys_info.device_id;
     if (!forceUpdate && HomeKitDevice.locks.has(deviceKey)) {
       this.log.debug('Skipping poll; active update lock');
@@ -245,18 +255,18 @@ export default abstract class HomeKitDevice {
       }
       this.isUpdating = true;
       try {
-        if (!skipFetch) {
-          const didUpdateSysInfo = await this.getSysInfo();
-          if (!didUpdateSysInfo || this.shouldSkipUpdate()) {
-            return;
-          }
+        const didUpdateSysInfo = await this.getSysInfo();
+        if (!didUpdateSysInfo || this.shouldSkipUpdate()) {
+          return;
         }
-        await this.updateAllServicesAndCharacteristics(forceUpdate);
+        // After an offline period every characteristic still carries the "No Response"
+        // status, so push all current values once instead of only the changed ones.
+        const forceAll = forceUpdate || this.refreshAllAfterRecovery;
+        await this.updateAllServicesAndCharacteristics(forceAll);
+        this.refreshAllAfterRecovery = false;
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
         this.log.error('Error during poll update:', error);
-        this.setOfflineState(true);
-        await this.stopPolling();
       } finally {
         this.isUpdating = false;
         this.updateEmitter.emit('updateComplete');
@@ -307,8 +317,36 @@ export default abstract class HomeKitDevice {
     this.setOfflineState(false);
   }
 
+  // Discovery reads device state earlier than it reaches here, so only identity is taken
+  // from it; current state is fetched fresh under the device lock.
+  public updateFromDiscovery(device: KasaDevice): void {
+    this.kasaDevice.sys_info.host = device.sys_info.host;
+    this.kasaDevice.sys_info.alias = device.sys_info.alias;
+    this.kasaDevice.feature_info = device.feature_info;
+  }
+
   public updateAfterPeriodicDiscovery(force = false): void {
-    void this.refreshAndUpdateCharacteristics(force, true);
+    void this.refreshAndUpdateCharacteristics(force);
+  }
+
+  protected markWriteStarted(): void {
+    this.writeGeneration += 1;
+  }
+
+  // A brightness write above zero already turns the light on. HomeKit scenes send On right
+  // after it, so that On needs no command of its own. The key is '' or a child id.
+  protected noteTurnedOnByBrightness(key: string): void {
+    this.turnedOnByBrightnessAt.set(key, Date.now());
+  }
+
+  protected shouldSkipTurnOn(key: string, value: CharacteristicValue): boolean {
+    const turnedOnAt = this.turnedOnByBrightnessAt.get(key);
+    this.turnedOnByBrightnessAt.delete(key);
+    const skip = Boolean(value) && turnedOnAt !== undefined && Date.now() - turnedOnAt < TURN_ON_BY_BRIGHTNESS_WINDOW_MS;
+    if (skip) {
+      this.log.debug('Skipping turn on; the brightness write just turned the light on');
+    }
+    return skip;
   }
 
   protected setupPrimaryService(): void {
@@ -379,6 +417,9 @@ export default abstract class HomeKitDevice {
   }
 
   private async genericOnGet(descriptor: CharacteristicDescriptor): Promise<CharacteristicValue> {
+    if (this.kasaDevice.offline) {
+      throw this.communicationFailure();
+    }
     const context = this.buildDescriptorContext();
     try {
       const characteristic = this.primaryService!.getCharacteristic(descriptor.type);
@@ -390,8 +431,6 @@ export default abstract class HomeKitDevice {
       return value;
     } catch (error) {
       this.log.error(`OnGet error for ${descriptor.name ?? descriptor.type.UUID}`, error);
-      this.setOfflineState(true);
-      await this.stopPolling();
       return this.defaultValueForCharacteristic(descriptor.type);
     }
   }
@@ -417,6 +456,7 @@ export default abstract class HomeKitDevice {
       }
       try {
         this.isUpdating = true;
+        this.markWriteStarted();
         const context = this.buildDescriptorContext();
         await descriptor.applySet!(value, context);
 
@@ -443,8 +483,7 @@ export default abstract class HomeKitDevice {
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
         this.log.error(`OnSet error for ${descriptor.name ?? descriptor.type.UUID}`, error);
-        this.setOfflineState(true);
-        await this.stopPolling();
+        throw this.communicationFailure();
       } finally {
         if (!isGrouped) {
           this.isUpdating = false;
@@ -642,11 +681,32 @@ export default abstract class HomeKitDevice {
     const offlineStatusChanged =
       this.kasaDevice.offline !== offline || this.homebridgeAccessory.context.offline !== offline;
 
+    const wasOffline = this.kasaDevice.offline;
     this.kasaDevice.offline = offline;
     this.homebridgeAccessory.context.offline = offline;
 
+    if (offline && !wasOffline) {
+      this.pushCommunicationFailure();
+    } else if (!offline && wasOffline) {
+      this.refreshAllAfterRecovery = true;
+    }
+
     if (offlineStatusChanged) {
       this.platform.api.updatePlatformAccessories([this.homebridgeAccessory]);
+    }
+  }
+
+  protected communicationFailure(): HapStatusError {
+    return new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+  }
+
+  // Shows the device as "No Response" in HomeKit right away, without waiting for a read.
+  protected pushCommunicationFailure(): void {
+    if (!this.primaryService) {
+      return;
+    }
+    for (const descriptor of this.primaryDescriptors) {
+      this.primaryService.getCharacteristic(descriptor.type).updateValue(this.communicationFailure());
     }
   }
 

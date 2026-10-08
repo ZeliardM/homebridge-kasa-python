@@ -16,6 +16,7 @@ export default class DeviceManager {
   private apiUrl!: string;
   private username!: string;
   private password!: string;
+  private disableBroadcast!: boolean;
   private additionalBroadcasts!: string[];
   private manualDeviceHosts!: string[];
   private excludeMacs!: string[];
@@ -30,6 +31,7 @@ export default class DeviceManager {
     this.username = this.platform.config.username;
     this.password = this.platform.config.password;
     this.apiUrl = `http://127.0.0.1:${this.platform.port}`;
+    this.disableBroadcast = this.platform.config.discoveryOptions.disableBroadcast;
     this.additionalBroadcasts = this.platform.config.discoveryOptions.additionalBroadcasts;
     this.manualDeviceHosts = this.platform.config.discoveryOptions.manualDevices.map(d => d.host);
     this.excludeMacs = this.platform.config.discoveryOptions.excludeMacAddresses;
@@ -45,6 +47,7 @@ export default class DeviceManager {
       await axios.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
         `${this.apiUrl}/discover`,
         {
+          disableBroadcast: this.disableBroadcast,
           additionalBroadcasts: this.additionalBroadcasts,
           manualDevices: this.manualDeviceHosts,
           excludeMacAddresses: this.excludeMacs,
@@ -108,9 +111,15 @@ export default class DeviceManager {
     }
   }
 
-  async controlDevice(host: string, feature: string, value: ControlValue, childNum?: number): Promise<void> {
+  async controlDevice(
+    host: string,
+    feature: string,
+    value: ControlValue,
+    childNum?: number,
+    options: { lightOn?: boolean } = {},
+  ): Promise<void> {
     const action = this.mapFeatureToAction(feature, value);
-    await this.performDeviceAction(host, feature, action, value, childNum);
+    await this.performDeviceAction(host, feature, action, value, childNum, options.lightOn);
   }
 
   private mapFeatureToAction(feature: string, value: ControlValue): string {
@@ -134,6 +143,7 @@ export default class DeviceManager {
     action: string,
     value: ControlValue,
     childNumber?: number,
+    lightOn?: boolean,
   ): Promise<void> {
     const url = `${this.apiUrl}/controlDevice`;
     const payload = {
@@ -142,14 +152,19 @@ export default class DeviceManager {
       action,
       value,
       ...(childNumber !== undefined && { child_num: childNumber }),
+      ...(lightOn !== undefined && { light_on: lightOn }),
     };
+    let response;
     try {
-      const response = await axios.post(url, payload);
-      if (response.data.status !== 'success') {
-        this.log.error(`Action failed (${feature}/${action}) on ${host}: ${response.data.message}`);
-      }
+      response = await axios.post(url, payload);
     } catch (error) {
       this.handleAxiosError(error, 'controlDevice');
+      throw new Error(`Control request failed (${feature}/${action}) on ${host}`, { cause: error });
+    }
+    if (response.data?.status !== 'success') {
+      const reason = response.data?.message ?? response.data?.error ?? 'unknown error';
+      this.log.error(`Action failed (${feature}/${action}) on ${host}: ${reason}`);
+      throw new Error(`Action failed (${feature}/${action}) on ${host}: ${reason}`);
     }
   }
 
