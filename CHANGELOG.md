@@ -1,5 +1,5 @@
 # Changelog
-## [v3.3.0-beta.3](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.3)
+## [v3.3.0-beta.3](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.3) (2026-10-08)
 
 ### Featured Changes
 
@@ -7,6 +7,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v3.3.0-beta.3 [beta-release] (@github-actions)
 - pip(deps): bump uvicorn from 0.53.0 to 0.54.0 [#385](https://github.com/ZeliardM/homebridge-kasa-python/pull/385) (@dependabot[bot])
 - pip(deps): bump tzdata from 2026.3 to 2026.4 [#380](https://github.com/ZeliardM/homebridge-kasa-python/pull/380) (@dependabot[bot])
 - pip(deps): bump uvicorn from 0.52.4 to 0.53.0 [#379](https://github.com/ZeliardM/homebridge-kasa-python/pull/379) (@dependabot[bot])
