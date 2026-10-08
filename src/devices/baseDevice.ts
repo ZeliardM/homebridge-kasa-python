@@ -46,6 +46,7 @@ export default abstract class HomeKitDevice {
   protected primaryService?: Service;
   private consecutivePollFailures = 0;
   private removedFromPlatform = false;
+  private refreshAllAfterRecovery = false;
   private readonly periodicDiscoveryCompleteHandler = () => {
     this.updateEmitter.emit('periodicDeviceDiscoveryComplete');
   };
@@ -251,12 +252,14 @@ export default abstract class HomeKitDevice {
             return;
           }
         }
-        await this.updateAllServicesAndCharacteristics(forceUpdate);
+        // After an offline period every characteristic still carries the "No Response"
+        // status, so push all current values once instead of only the changed ones.
+        const forceAll = forceUpdate || this.refreshAllAfterRecovery;
+        await this.updateAllServicesAndCharacteristics(forceAll);
+        this.refreshAllAfterRecovery = false;
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
         this.log.error('Error during poll update:', error);
-        this.setOfflineState(true);
-        await this.stopPolling();
       } finally {
         this.isUpdating = false;
         this.updateEmitter.emit('updateComplete');
@@ -379,6 +382,9 @@ export default abstract class HomeKitDevice {
   }
 
   private async genericOnGet(descriptor: CharacteristicDescriptor): Promise<CharacteristicValue> {
+    if (this.kasaDevice.offline) {
+      throw this.communicationFailure();
+    }
     const context = this.buildDescriptorContext();
     try {
       const characteristic = this.primaryService!.getCharacteristic(descriptor.type);
@@ -390,8 +396,6 @@ export default abstract class HomeKitDevice {
       return value;
     } catch (error) {
       this.log.error(`OnGet error for ${descriptor.name ?? descriptor.type.UUID}`, error);
-      this.setOfflineState(true);
-      await this.stopPolling();
       return this.defaultValueForCharacteristic(descriptor.type);
     }
   }
@@ -443,8 +447,7 @@ export default abstract class HomeKitDevice {
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
         this.log.error(`OnSet error for ${descriptor.name ?? descriptor.type.UUID}`, error);
-        this.setOfflineState(true);
-        await this.stopPolling();
+        throw this.communicationFailure();
       } finally {
         if (!isGrouped) {
           this.isUpdating = false;
@@ -642,11 +645,32 @@ export default abstract class HomeKitDevice {
     const offlineStatusChanged =
       this.kasaDevice.offline !== offline || this.homebridgeAccessory.context.offline !== offline;
 
+    const wasOffline = this.kasaDevice.offline;
     this.kasaDevice.offline = offline;
     this.homebridgeAccessory.context.offline = offline;
 
+    if (offline && !wasOffline) {
+      this.pushCommunicationFailure();
+    } else if (!offline && wasOffline) {
+      this.refreshAllAfterRecovery = true;
+    }
+
     if (offlineStatusChanged) {
       this.platform.api.updatePlatformAccessories([this.homebridgeAccessory]);
+    }
+  }
+
+  protected communicationFailure(): HapStatusError {
+    return new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+  }
+
+  // Shows the device as "No Response" in HomeKit right away, without waiting for a read.
+  protected pushCommunicationFailure(): void {
+    if (!this.primaryService) {
+      return;
+    }
+    for (const descriptor of this.primaryDescriptors) {
+      this.primaryService.getCharacteristic(descriptor.type).updateValue(this.communicationFailure());
     }
   }
 

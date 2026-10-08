@@ -208,7 +208,6 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
       waiters.forEach(waiter => waiter.resolve());
     } catch (error) {
       waiters.forEach(waiter => waiter.reject(error));
-      throw error;
     } finally {
       this.hsvFlushInProgress = false;
 

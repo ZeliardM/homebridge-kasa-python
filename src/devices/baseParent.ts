@@ -70,6 +70,9 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
   }
 
   private async childOnGet(service: Service, child: ChildDevice, descriptor: CharacteristicDescriptor) {
+    if (this.kasaDevice.offline) {
+      throw this.communicationFailure();
+    }
     const context = this.buildChildDescriptorContext(child);
     try {
       let value = service.getCharacteristic(descriptor.type).value;
@@ -80,8 +83,6 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
       return value;
     } catch (error) {
       this.log.error(`Child OnGet error (${child.alias}) ${descriptor.name}`, error);
-      this.setOfflineState(true);
-      await this.stopPolling();
       return this.defaultValueForCharacteristic(descriptor.type);
     }
   }
@@ -140,8 +141,7 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
         this.log.error(`Child OnSet error (${child.alias}) ${descriptor.name}`, error);
-        this.setOfflineState(true);
-        await this.stopPolling();
+        throw this.communicationFailure();
       } finally {
         if (!isGrouped) {
           this.isUpdating = false;
@@ -237,6 +237,24 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
         } catch (error) {
           this.log.error(`Child update diff error (${child.alias}) ${descriptor.name}`, error);
         }
+      }
+    }
+  }
+
+  protected pushCommunicationFailure(): void {
+    super.pushCommunicationFailure();
+    const children = this.kasaDevice.sys_info.children;
+    if (!Array.isArray(children)) {
+      return;
+    }
+    for (const child of children) {
+      const service = this.getChildService(child);
+      const descriptors = this.childDescriptorMap.get(this.childKey(child));
+      if (!service || !descriptors) {
+        continue;
+      }
+      for (const descriptor of descriptors) {
+        service.getCharacteristic(descriptor.type).updateValue(this.communicationFailure());
       }
     }
   }

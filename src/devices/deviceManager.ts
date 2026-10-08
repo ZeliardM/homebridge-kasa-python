@@ -146,13 +146,17 @@ export default class DeviceManager {
       value,
       ...(childNumber !== undefined && { child_num: childNumber }),
     };
+    let response;
     try {
-      const response = await axios.post(url, payload);
-      if (response.data.status !== 'success') {
-        this.log.error(`Action failed (${feature}/${action}) on ${host}: ${response.data.message}`);
-      }
+      response = await axios.post(url, payload);
     } catch (error) {
       this.handleAxiosError(error, 'controlDevice');
+      throw new Error(`Control request failed (${feature}/${action}) on ${host}`, { cause: error });
+    }
+    if (response.data?.status !== 'success') {
+      const reason = response.data?.message ?? response.data?.error ?? 'unknown error';
+      this.log.error(`Action failed (${feature}/${action}) on ${host}: ${reason}`);
+      throw new Error(`Action failed (${feature}/${action}) on ${host}: ${reason}`);
     }
   }
 
