@@ -1,5 +1,5 @@
 # Changelog
-## [v3.3.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.4)
+## [v3.3.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.4) (2026-10-08)
 
 ### Featured Changes
 
@@ -8,6 +8,10 @@
 ### Bug Fixes
 
 - Fix manual devices never being rediscovered after going offline [#384](https://github.com/ZeliardM/homebridge-kasa-python/pull/384) (@aashishvanand)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.3.0-beta.4 [beta-release] (@github-actions)
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.3...v3.3.0-beta.4
 
