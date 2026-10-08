@@ -353,8 +353,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     if (existingDevice) {
       if (!existingDevice.isUpdating) {
         const comingOnline = existingDevice.kasaDevice.offline && !device.offline;
-        existingDevice.kasaDevice.sys_info = device.sys_info;
-        existingDevice.kasaDevice.feature_info = device.feature_info;
+        existingDevice.updateFromDiscovery(device);
         existingDevice.markDeviceReachable(device.last_seen);
         if (comingOnline) {
           this.log.debug(`Device [${device.sys_info.device_id}] was offline and is now online. Updating and restarting polling.`);

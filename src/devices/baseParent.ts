@@ -121,6 +121,7 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
       }
       try {
         this.isUpdating = true;
+        this.markWriteStarted();
         const context = this.buildChildDescriptorContext(child);
         await descriptor.applySet!(value, context);
 

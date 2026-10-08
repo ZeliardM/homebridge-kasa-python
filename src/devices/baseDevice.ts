@@ -47,6 +47,7 @@ export default abstract class HomeKitDevice {
   private consecutivePollFailures = 0;
   private removedFromPlatform = false;
   private refreshAllAfterRecovery = false;
+  private writeGeneration = 0;
   private readonly periodicDiscoveryCompleteHandler = () => {
     this.updateEmitter.emit('periodicDeviceDiscoveryComplete');
   };
@@ -202,7 +203,13 @@ export default abstract class HomeKitDevice {
       this.log.warn('No host in sys_info');
       return false;
     }
+    const generation = this.writeGeneration;
     const updatedSysInfo = await this.deviceManager.getSysInfo(host);
+    if (generation !== this.writeGeneration) {
+      // A write started while this read was in flight, so the reading may predate it.
+      this.log.debug('Discarding sys_info read that started before a write');
+      return false;
+    }
     if (!updatedSysInfo) {
       this.recordPollCommunicationFailure(host);
       return false;
@@ -226,7 +233,7 @@ export default abstract class HomeKitDevice {
     return true;
   }
 
-  protected async refreshAndUpdateCharacteristics(forceUpdate: boolean, skipFetch = false): Promise<void> {
+  protected async refreshAndUpdateCharacteristics(forceUpdate: boolean): Promise<void> {
     const deviceKey = this.kasaDevice.sys_info.device_id;
     if (!forceUpdate && HomeKitDevice.locks.has(deviceKey)) {
       this.log.debug('Skipping poll; active update lock');
@@ -246,11 +253,9 @@ export default abstract class HomeKitDevice {
       }
       this.isUpdating = true;
       try {
-        if (!skipFetch) {
-          const didUpdateSysInfo = await this.getSysInfo();
-          if (!didUpdateSysInfo || this.shouldSkipUpdate()) {
-            return;
-          }
+        const didUpdateSysInfo = await this.getSysInfo();
+        if (!didUpdateSysInfo || this.shouldSkipUpdate()) {
+          return;
         }
         // After an offline period every characteristic still carries the "No Response"
         // status, so push all current values once instead of only the changed ones.
@@ -310,8 +315,20 @@ export default abstract class HomeKitDevice {
     this.setOfflineState(false);
   }
 
+  // Discovery reads device state earlier than it reaches here, so only identity is taken
+  // from it; current state is fetched fresh under the device lock.
+  public updateFromDiscovery(device: KasaDevice): void {
+    this.kasaDevice.sys_info.host = device.sys_info.host;
+    this.kasaDevice.sys_info.alias = device.sys_info.alias;
+    this.kasaDevice.feature_info = device.feature_info;
+  }
+
   public updateAfterPeriodicDiscovery(force = false): void {
-    void this.refreshAndUpdateCharacteristics(force, true);
+    void this.refreshAndUpdateCharacteristics(force);
+  }
+
+  protected markWriteStarted(): void {
+    this.writeGeneration += 1;
   }
 
   protected setupPrimaryService(): void {
@@ -421,6 +438,7 @@ export default abstract class HomeKitDevice {
       }
       try {
         this.isUpdating = true;
+        this.markWriteStarted();
         const context = this.buildDescriptorContext();
         await descriptor.applySet!(value, context);
 
