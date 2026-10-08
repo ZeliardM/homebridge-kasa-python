@@ -171,6 +171,7 @@ Some newer Kasa devices require authentication. These are marked with [*] in the
 ### Power Strips
 - **EP40**
   - Hardware: 1.0 (US) / Firmware: 1.0.2
+- **EP40A**
 - **EP40M**
   - Hardware: 1.0 (US) / Firmware: 1.1.0[*]
 - **HS107**
@@ -324,6 +325,7 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (US) / Firmware: 1.2.0
 - **TP10**
   - Hardware: 1.0 (IT) / Firmware: 1.2.5
+- **TP11**
 - **TP15**
   - Hardware: 1.0 (US) / Firmware: 1.0.3
 
@@ -361,6 +363,7 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.6 (US) / Firmware: 1.0.4
 - **TS15**
   - Hardware: 1.0 (US) / Firmware: 1.2.2
+- **TS25**
 
 ### Bulbs
 - **L430C**
@@ -372,6 +375,7 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
 - **L510E**
   - Hardware: 3.0 (US) / Firmware: 1.0.5
   - Hardware: 3.0 (US) / Firmware: 1.1.2
+- **L520**
 - **L530B**
   - Hardware: 3.0 (EU) / Firmware: 1.1.9
 - **L530E**
