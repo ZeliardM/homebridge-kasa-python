@@ -188,7 +188,14 @@ async def discover_devices(
         await close_all_connections()
         log("All existing device connections closed.")
 
+    discovered_hosts: set[str] = set()
+
     async def on_discovered(device: Device):
+        if device.host in discovered_hosts:
+            log("Device already discovered this run, skipping", level="DEBUG", host=device.host, alias=device.alias)
+            await safe_disconnect(device)
+            return
+        discovered_hosts.add(device.host)
         log("Discovered device", host=device.host, alias=device.alias)
         try:
             if isinstance(device, IotDevice):
@@ -206,9 +213,11 @@ async def discover_devices(
                 await safe_disconnect(device)
         except (UnsupportedDeviceError, AuthenticationError) as e:
             log(f"{e.__class__.__name__}", level="ERROR", host=device.host, alias=device.alias)
+            discovered_hosts.discard(device.host)
             await safe_disconnect(device)
         except Exception as e:
             log(f"Device discovery: {e}", level="ERROR", host=device.host, alias=device.alias)
+            discovered_hosts.discard(device.host)
             await safe_disconnect(device)
 
     async def process_device(device: Device) -> dict[str, Any] | None:
@@ -263,8 +272,6 @@ async def discover_devices(
             log(f"Discovering on broadcast: {e}", level="ERROR", host=broadcast)
 
     async def discover_manual_device(host: str):
-        if host in device_config_cache:
-            return
         log("Discovering manual device", host=host)
         device = None
         try:
