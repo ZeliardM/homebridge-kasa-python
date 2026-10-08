@@ -22,6 +22,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
   private hsvFlushTimer: NodeJS.Timeout | null = null;
   private hsvFlushInProgress: boolean = false;
   private hsvWaiters: Array<{ resolve: () => void; reject: (error?: unknown) => void }> = [];
+  private colorWrittenWhileOff = false;
 
   constructor(
     platform: KasaPythonPlatform,
@@ -70,7 +71,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
       list.push(buildColorTemperatureDescriptor(
         C,
         async (value, context) => {
-          await this.deviceManager!.controlDevice(context.device.host, 'color_temp', value);
+          await this.deviceManager!.controlDevice(context.device.host, 'color_temp', value, undefined, this.colorWriteOptions());
           this.syncHueSaturationFromColorTemperature(Number(value), context.alias);
         },
       ));
@@ -98,6 +99,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
   }
 
   protected async updateAllServicesAndCharacteristics(forceUpdate: boolean): Promise<void> {
+    const wasOn = this.previousSnapshot?.sys_info.state === true;
     const previousColorTemp = this.previousSnapshot?.sys_info.color_temp;
     const previousHue = this.previousSnapshot?.sys_info.hsv?.hue;
     const previousSaturation = this.previousSnapshot?.sys_info.hsv?.saturation;
@@ -105,6 +107,16 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     await super.updateAllServicesAndCharacteristics(forceUpdate);
 
     if (!this.adaptiveLightingController?.isAdaptiveLightingActive() || forceUpdate) {
+      return;
+    }
+
+    // Colors written while the bulb was off may only show up once it is on again, so a
+    // difference then is not an external change.
+    const isOn = this.kasaDevice.sys_info.state === true;
+    if (!isOn || !wasOn || this.colorWrittenWhileOff) {
+      if (isOn) {
+        this.colorWrittenWhileOff = false;
+      }
       return;
     }
 
@@ -202,7 +214,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     const saturation = pendingHSV.saturation ?? currentHSV.saturation ?? 0;
 
     try {
-      await this.deviceManager!.controlDevice(host, 'hsv', { hue, saturation });
+      await this.deviceManager!.controlDevice(host, 'hsv', { hue, saturation }, undefined, this.colorWriteOptions());
       this.kasaDevice.sys_info.hsv = { hue, saturation };
       this.cacheColorTemperatureForColorMode();
       waiters.forEach(waiter => waiter.resolve());
@@ -215,6 +227,15 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
         this.scheduleHSVFlush(host);
       }
     }
+  }
+
+  // A color change on its own turns the bulb on, so while it is off ask the device to stay off.
+  private colorWriteOptions(): { lightOn?: boolean } {
+    if (this.kasaDevice.sys_info.state !== false) {
+      return {};
+    }
+    this.colorWrittenWhileOff = true;
+    return { lightOn: false };
   }
 
   public identify(): void {

@@ -111,9 +111,15 @@ export default class DeviceManager {
     }
   }
 
-  async controlDevice(host: string, feature: string, value: ControlValue, childNum?: number): Promise<void> {
+  async controlDevice(
+    host: string,
+    feature: string,
+    value: ControlValue,
+    childNum?: number,
+    options: { lightOn?: boolean } = {},
+  ): Promise<void> {
     const action = this.mapFeatureToAction(feature, value);
-    await this.performDeviceAction(host, feature, action, value, childNum);
+    await this.performDeviceAction(host, feature, action, value, childNum, options.lightOn);
   }
 
   private mapFeatureToAction(feature: string, value: ControlValue): string {
@@ -137,6 +143,7 @@ export default class DeviceManager {
     action: string,
     value: ControlValue,
     childNumber?: number,
+    lightOn?: boolean,
   ): Promise<void> {
     const url = `${this.apiUrl}/controlDevice`;
     const payload = {
@@ -145,6 +152,7 @@ export default class DeviceManager {
       action,
       value,
       ...(childNumber !== undefined && { child_num: childNumber }),
+      ...(lightOn !== undefined && { light_on: lightOn }),
     };
     let response;
     try {

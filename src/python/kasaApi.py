@@ -11,6 +11,7 @@ from kasa import (
     DeviceConfig,
     DeviceType,
     Discover,
+    LightState,
     Module,
     UnsupportedDeviceError,
 )
@@ -345,6 +346,7 @@ async def control_device(
     action: str,
     value: Any,
     child_num: int | None = None,
+    light_on: bool | None = None,
 ) -> dict[str, Any]:
     log("Controlling device", host=host)
     try:
@@ -353,7 +355,7 @@ async def control_device(
         device_lock = device_lock_cache.get(host, asyncio.Lock())
         async with device_lock:
             device = await get_or_connect_device(host, device_config)
-            return await perform_device_action(device, feature, action, value, child_num)
+            return await perform_device_action(device, feature, action, value, child_num, light_on)
     except Exception as e:
         return await handle_device_error(host, e)
 
@@ -363,6 +365,7 @@ async def perform_device_action(
     action: str,
     value: Any,
     child_num: int | None = None,
+    light_on: bool | None = None,
 ) -> dict[str, Any]:
     try:
         if child_num is not None and device.children:
@@ -378,11 +381,11 @@ async def perform_device_action(
         elif feature == "brightness" and light and light.has_feature("brightness"):
             await handle_brightness(target, action, value)
         elif feature == "color_temp" and light and light.has_feature("color_temp"):
-            await handle_color_temp(target, action, value)
+            await handle_color_temp(target, action, value, light_on)
         elif feature == "fan_speed_level" and fan and fan.has_feature("fan_speed_level"):
             await handle_fan_speed_level(target, action, value)
         elif feature == 'hsv' and light and light.has_feature("hsv"):
-            await handle_hsv(target, action, feature, value)
+            await handle_hsv(target, action, feature, value, light_on)
         else:
             raise ValueError("Invalid feature or action")
         return {"status": "success"}
@@ -401,7 +404,7 @@ async def handle_brightness(target: Device, action: str, value: int):
     if target.is_off:
         await target.turn_on()
 
-async def handle_color_temp(target: Device, action: str, value: int):
+async def handle_color_temp(target: Device, action: str, value: int, light_on: bool | None = None):
     log(f"Handling color temperature: action={action}, value={value}", alias=target.alias)
     light = target.modules.get(Module.Light)
     color_temp = target.modules.get(Module.ColorTemperature)
@@ -412,6 +415,10 @@ async def handle_color_temp(target: Device, action: str, value: int):
     else:
         min_temp, max_temp = (2500, 6500)
     kelvin = max(min_temp, min(kelvin, max_temp))
+    if light_on is False:
+        # A plain color change turns the bulb on; keep it off and only update the color.
+        await light.set_state(LightState(light_on=False, color_temp=kelvin))
+        return
     await getattr(light, action)(kelvin)
 
 async def handle_fan_speed_level(target: Device, action: str, value: int):
@@ -425,7 +432,7 @@ async def handle_fan_speed_level(target: Device, action: str, value: int):
     if target.is_off:
         await target.turn_on()
 
-async def handle_hsv(target: Device, action: str, feature: str, value: dict):
+async def handle_hsv(target: Device, action: str, feature: str, value: dict, light_on: bool | None = None):
     log(f"Handling HSV: action={action}, feature={feature}, value={value}", alias=target.alias)
     light = target.modules.get(Module.Light)
     current_hsv = light.hsv
@@ -435,6 +442,10 @@ async def handle_hsv(target: Device, action: str, feature: str, value: dict):
     new_h = max(0, min(h, 360))
     new_s = max(0, min(s, 100))
     new_v = max(0, min(v, 100))
+    if light_on is False:
+        # A plain color change turns the bulb on; keep it off and only update the color.
+        await light.set_state(LightState(light_on=False, hue=new_h, saturation=new_s, color_temp=0))
+        return
     await getattr(light, action)(new_h, new_s, new_v)
 
 @app.route('/discover', methods=['POST'])
@@ -493,7 +504,9 @@ async def control_device_route():
         action = data['action']
         value = data.get('value')
         child_num = data.get('child_num')
-        result = await control_device(host, feature, action, value, child_num)
+        light_on = data.get('light_on')
+        light_on = light_on if isinstance(light_on, bool) else None
+        result = await control_device(host, feature, action, value, child_num, light_on)
         return jsonify(result)
     except Exception as e:
         log(f"ControlDevice route: {e}", level="ERROR")
