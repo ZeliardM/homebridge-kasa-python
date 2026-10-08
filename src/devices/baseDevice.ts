@@ -27,6 +27,7 @@ import type {
 import type { KasaPythonAccessoryContext } from '../platform.js';
 
 const MAX_CONSECUTIVE_POLL_FAILURES = 2;
+const TURN_ON_BY_BRIGHTNESS_WINDOW_MS = 1000;
 
 export default abstract class HomeKitDevice {
   readonly log: Logger;
@@ -48,6 +49,7 @@ export default abstract class HomeKitDevice {
   private removedFromPlatform = false;
   private refreshAllAfterRecovery = false;
   private writeGeneration = 0;
+  private turnedOnByBrightnessAt: Map<string, number> = new Map();
   private readonly periodicDiscoveryCompleteHandler = () => {
     this.updateEmitter.emit('periodicDeviceDiscoveryComplete');
   };
@@ -329,6 +331,22 @@ export default abstract class HomeKitDevice {
 
   protected markWriteStarted(): void {
     this.writeGeneration += 1;
+  }
+
+  // A brightness write above zero already turns the light on. HomeKit scenes send On right
+  // after it, so that On needs no command of its own. The key is '' or a child id.
+  protected noteTurnedOnByBrightness(key: string): void {
+    this.turnedOnByBrightnessAt.set(key, Date.now());
+  }
+
+  protected shouldSkipTurnOn(key: string, value: CharacteristicValue): boolean {
+    const turnedOnAt = this.turnedOnByBrightnessAt.get(key);
+    this.turnedOnByBrightnessAt.delete(key);
+    const skip = Boolean(value) && turnedOnAt !== undefined && Date.now() - turnedOnAt < TURN_ON_BY_BRIGHTNESS_WINDOW_MS;
+    if (skip) {
+      this.log.debug('Skipping turn on; the brightness write just turned the light on');
+    }
+    return skip;
   }
 
   protected setupPrimaryService(): void {

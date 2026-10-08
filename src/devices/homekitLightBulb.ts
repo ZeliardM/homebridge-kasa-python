@@ -51,6 +51,9 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     const onDescriptor = buildOnDescriptor(
       C,
       async (value, context) => {
+        if (this.shouldSkipTurnOn('', value)) {
+          return;
+        }
         await this.deviceManager!.controlDevice(context.device.host, 'state', value);
       },
       { debouncePolls: 2 },
@@ -63,6 +66,9 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
         C,
         async (value, context) => {
           await this.deviceManager!.controlDevice(context.device.host, 'brightness', value);
+          if (value > 0) {
+            this.noteTurnedOnByBrightness('');
+          }
         },
       ));
     }

@@ -400,9 +400,10 @@ async def handle_brightness(target: Device, action: str, value: int):
         await target.turn_off()
         return
     value = max(1, min(value, 100))
-    await getattr(light, action)(value)
-    if target.is_off:
-        await target.turn_on()
+    # One command that sets the brightness and turns the light on, for every device type.
+    # set_brightness alone does not turn Tapo devices on, and following it with turn_on
+    # sends extra commands that can make a dimmer fade back to its previous level.
+    await light.set_state(LightState(light_on=True, brightness=value))
 
 async def handle_color_temp(target: Device, action: str, value: int, light_on: bool | None = None):
     log(f"Handling color temperature: action={action}, value={value}", alias=target.alias)

@@ -36,6 +36,9 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
       buildOnDescriptor(
         C,
         async (value, context) => {
+          if (this.shouldSkipTurnOn('', value)) {
+            return;
+          }
           await this.deviceManager!.controlDevice(context.device.host, 'state', value);
         },
         this.hasBrightness ? { debouncePolls: 2 } : undefined,
@@ -47,6 +50,9 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
         C,
         async (value, context) => {
           await this.deviceManager!.controlDevice(context.device.host, 'brightness', value);
+          if (value > 0) {
+            this.noteTurnedOnByBrightness('');
+          }
         },
       ));
     }
