@@ -104,19 +104,19 @@ export interface ConfigDevice {
 
 export const Plugs = [
   'EP10', 'EP25', 'HS100', 'HS103', 'HS105', 'HS110', 'KP100', 'KP105', 'KP115', 'KP125', 'KP125M',
-  'KP401', 'P100', 'P105', 'P110', 'P110M', 'P115', 'P125M', 'P135', 'TP10', 'TP15',
+  'KP401', 'P100', 'P105', 'P110', 'P110M', 'P115', 'P125M', 'P135', 'TP10', 'TP11', 'TP15',
 ];
 export const PowerStrips = [
-  'EP40', 'EP40M', 'HS107', 'HS300', 'KP200', 'KP303', 'KP400', 'P210M', 'P300', 'P304M', 'P306',
+  'EP40', 'EP40A', 'EP40M', 'HS107', 'HS300', 'KP200', 'KP303', 'KP400', 'P210M', 'P300', 'P304M', 'P306',
   'P316M', 'P400M', 'TP25',
 ];
 export const Switches = [
   'ES20M', 'HS200', 'HS210', 'HS220', 'KP405', 'KS200', 'KS200M', 'KS205', 'KS220', 'KS220M', 'KS225',
-  'KS230', 'KS240', 'S210', 'S220', 'S500', 'S500D', 'S505', 'S505D', 'S515D', 'TS15',
+  'KS230', 'KS240', 'S210', 'S220', 'S500', 'S500D', 'S505', 'S505D', 'S515D', 'TS15', 'TS25',
 ];
 export const LightBulbs = [
   'KL110', 'KL110B', 'KL120', 'KL125', 'KL130', 'KL135', 'KL50', 'KL60', 'LB100', 'LB110', 'LB130', 'L430C',
-  'L430P', 'L510', 'L510 Series', 'L530', 'L530EA', 'L535', 'L630', 'KL400L5', 'KL400L10', 'KL420L5', 'KL430',
+  'L430P', 'L510', 'L510 Series', 'L520', 'L530', 'L530EA', 'L535', 'L630', 'KL400L5', 'KL400L10', 'KL420L5', 'KL430',
   'L900', 'L920', 'L930',
 ];
 export const Unsupported = [
