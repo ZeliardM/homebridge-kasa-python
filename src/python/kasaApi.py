@@ -192,7 +192,7 @@ async def discover_devices(
 
     async def on_discovered(device: Device):
         if device.host in discovered_hosts:
-            log("Device already discovered this run, skipping", host=device.host, alias=device.alias)
+            log("Device already discovered this run, skipping", level="DEBUG", host=device.host, alias=device.alias)
             await safe_disconnect(device)
             return
         discovered_hosts.add(device.host)
@@ -213,9 +213,11 @@ async def discover_devices(
                 await safe_disconnect(device)
         except (UnsupportedDeviceError, AuthenticationError) as e:
             log(f"{e.__class__.__name__}", level="ERROR", host=device.host, alias=device.alias)
+            discovered_hosts.discard(device.host)
             await safe_disconnect(device)
         except Exception as e:
             log(f"Device discovery: {e}", level="ERROR", host=device.host, alias=device.alias)
+            discovered_hosts.discard(device.host)
             await safe_disconnect(device)
 
     async def process_device(device: Device) -> dict[str, Any] | None:
