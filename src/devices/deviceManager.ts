@@ -16,6 +16,7 @@ export default class DeviceManager {
   private apiUrl!: string;
   private username!: string;
   private password!: string;
+  private disableBroadcast!: boolean;
   private additionalBroadcasts!: string[];
   private manualDeviceHosts!: string[];
   private excludeMacs!: string[];
@@ -30,6 +31,7 @@ export default class DeviceManager {
     this.username = this.platform.config.username;
     this.password = this.platform.config.password;
     this.apiUrl = `http://127.0.0.1:${this.platform.port}`;
+    this.disableBroadcast = this.platform.config.discoveryOptions.disableBroadcast;
     this.additionalBroadcasts = this.platform.config.discoveryOptions.additionalBroadcasts;
     this.manualDeviceHosts = this.platform.config.discoveryOptions.manualDevices.map(d => d.host);
     this.excludeMacs = this.platform.config.discoveryOptions.excludeMacAddresses;
@@ -45,6 +47,7 @@ export default class DeviceManager {
       await axios.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
         `${this.apiUrl}/discover`,
         {
+          disableBroadcast: this.disableBroadcast,
           additionalBroadcasts: this.additionalBroadcasts,
           manualDevices: this.manualDeviceHosts,
           excludeMacAddresses: this.excludeMacs,

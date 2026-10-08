@@ -180,8 +180,9 @@ async def discover_devices(
     manual_devices: list[str] | None = None,
     exclude_mac_addresses: list[str] | None = None,
     include_mac_addresses: list[str] | None = None,
+    disable_broadcast: bool = False,
 ) -> None:
-    broadcasts = ["255.255.255.255"] + (additional_broadcasts or [])
+    broadcasts = [] if disable_broadcast else ["255.255.255.255"] + (additional_broadcasts or [])
     credentials = Credentials(username, password) if username and password else None
 
     if device_cache:
@@ -450,8 +451,10 @@ async def discover_route():
         manual_devices = data.get('manualDevices', [])
         exclude_mac_addresses = data.get('excludeMacAddresses', [])
         include_mac_addresses = data.get('includeMacAddresses', [])
+        disable_broadcast = data.get('disableBroadcast', False) is True
         asyncio.create_task(discover_devices(
-            username, password, additional_broadcasts, manual_devices, exclude_mac_addresses, include_mac_addresses
+            username, password, additional_broadcasts, manual_devices, exclude_mac_addresses, include_mac_addresses,
+            disable_broadcast,
         ))
         return jsonify({"status": "discovery started"})
     except Exception as e:

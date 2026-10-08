@@ -73,6 +73,9 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.Characteristic = this.api.hap.Characteristic;
     this.storagePath = this.api.user.storagePath();
     this.config = parseConfig(config);
+    if (this.config.discoveryOptions.disableBroadcast && this.config.discoveryOptions.manualDevices.length === 0) {
+      this.log.warn('Broadcast discovery is disabled and no Manual Devices are configured, so no devices will be discovered.');
+    }
     this.energyCharacteristics = this.config.energyOptions.enableEnergyMonitoring
       ? createEnergyCharacteristics(this.api.hap)
       : undefined;
