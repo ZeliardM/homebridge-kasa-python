@@ -21,6 +21,9 @@ export function deferAndCombine<T, U>(
   let timer: NodeJS.Timeout | null = null;
 
   const processRequests = () => {
+    // Clear the timer before running, not after: a caller resumed by resolving one of these requests
+    // may call back in synchronously, and it must schedule a fresh run rather than join a dead batch.
+    timer = null;
     const currentRequests = requests;
     requests = [];
     let result: Promise<T>;
@@ -31,10 +34,7 @@ export function deferAndCombine<T, U>(
     }
     result
       .then(value => currentRequests.forEach(req => req.resolve(value)))
-      .catch(error => currentRequests.forEach(req => req.reject(error)))
-      .finally(() => {
-        timer = null;
-      });
+      .catch(error => currentRequests.forEach(req => req.reject(error)));
   };
 
   return (arg?: U) => {
