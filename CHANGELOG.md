@@ -1,4 +1,12 @@
 # Changelog
+## [v3.3.0-beta.5](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.5)
+
+### Other Changes
+
+- npm-dev(deps-dev): bump typescript-eslint from 8.71.1 to 8.71.2 [#390](https://github.com/ZeliardM/homebridge-kasa-python/pull/390) (@dependabot[bot])
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.4...v3.3.0-beta.5
+
 ## [v3.3.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.4) (2026-10-08)
 
 ### Featured Changes
