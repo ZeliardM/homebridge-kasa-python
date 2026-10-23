@@ -48,6 +48,7 @@ export default abstract class HomeKitDevice {
   private consecutivePollFailures = 0;
   private removedFromPlatform = false;
   private refreshAllAfterRecovery = false;
+  private pollAfterDiscoveryPending = false;
   private writeGeneration = 0;
   private turnedOnByBrightnessAt: Map<string, number> = new Map();
   private readonly periodicDiscoveryCompleteHandler = () => {
@@ -243,12 +244,19 @@ export default abstract class HomeKitDevice {
       this.log.debug('Skipping poll; active update lock');
       return;
     }
+    // Discovery only refreshes identity, so a poll has no reason to run during it. Run it once
+    // discovery ends rather than wait under the device lock, which would hold HomeKit writes back.
+    if (!forceUpdate && this.platform.periodicDeviceDiscovering) {
+      this.log.debug('Deferring poll until periodic discovery ends');
+      this.pollAfterDiscovery();
+      return;
+    }
     await this.withLock(deviceKey, async () => {
       if (this.shouldSkipUpdate()) {
         await this.stopPolling();
         return;
       }
-      if (this.isUpdating || this.platform.periodicDeviceDiscovering) {
+      if (this.isUpdating) {
         await this.waitForUpdateOrDiscovery();
       }
       if (this.shouldSkipUpdate()) {
@@ -320,7 +328,7 @@ export default abstract class HomeKitDevice {
   }
 
   // Discovery reads device state earlier than it reaches here, so only identity is taken
-  // from it; current state is fetched fresh under the device lock.
+  // from it; current state comes from the next poll, under the device lock.
   public updateFromDiscovery(device: KasaDevice): void {
     this.kasaDevice.sys_info.host = device.sys_info.host;
     this.kasaDevice.sys_info.alias = device.sys_info.alias;
@@ -329,6 +337,22 @@ export default abstract class HomeKitDevice {
 
   public updateAfterPeriodicDiscovery(force = false): void {
     void this.refreshInBackground(force);
+  }
+
+  // A poll skipped during discovery runs once discovery ends. Otherwise a polling interval that
+  // keeps landing inside discovery windows (a multiple of the discovery interval, started during
+  // discovery) would never poll the device again.
+  private pollAfterDiscovery(): void {
+    if (this.pollAfterDiscoveryPending) {
+      return;
+    }
+    this.pollAfterDiscoveryPending = true;
+    this.updateEmitter.once('periodicDeviceDiscoveryComplete', () => {
+      this.pollAfterDiscoveryPending = false;
+      if (!this.shouldSkipUpdate()) {
+        void this.refreshInBackground(false);
+      }
+    });
   }
 
   // Nothing awaits these refreshes, and an unhandled rejection makes Homebridge shut down.
