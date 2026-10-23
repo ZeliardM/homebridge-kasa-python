@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- npm(deps): bump eventsource from 5.1.2 to 5.1.3 [#393](https://github.com/ZeliardM/homebridge-kasa-python/pull/393) (@dependabot[bot])
 - npm-dev(deps-dev): bump typescript-eslint from 8.71.1 to 8.71.2 [#390](https://github.com/ZeliardM/homebridge-kasa-python/pull/390) (@dependabot[bot])
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.4...v3.3.0-beta.5
