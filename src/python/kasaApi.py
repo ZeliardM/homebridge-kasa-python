@@ -424,11 +424,13 @@ async def handle_brightness(target: Device, action: str, value: int):
 async def handle_color_temp(target: Device, action: str, value: int, light_on: bool | None = None):
     log(f"Handling color temperature: action={action}, value={value}", alias=target.alias)
     light = target.modules.get(Module.Light)
-    color_temp = target.modules.get(Module.ColorTemperature)
+    # The light's color_temp feature carries the device's range on both Kasa and Tapo devices;
+    # Module.ColorTemperature only exists on Tapo (smart) devices.
+    color_temp_feature = light.get_feature("color_temp")
     mired = max(140, min(value, 500))
     kelvin = mired_to_kelvin(mired)
-    if color_temp and hasattr(color_temp, "valid_temperature_range"):
-        min_temp, max_temp = color_temp.valid_temperature_range
+    if color_temp_feature:
+        min_temp, max_temp = color_temp_feature.minimum_value, color_temp_feature.maximum_value
     else:
         min_temp, max_temp = (2500, 6500)
     kelvin = max(min_temp, min(kelvin, max_temp))
