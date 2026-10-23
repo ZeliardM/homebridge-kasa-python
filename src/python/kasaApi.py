@@ -27,6 +27,7 @@ device_lock_cache: dict[str, asyncio.Lock] = {}
 device_config_cache: dict[str, dict] = {}
 
 device_queue: asyncio.Queue = asyncio.Queue()
+discovery_run = 0
 
 UNSUPPORTED_TYPES = {
     DeviceType.Camera.value,
@@ -183,8 +184,22 @@ async def discover_devices(
     include_mac_addresses: list[str] | None = None,
     disable_broadcast: bool = False,
 ) -> None:
+    global discovery_run
     broadcasts = [] if disable_broadcast else ["255.255.255.255"] + (additional_broadcasts or [])
     credentials = Credentials(username, password) if username and password else None
+
+    # A run that outlasts the plugin's stream window (slow or failing devices) must not end the
+    # next run's stream with its completion marker. Its late device results stay queued, so a
+    # device that answers late is still reported, one run late, instead of never.
+    discovery_run += 1
+    run = discovery_run
+    leftover = []
+    while not device_queue.empty():
+        item = device_queue.get_nowait()
+        if item.get("status") != "discovery_complete":
+            leftover.append(item)
+    for item in leftover:
+        device_queue.put_nowait(item)
 
     if device_cache:
         await close_all_connections()
@@ -287,7 +302,8 @@ async def discover_devices(
     discover_tasks = [discover_on_broadcast(bc) for bc in broadcasts]
     manual_discover_tasks = [discover_manual_device(host) for host in (manual_devices or [])]
     await asyncio.gather(*discover_tasks, *manual_discover_tasks, return_exceptions=True)
-    await device_queue.put({"status": "discovery_complete"})
+    if run == discovery_run:
+        await device_queue.put({"status": "discovery_complete"})
 
 async def close_all_connections():
     log("Closing all existing device connections...")
