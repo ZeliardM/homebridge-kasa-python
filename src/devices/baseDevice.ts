@@ -208,6 +208,13 @@ export default abstract class HomeKitDevice {
       this.recordPollCommunicationFailure(host);
       return false;
     }
+    if (updatedSysInfo.device_id !== this.kasaDevice.sys_info.device_id) {
+      // The address now belongs to another device (it was given to a new one); this device is not
+      // there, and its accessory must not take on the other device's state.
+      this.log.debug(`Read of ${host} answered as another device (${updatedSysInfo.device_id})`);
+      this.recordPollCommunicationFailure(host);
+      return false;
+    }
     this.kasaDevice.sys_info = updatedSysInfo;
     const previousFailures = this.consecutivePollFailures;
     const wasOffline = this.kasaDevice.offline;
