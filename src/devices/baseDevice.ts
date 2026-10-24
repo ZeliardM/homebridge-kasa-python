@@ -199,6 +199,11 @@ export default abstract class HomeKitDevice {
       this.log.debug('Discarding sys_info read that started before a write');
       return false;
     }
+    if (this.kasaDevice.sys_info.host !== host) {
+      // Discovery found the device at a new address while this read of the old one was in flight.
+      this.log.debug(`Discarding sys_info read of ${host}; the device is now at ${this.kasaDevice.sys_info.host}`);
+      return false;
+    }
     if (!updatedSysInfo) {
       this.recordPollCommunicationFailure(host);
       return false;
