@@ -76,51 +76,75 @@ jobs:
       - name: Auto-Merge Pull Request
         id: auto_merge
         if: steps.safety.outcome == 'success' && steps.safety.outputs.block == 'false'
-        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          max_attempts=6
-          sleep_seconds=10
-          attempt=1
+          # Dependabot opens several pull requests at once. Each merge moves beta, and GitHub then
+          # rechecks the others for a few seconds, so wait for that check and retry instead of
+          # giving up. A real conflict is left to Dependabot, whose rebase starts a new run.
+          max_attempts=${MAX_ATTEMPTS:-16}
+          sleep_seconds=${SLEEP_SECONDS:-10}
+          start_head=""
           tmp_err="$(mktemp)"
-          while [ "$attempt" -le "$max_attempts" ]; do
-            echo "::notice::Dependabot merge attempt ${attempt}/${max_attempts}"
-            if gh pr merge --squash "$PULL_REQUEST_URL" 2>"$tmp_err"; then
-              exit 0
+          for attempt in $(seq 1 "$max_attempts"); do
+            if [ "$attempt" -gt 1 ]; then
+              # Jitter keeps runs that started together from retrying in lockstep.
+              sleep $(( sleep_seconds + RANDOM % (sleep_seconds + 1) ))
             fi
-
-            err_text="$(cat "$tmp_err")"
-            pr_state="$(gh pr view "$PULL_REQUEST_URL" --json state --jq .state 2>/dev/null || echo UNKNOWN)"
-            mergeable="$(gh pr view "$PULL_REQUEST_URL" --json mergeable --jq .mergeable 2>/dev/null || echo UNKNOWN)"
-            merge_state="$(gh pr view "$PULL_REQUEST_URL" --json mergeStateStatus --jq .mergeStateStatus 2>/dev/null || echo UNKNOWN)"
-
-            printf '%s\n' "$err_text"
-            echo "::notice::PR state=${pr_state}, mergeable=${mergeable}, mergeStateStatus=${merge_state}"
+            if ! pr_info="$(gh pr view "$PULL_REQUEST_URL" --json state,mergeable,mergeStateStatus,headRefOid \
+              --jq '[.state, .mergeable, .mergeStateStatus, .headRefOid] | @tsv' 2>"$tmp_err")"; then
+              echo "::notice::Attempt ${attempt}/${max_attempts}: could not read the pull request: $(tr '\n' ' ' < "$tmp_err")"
+              continue
+            fi
+            IFS=$'\t' read -r pr_state mergeable merge_state head_oid <<< "$pr_info"
+            start_head="${start_head:-$head_oid}"
+            echo "::notice::Attempt ${attempt}/${max_attempts}: state=${pr_state}, mergeable=${mergeable}, mergeStateStatus=${merge_state}"
 
             if [ "$pr_state" = "MERGED" ]; then
+              echo "merged=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-
-            if printf '%s\n' "$err_text" | grep -qi 'Pull request is in unstable status'; then
-              if [ "$attempt" -lt "$max_attempts" ]; then
-                sleep "$sleep_seconds"
-                attempt=$((attempt + 1))
-                continue
-              fi
+            if [ "$pr_state" != "OPEN" ]; then
+              echo "::notice::The pull request is ${pr_state}; nothing to merge."
+              exit 0
             fi
-
-            exit 1
+            if [ "$head_oid" != "$start_head" ]; then
+              echo "::notice::The branch changed during this run; the run for the new commit merges it."
+              exit 0
+            fi
+            if [ "$mergeable" = "CONFLICTING" ]; then
+              echo "::warning::The pull request conflicts with beta; Dependabot rebases it and the next run merges it."
+              exit 0
+            fi
+            if [ "$mergeable" != "MERGEABLE" ]; then
+              continue
+            fi
+            if gh pr merge --squash --match-head-commit "$head_oid" "$PULL_REQUEST_URL" 2>"$tmp_err"; then
+              echo "merged=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::notice::Merge attempt failed: $(tr '\n' ' ' < "$tmp_err")"
           done
+          # A merge that GitHub applied but reported as failed on the last attempt still counts.
+          if [ "$(gh pr view "$PULL_REQUEST_URL" --json state --jq .state 2>/dev/null || true)" = "MERGED" ]; then
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::error::Not merged after ${max_attempts} attempts. Merge it by hand, or comment '@dependabot rebase' to try again."
+          exit 1
 
       - name: Set Merge Result Output
         id: merge_output
         if: always()
         shell: bash
+        env:
+          STEP_MERGED: ${{ steps.auto_merge.outputs.merged }}
         run: |
           set -euo pipefail
+          # The merge step exits 0 without merging on a conflict, a closed pull request or a new
+          # commit, so only an actual merge (or a merged pull request) counts here.
           pr_state="$(gh pr view "$PULL_REQUEST_URL" --json state --jq .state 2>/dev/null || echo UNKNOWN)"
-          if [ "$pr_state" = "MERGED" ] || [ "${{ steps.auto_merge.outcome }}" = "success" ]; then
+          if [ "$pr_state" = "MERGED" ] || [ "$STEP_MERGED" = "true" ]; then
             echo "is_merged=true" >> "$GITHUB_OUTPUT"
           else
             echo "is_merged=false" >> "$GITHUB_OUTPUT"
@@ -130,7 +154,7 @@ jobs:
     name: Update CHANGELOG.md and Release from Dependabot Merge
     runs-on: ubuntu-latest
     needs: auto-merge
-    if: needs.auto-merge.outputs.is_merged == 'true'
+    if: ${{ !cancelled() && needs.auto-merge.outputs.is_merged == 'true' }}
     steps:
       - name: Checkout Actions
         id: checkout
