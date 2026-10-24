@@ -67,6 +67,8 @@ jobs:
 
       - name: Upsert Sticky Comment
         id: upsert_sticky
+        # The comment is informational; failing to post it must not block the merge.
+        continue-on-error: true
         uses: ./.github/actions/sticky-comment
         with:
           number: ${{ env.PULL_REQUEST_NUMBER }}
@@ -200,8 +202,11 @@ jobs:
           PULL_REQUEST_LABELS: ${{ steps.labels.outputs.path }}
         run: |
           set -euo pipefail
-          export PULL_REQUEST_BRANCH="$(gh pr view "$PULL_REQUEST_NUMBER" --json baseRefName --jq .baseRefName)"
-          MAX_ATTEMPTS=${MAX_ATTEMPTS:-5}
+          PULL_REQUEST_BRANCH="$(gh pr view "$PULL_REQUEST_NUMBER" --json baseRefName --jq .baseRefName)"
+          export PULL_REQUEST_BRANCH
+          # Several of these run at once after a Dependabot burst. Each push race leaves one winner
+          # per round and the others re-sync and retry, so allow more rounds than a burst has PRs.
+          MAX_ATTEMPTS=${MAX_ATTEMPTS:-8}
           BASE_SLEEP=${BASE_SLEEP:-5}
           JITTER=${JITTER:-10}
           attempt=1
