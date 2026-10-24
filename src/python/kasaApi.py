@@ -38,6 +38,14 @@ device_failures: dict[str, int] = {}
 # A refused or unreachable connection fails at once. That is what a short Wi-Fi drop looks like,
 # so a command tries again after each of these pauses (seconds), well inside HomeKit's 9 s limit.
 COMMAND_RETRY_DELAYS = (1, 2)
+# The MAC of the device discovery accepted at each address (identified, filtered and checked for
+# native HomeKit/Matter). A connection is only used for that device: after addresses are
+# reassigned, a poll of the old address would read whatever device answers there now.
+admitted_macs: dict[str, str] = {}
+
+
+class AddressReassignedError(Exception):
+    """A different device than the one accepted answers at this address."""
 
 UNSUPPORTED_TYPES = {
     DeviceType.Camera.value,
@@ -223,11 +231,11 @@ async def discover_devices(
         try:
             async with host_lock(device.host):
                 connected = device_cache.get(device.host)
-                if connected is not None and (not same_device(connected, device) or mac_filtered(connected)):
-                    # Addresses were reassigned: a different device answers here now, or a poll of
-                    # this address has already read one. Connect to the device that answered, so
-                    # it is identified and filtered like any new device.
-                    log("Another device answers at this address, reconnecting", host=device.host, alias=device.alias)
+                if connected is not None and (not admitted_here(device.host, device) or device_failures.get(device.host)):
+                    # A different device answers here than the one this connection is for, or the
+                    # connection's last request failed, so what it last read cannot be trusted.
+                    # Connect to the device that answered and check it like any new device.
+                    log("Checking this address with a new connection", host=device.host, alias=device.alias)
                     await drop_device(device.host)
                     connected = None
                 if connected is not None:
@@ -257,12 +265,6 @@ async def discover_devices(
             log(f"Device discovery: {e}", level="ERROR", host=device.host, alias=device.alias)
             discovered_hosts.discard(device.host)
             await safe_disconnect(device)
-
-    def mac_filtered(device: Device) -> bool:
-        return bool(
-            (include_mac_addresses and device.mac not in include_mac_addresses)
-            or (exclude_mac_addresses and device.mac in exclude_mac_addresses)
-        )
 
     async def process_device(device: Device) -> dict[str, Any] | None:
         log("Processing device", host=device.host, alias=device.alias)
@@ -294,6 +296,7 @@ async def discover_devices(
         if device_type and device_type not in UNSUPPORTED_TYPES:
             # This connection is the device's from now on; polling and control use it.
             device_cache[device.host] = device
+            admitted_macs[device.host] = normalized_mac(device)
             device_failures.pop(device.host, None)
             device_info = await create_device_info(device)
             if isinstance(device_info, Exception):
@@ -357,12 +360,20 @@ def is_quick_connection_failure(error: BaseException) -> bool:
     chain = list(error_chain(error))
     return not any(isinstance(e, TimeoutError) for e in chain) and any(isinstance(e, OSError) for e in chain)
 
-def same_device(a: Device, b: Device) -> bool:
-    """Whether two objects are the same device, by MAC (a discovery reply carries it)."""
+def normalized_mac(device: Device) -> str:
     try:
-        return a.mac.replace("-", ":").upper() == b.mac.replace("-", ":").upper()
+        return (device.mac or "").replace("-", ":").upper()
     except Exception:
-        return True
+        return ""
+
+def admitted_here(host: str, device: Device) -> bool:
+    """Whether this is the device discovery accepted at this address; unknown counts as yes."""
+    admitted, mac = admitted_macs.get(host), normalized_mac(device)
+    return not admitted or not mac or admitted == mac
+
+def ensure_admitted_here(host: str, device: Device):
+    if not admitted_here(host, device):
+        raise AddressReassignedError(f"A different device ({device.mac}) answers at {host} now")
 
 async def close_all_connections():
     log("Closing all existing device connections...")
@@ -392,6 +403,7 @@ async def get_sys_info(host: str) -> dict[str, Any]:
             device_config = DeviceConfig.from_dict(device_config_cache.get(host))
             device = await get_or_connect_device(host, device_config)
             await device.update()
+            ensure_admitted_here(host, device)
             device_info = custom_serializer(device)
             device_failures.pop(host, None)
             return {"sys_info": device_info["sys_info"]}
@@ -427,6 +439,7 @@ async def control_device(
         try:
             device_config = DeviceConfig.from_dict(device_config_cache.get(host))
             device = await get_or_connect_device(host, device_config)
+            ensure_admitted_here(host, device)
             result = await perform_device_action(device, feature, action, value, child_num, light_on)
             if result.get("status") == "success":
                 device_failures.pop(host, None)
@@ -624,13 +637,14 @@ async def handle_device_error(host: str, error: Exception | None = None) -> dict
     """Record a failed request. Callers hold the device's lock.
 
     A short network drop keeps the connection, which python-kasa reopens on the next request.
-    After an authentication error, or several connection failures in a row, the connection is
-    dropped, and the next poll, command or discovery connects again. A device that answers with
+    After an authentication error, a different device answering at the address, or several
+    connection failures in a row, the connection is dropped, and the next poll, command or
+    discovery connects again. A device that answers with
     an error is reachable, so that does not count. Polling marks the device offline if requests
     keep failing.
     """
     log(f"Handling device: {error}", level="ERROR", host=host)
-    if isinstance(error, (AuthenticationError, UnsupportedDeviceError)):
+    if isinstance(error, (AuthenticationError, UnsupportedDeviceError, AddressReassignedError)):
         await drop_device(host)
     elif error is not None and is_connection_failure(error):
         failures = device_failures.get(host, 0) + 1
@@ -650,3 +664,5 @@ async def cleanup():
     await close_all_connections()
     device_lock_cache.clear()
     device_config_cache.clear()
+    device_failures.clear()
+    admitted_macs.clear()
