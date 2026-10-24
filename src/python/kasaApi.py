@@ -32,12 +32,12 @@ discovery_run = 0
 
 # python-kasa retries a request itself and reopens a dropped socket on the next one, so one failed
 # request says little about the connection. It is replaced only after an authentication error, or
-# after this many failed requests in a row.
+# after this many connection failures in a row. A device rejecting a request does not count.
 DROP_AFTER_FAILURES = 3
 device_failures: dict[str, int] = {}
-# A refused or unreachable connection fails at once, without a python-kasa retry. That is what a
-# short Wi-Fi drop looks like, so a command tries once more after this many seconds.
-COMMAND_RETRY_SECONDS = 1
+# A refused or unreachable connection fails at once. That is what a short Wi-Fi drop looks like,
+# so a command tries again after each of these pauses (seconds), well inside HomeKit's 9 s limit.
+COMMAND_RETRY_DELAYS = (1, 2)
 
 UNSUPPORTED_TYPES = {
     DeviceType.Camera.value,
@@ -294,6 +294,7 @@ async def discover_devices(
         if device_type and device_type not in UNSUPPORTED_TYPES:
             # This connection is the device's from now on; polling and control use it.
             device_cache[device.host] = device
+            device_failures.pop(device.host, None)
             device_info = await create_device_info(device)
             if isinstance(device_info, Exception):
                 log(f"Creating device info: {device_info}", level="ERROR", host=device.host, alias=device.alias)
@@ -339,9 +340,22 @@ async def drop_device(host: str):
     device_failures.pop(host, None)
     await safe_disconnect(device_cache.pop(host, None))
 
-def is_quick_connection_failure(error: Exception) -> bool:
-    """A refused or unreachable connection, which python-kasa reports at once without retrying."""
-    return not isinstance(error, asyncio.TimeoutError) and isinstance(error.__cause__, OSError)
+def error_chain(error: BaseException):
+    """The error and its causes. Kasa (iot) devices wrap a failed request in another exception."""
+    seen: set[int] = set()
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        yield error
+        error = error.__cause__
+
+def is_connection_failure(error: BaseException) -> bool:
+    """The request did not get an answer (refused, unreachable, reset or timed out)."""
+    return any(isinstance(e, OSError) for e in error_chain(error))
+
+def is_quick_connection_failure(error: BaseException) -> bool:
+    """Refused or unreachable at once, rather than timed out (TimeoutError is an OSError too)."""
+    chain = list(error_chain(error))
+    return not any(isinstance(e, TimeoutError) for e in chain) and any(isinstance(e, OSError) for e in chain)
 
 def same_device(a: Device, b: Device) -> bool:
     """Whether two objects are the same device, by MAC (a discovery reply carries it)."""
@@ -414,7 +428,8 @@ async def control_device(
             device_config = DeviceConfig.from_dict(device_config_cache.get(host))
             device = await get_or_connect_device(host, device_config)
             result = await perform_device_action(device, feature, action, value, child_num, light_on)
-            device_failures.pop(host, None)
+            if result.get("status") == "success":
+                device_failures.pop(host, None)
             return result
         except Exception as e:
             return await handle_device_error(host, e)
@@ -428,21 +443,20 @@ async def perform_device_action(
     light_on: bool | None = None,
 ) -> dict[str, Any]:
     """Apply one action. Errors from the device propagate so the caller can count them."""
-    for attempt in range(2):
+    for delay in (*COMMAND_RETRY_DELAYS, None):
         try:
             await apply_device_action(device, feature, action, value, child_num, light_on)
             return {"status": "success"}
         except KasaException as e:
-            # Every action sets a value, so sending it again after a quick failure is safe.
-            if attempt == 0 and is_quick_connection_failure(e):
-                log(f"Retrying action after a connection failure: {e}", level="DEBUG", alias=device.alias)
-                await asyncio.sleep(COMMAND_RETRY_SECONDS)
-                continue
-            raise
+            # Every action sets a value, so sending it again after a quick failure is safe. A
+            # timeout is not retried here: python-kasa has already spent its retries on it.
+            if delay is None or not is_quick_connection_failure(e):
+                raise
+            log(f"Retrying action in {delay} s after a connection failure: {e}", level="DEBUG", alias=device.alias)
+            await asyncio.sleep(delay)
         except Exception as e:
             log(f"Error performing action: {e}", level="ERROR", alias=device.alias)
             return {"status": "error", "message": str(e)}
-    return {"status": "error", "message": "Action was not applied"}
 
 async def apply_device_action(
     device: Device,
@@ -610,15 +624,19 @@ async def handle_device_error(host: str, error: Exception | None = None) -> dict
     """Record a failed request. Callers hold the device's lock.
 
     A short network drop keeps the connection, which python-kasa reopens on the next request.
-    After an authentication error, or several failures in a row, the connection is dropped, and
-    the next poll, command or discovery connects again. Polling marks the device offline if
-    requests keep failing.
+    After an authentication error, or several connection failures in a row, the connection is
+    dropped, and the next poll, command or discovery connects again. A device that answers with
+    an error is reachable, so that does not count. Polling marks the device offline if requests
+    keep failing.
     """
     log(f"Handling device: {error}", level="ERROR", host=host)
-    failures = device_failures.get(host, 0) + 1
-    device_failures[host] = failures
-    if isinstance(error, (AuthenticationError, UnsupportedDeviceError)) or failures >= DROP_AFTER_FAILURES:
+    if isinstance(error, (AuthenticationError, UnsupportedDeviceError)):
         await drop_device(host)
+    elif error is not None and is_connection_failure(error):
+        failures = device_failures.get(host, 0) + 1
+        device_failures[host] = failures
+        if failures >= DROP_AFTER_FAILURES:
+            await drop_device(host)
     return {"error": str(error)}
 
 async def disconnect_all_devices(devices: dict[str, Device]):
