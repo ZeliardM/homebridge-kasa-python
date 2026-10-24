@@ -275,6 +275,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       } else {
         this.log.warn('Skipping offline accessory reconciliation because periodic discovery did not complete successfully');
       }
+      // Clear the flag before emitting: devices poll on this event, and a poll that still saw the
+      // flag set would wait for the next discovery.
       this.periodicDeviceDiscovering = false;
       this.periodicDeviceDiscoveryEmitter.emit('periodicDeviceDiscoveryComplete');
       this.log.debug('Finished periodic device discovery');

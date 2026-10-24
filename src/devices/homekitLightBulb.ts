@@ -23,6 +23,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
   private hsvFlushInProgress: boolean = false;
   private hsvWaiters: Array<{ resolve: () => void; reject: (error?: unknown) => void }> = [];
   private colorWrittenWhileOff = false;
+  private colorWrittenSincePoll = false;
 
   constructor(
     platform: KasaPythonPlatform,
@@ -109,6 +110,8 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     const previousColorTemp = this.previousSnapshot?.sys_info.color_temp;
     const previousHue = this.previousSnapshot?.sys_info.hsv?.hue;
     const previousSaturation = this.previousSnapshot?.sys_info.hsv?.saturation;
+    const colorWrittenSincePoll = this.colorWrittenSincePoll;
+    this.colorWrittenSincePoll = false;
 
     await super.updateAllServicesAndCharacteristics(forceUpdate);
 
@@ -117,9 +120,11 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     }
 
     // Colors written while the bulb was off may only show up once it is on again, so a
-    // difference then is not an external change.
+    // difference then is not an external change. The first poll after our own color write
+    // shows how the device applied it (clamped to its range, with its own hue and saturation),
+    // so it becomes the new baseline instead.
     const isOn = this.kasaDevice.sys_info.state === true;
-    if (!isOn || !wasOn || this.colorWrittenWhileOff) {
+    if (!isOn || !wasOn || this.colorWrittenWhileOff || colorWrittenSincePoll) {
       if (isOn) {
         this.colorWrittenWhileOff = false;
       }
@@ -237,6 +242,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
 
   // A color change on its own turns the bulb on, so while it is off ask the device to stay off.
   private colorWriteOptions(): { lightOn?: boolean } {
+    this.colorWrittenSincePoll = true;
     if (this.kasaDevice.sys_info.state !== false) {
       return {};
     }
