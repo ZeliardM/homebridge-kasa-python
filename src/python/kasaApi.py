@@ -201,10 +201,6 @@ async def discover_devices(
     for item in leftover:
         device_queue.put_nowait(item)
 
-    if device_cache:
-        await close_all_connections()
-        log("All existing device connections closed.")
-
     discovered_hosts: set[str] = set()
 
     async def on_discovered(device: Device):
@@ -215,19 +211,27 @@ async def discover_devices(
         discovered_hosts.add(device.host)
         log("Discovered device", host=device.host, alias=device.alias)
         try:
-            if isinstance(device, IotDevice):
-                # Discovery picks the iot class from the device family alone, so a
-                # strip discovered over KLAP comes back as a plug. Connecting reads
-                # sysinfo first and picks the class from it.
-                discovered = device
-                device = await Device.connect(config=discovered.config)
-                await safe_disconnect(discovered)
-            else:
-                await device.update()
-            result = await process_device(device)
+            async with host_lock(device.host):
+                connected = device_cache.get(device.host)
+                if connected is not None:
+                    # Discovery is for new devices and ones that lost their connection. A device
+                    # we are connected to keeps that connection for polling and control, and is
+                    # reported as seen from what it last read, without talking to it again.
+                    await safe_disconnect(device)
+                    result = await create_device_info(connected)
+                else:
+                    if isinstance(device, IotDevice):
+                        # Discovery picks the iot class from the device family alone, so a
+                        # strip discovered over KLAP comes back as a plug. Connecting reads
+                        # sysinfo first and picks the class from it.
+                        discovered = device
+                        device = await Device.connect(config=discovered.config)
+                        await safe_disconnect(discovered)
+                    else:
+                        await device.update()
+                    result = await process_device(device)
             if result is not None:
                 await device_queue.put(result)
-                await safe_disconnect(device)
         except (UnsupportedDeviceError, AuthenticationError) as e:
             log(f"{e.__class__.__name__}", level="ERROR", host=device.host, alias=device.alias)
             discovered_hosts.discard(device.host)
@@ -265,10 +269,9 @@ async def discover_devices(
             return None
         device_type = device.device_type.value
         if device_type and device_type not in UNSUPPORTED_TYPES:
-            if device.host not in device_cache:
-                device_cache[device.host] = device
-            if device.host not in device_lock_cache:
-                device_lock_cache[device.host] = asyncio.Lock()
+            # This connection is the device's from now on; polling and control use it.
+            device_cache[device.host] = device
+            await forget_old_address(device)
             device_info = await create_device_info(device)
             if isinstance(device_info, Exception):
                 log(f"Creating device info: {device_info}", level="ERROR", host=device.host, alias=device.alias)
@@ -304,6 +307,21 @@ async def discover_devices(
     await asyncio.gather(*discover_tasks, *manual_discover_tasks, return_exceptions=True)
     if run == discovery_run:
         await device_queue.put({"status": "discovery_complete"})
+
+def host_lock(host: str) -> asyncio.Lock:
+    """Serialize every access to one device: polls, control and discovery."""
+    return device_lock_cache.setdefault(host, asyncio.Lock())
+
+async def drop_device(host: str):
+    """Close and forget a device's connection; the next access or discovery reconnects it."""
+    await safe_disconnect(device_cache.pop(host, None))
+
+async def forget_old_address(device: Device):
+    """A device that answered from a new address no longer needs the connection to its old one."""
+    for host, other in list(device_cache.items()):
+        if host != device.host and other.mac == device.mac:
+            log("Device moved to a new address, closing its old connection", host=host, alias=other.alias)
+            await drop_device(host)
 
 async def close_all_connections():
     log("Closing all existing device connections...")
