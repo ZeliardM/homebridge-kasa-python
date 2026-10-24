@@ -11,7 +11,6 @@ import type {
 
 import path from 'node:path';
 import { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { EventEmitter } from 'node:events';
 import { fileURLToPath } from 'node:url';
 
 import HomeKitDevice from './devices/baseDevice.js';
@@ -57,7 +56,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public energyCharacteristics: EnergyCharacteristics | undefined;
   public isShuttingDown: boolean = false;
   public periodicDeviceDiscovering: boolean = false;
-  public periodicDeviceDiscoveryEmitter: EventEmitter;
   public port: number = 0;
   public taskQueue: TaskQueue;
   public venvPythonExecutable: string = '';
@@ -79,10 +77,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.energyCharacteristics = this.config.energyOptions.enableEnergyMonitoring
       ? createEnergyCharacteristics(this.api.hap)
       : undefined;
-    this.periodicDeviceDiscoveryEmitter = new EventEmitter();
     this.taskQueue = new TaskQueue(this.log, () => this.isShuttingDown);
 
-    this.periodicDeviceDiscoveryEmitter.setMaxListeners(255);
     this.setupDeviceEventEmitter('firstDiscovery');
 
     this.platformInitialization = this.initializePlatform();
@@ -275,10 +271,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       } else {
         this.log.warn('Skipping offline accessory reconciliation because periodic discovery did not complete successfully');
       }
-      // Clear the flag before emitting: devices poll on this event, and a poll that still saw the
-      // flag set would wait for the next discovery.
       this.periodicDeviceDiscovering = false;
-      this.periodicDeviceDiscoveryEmitter.emit('periodicDeviceDiscoveryComplete');
       this.log.debug('Finished periodic device discovery');
     }
   }
@@ -359,11 +352,11 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         existingDevice.markDeviceReachable(device.last_seen);
         if (comingOnline) {
           this.log.debug(`Device [${device.sys_info.device_id}] was offline and is now online. Updating and restarting polling.`);
-          existingDevice.updateAfterPeriodicDiscovery(true);
+          existingDevice.updateAfterPeriodicDiscovery();
           existingDevice.startPolling();
         } else {
-          this.log.debug(`Updating existing HomeKit device [${device.sys_info.device_id}].`);
-          existingDevice.updateAfterPeriodicDiscovery();
+          // Its own polling keeps the state current; discovery only refreshed its identity.
+          this.log.debug(`Updated existing HomeKit device [${device.sys_info.device_id}] from discovery.`);
         }
       } else {
         this.log.debug(`HomeKit device [${device.sys_info.device_id}] is currently updating. Skipping update.`);
