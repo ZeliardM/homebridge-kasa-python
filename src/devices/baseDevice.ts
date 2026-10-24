@@ -309,7 +309,7 @@ export default abstract class HomeKitDevice {
     this.kasaDevice.feature_info = device.feature_info;
   }
 
-  // Discovery found a device that was offline: read it now instead of at the next poll.
+  // Discovery found a device that was offline or at a new address: read it now, not at the next poll.
   public updateAfterPeriodicDiscovery(): void {
     void this.refreshInBackground(true);
   }
