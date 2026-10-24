@@ -19,21 +19,38 @@ export function deferAndCombine<T, U>(
 ): (arg?: U) => Promise<T> {
   let requests: { resolve: (value: T) => void; reject: (reason?: unknown) => void }[] = [];
   let timer: NodeJS.Timeout | null = null;
+  let running = false;
+
+  const schedule = () => {
+    if (!timer && !running) {
+      timer = setTimeout(processRequests, timeout);
+    }
+  };
 
   const processRequests = () => {
+    timer = null;
+    running = true;
     const currentRequests = requests;
     requests = [];
     let result: Promise<T>;
-    if (fn.length === 0) {
-      result = (fn as () => Promise<T>)();
-    } else {
-      result = (fn as (requestCount: number) => Promise<T>)(currentRequests.length);
+    try {
+      if (fn.length === 0) {
+        result = (fn as () => Promise<T>)();
+      } else {
+        result = (fn as (requestCount: number) => Promise<T>)(currentRequests.length);
+      }
+    } catch (error) {
+      result = Promise.reject(error);
     }
+    // One run at a time: requests that arrive while fn is running wait for it to settle, then get their own run.
     result
       .then(value => currentRequests.forEach(req => req.resolve(value)))
       .catch(error => currentRequests.forEach(req => req.reject(error)))
       .finally(() => {
-        timer = null;
+        running = false;
+        if (requests.length > 0) {
+          schedule();
+        }
       });
   };
 
@@ -44,10 +61,7 @@ export function deferAndCombine<T, U>(
 
     return new Promise<T>((resolve, reject) => {
       requests.push({ resolve, reject });
-
-      if (!timer) {
-        timer = setTimeout(processRequests, timeout);
-      }
+      schedule();
     });
   };
 }
