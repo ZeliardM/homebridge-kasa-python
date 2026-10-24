@@ -223,6 +223,13 @@ async def discover_devices(
         try:
             async with host_lock(device.host):
                 connected = device_cache.get(device.host)
+                if connected is not None and (not same_device(connected, device) or mac_filtered(connected)):
+                    # Addresses were reassigned: a different device answers here now, or a poll of
+                    # this address has already read one. Connect to the device that answered, so
+                    # it is identified and filtered like any new device.
+                    log("Another device answers at this address, reconnecting", host=device.host, alias=device.alias)
+                    await drop_device(device.host)
+                    connected = None
                 if connected is not None:
                     # Discovery is for new devices and ones that lost their connection. A device
                     # we are connected to keeps that connection for polling and control, and is
@@ -250,6 +257,12 @@ async def discover_devices(
             log(f"Device discovery: {e}", level="ERROR", host=device.host, alias=device.alias)
             discovered_hosts.discard(device.host)
             await safe_disconnect(device)
+
+    def mac_filtered(device: Device) -> bool:
+        return bool(
+            (include_mac_addresses and device.mac not in include_mac_addresses)
+            or (exclude_mac_addresses and device.mac in exclude_mac_addresses)
+        )
 
     async def process_device(device: Device) -> dict[str, Any] | None:
         log("Processing device", host=device.host, alias=device.alias)
@@ -281,7 +294,6 @@ async def discover_devices(
         if device_type and device_type not in UNSUPPORTED_TYPES:
             # This connection is the device's from now on; polling and control use it.
             device_cache[device.host] = device
-            await forget_old_address(device)
             device_info = await create_device_info(device)
             if isinstance(device_info, Exception):
                 log(f"Creating device info: {device_info}", level="ERROR", host=device.host, alias=device.alias)
@@ -331,12 +343,12 @@ def is_quick_connection_failure(error: Exception) -> bool:
     """A refused or unreachable connection, which python-kasa reports at once without retrying."""
     return not isinstance(error, asyncio.TimeoutError) and isinstance(error.__cause__, OSError)
 
-async def forget_old_address(device: Device):
-    """A device that answered from a new address no longer needs the connection to its old one."""
-    for host, other in list(device_cache.items()):
-        if host != device.host and other.mac == device.mac:
-            log("Device moved to a new address, closing its old connection", host=host, alias=other.alias)
-            await drop_device(host)
+def same_device(a: Device, b: Device) -> bool:
+    """Whether two objects are the same device, by MAC (a discovery reply carries it)."""
+    try:
+        return a.mac.replace("-", ":").upper() == b.mac.replace("-", ":").upper()
+    except Exception:
+        return True
 
 async def close_all_connections():
     log("Closing all existing device connections...")
