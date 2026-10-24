@@ -8,6 +8,7 @@
 
 ### Other Changes
 
+- [other] Fix Dependabot auto-merge when several pull requests open at once [#397](https://github.com/ZeliardM/homebridge-kasa-python/pull/397) (@ZeliardM)
 - npm-dev(deps-dev): bump typescript-eslint from 8.71.2 to 8.72.0 [#395](https://github.com/ZeliardM/homebridge-kasa-python/pull/395) (@dependabot[bot])
 - npm-dev(deps-dev): bump eslint from 10.12.0 to 10.13.0 [#394](https://github.com/ZeliardM/homebridge-kasa-python/pull/394) (@dependabot[bot])
 - npm(deps): bump eventsource from 5.1.2 to 5.1.3 [#393](https://github.com/ZeliardM/homebridge-kasa-python/pull/393) (@dependabot[bot])
