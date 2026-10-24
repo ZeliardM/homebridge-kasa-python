@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.3.0-beta.5](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.5)
 
+### Bug Fixes
+
+- [fix] Stop deferAndCombine from dropping back-to-back requests [#388](https://github.com/ZeliardM/homebridge-kasa-python/pull/388) (@lmcquade)
+
 ### Other Changes
 
 - npm-dev(deps-dev): bump eslint from 10.12.0 to 10.13.0 [#394](https://github.com/ZeliardM/homebridge-kasa-python/pull/394) (@dependabot[bot])
