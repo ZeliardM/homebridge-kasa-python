@@ -11,6 +11,7 @@ from kasa import (
     DeviceConfig,
     DeviceType,
     Discover,
+    KasaException,
     LightState,
     Module,
     UnsupportedDeviceError,
@@ -28,6 +29,15 @@ device_config_cache: dict[str, dict] = {}
 
 device_queue: asyncio.Queue = asyncio.Queue()
 discovery_run = 0
+
+# python-kasa retries a request itself and reopens a dropped socket on the next one, so one failed
+# request says little about the connection. It is replaced only after an authentication error, or
+# after this many failed requests in a row.
+DROP_AFTER_FAILURES = 3
+device_failures: dict[str, int] = {}
+# A refused or unreachable connection fails at once, without a python-kasa retry. That is what a
+# short Wi-Fi drop looks like, so a command tries once more after this many seconds.
+COMMAND_RETRY_SECONDS = 1
 
 UNSUPPORTED_TYPES = {
     DeviceType.Camera.value,
@@ -314,7 +324,12 @@ def host_lock(host: str) -> asyncio.Lock:
 
 async def drop_device(host: str):
     """Close and forget a device's connection; the next access or discovery reconnects it."""
+    device_failures.pop(host, None)
     await safe_disconnect(device_cache.pop(host, None))
+
+def is_quick_connection_failure(error: Exception) -> bool:
+    """A refused or unreachable connection, which python-kasa reports at once without retrying."""
+    return not isinstance(error, asyncio.TimeoutError) and isinstance(error.__cause__, OSError)
 
 async def forget_old_address(device: Device):
     """A device that answered from a new address no longer needs the connection to its old one."""
@@ -346,17 +361,16 @@ async def create_device_info(device: Device) -> dict[str, Any]:
 
 async def get_sys_info(host: str) -> dict[str, Any]:
     log("Getting sys_info", host=host)
-    try:
-        device_config_dict = device_config_cache.get(host)
-        device_config = DeviceConfig.from_dict(device_config_dict)
-        device_lock = device_lock_cache.get(host, asyncio.Lock())
-        async with device_lock:
+    async with host_lock(host):
+        try:
+            device_config = DeviceConfig.from_dict(device_config_cache.get(host))
             device = await get_or_connect_device(host, device_config)
             await device.update()
             device_info = custom_serializer(device)
+            device_failures.pop(host, None)
             return {"sys_info": device_info["sys_info"]}
-    except Exception as e:
-        return await handle_device_error(host, e)
+        except Exception as e:
+            return await handle_device_error(host, e)
 
 async def get_or_connect_device(host: str, device_config: DeviceConfig) -> Device:
     try:
@@ -383,15 +397,15 @@ async def control_device(
     light_on: bool | None = None,
 ) -> dict[str, Any]:
     log("Controlling device", host=host)
-    try:
-        device_config_dict = device_config_cache.get(host)
-        device_config = DeviceConfig.from_dict(device_config_dict)
-        device_lock = device_lock_cache.get(host, asyncio.Lock())
-        async with device_lock:
+    async with host_lock(host):
+        try:
+            device_config = DeviceConfig.from_dict(device_config_cache.get(host))
             device = await get_or_connect_device(host, device_config)
-            return await perform_device_action(device, feature, action, value, child_num, light_on)
-    except Exception as e:
-        return await handle_device_error(host, e)
+            result = await perform_device_action(device, feature, action, value, child_num, light_on)
+            device_failures.pop(host, None)
+            return result
+        except Exception as e:
+            return await handle_device_error(host, e)
 
 async def perform_device_action(
     device: Device,
@@ -401,31 +415,51 @@ async def perform_device_action(
     child_num: int | None = None,
     light_on: bool | None = None,
 ) -> dict[str, Any]:
-    try:
-        if child_num is not None and device.children:
-            sorted_children = sorted(device.children, key=lambda c: _extract_child_suffix_index(c.device_id))
-            target = sorted_children[child_num]
-        else:
-            target = device
-        log(f"Performing action={action} on feature={feature}", alias=target.alias)
-        light = target.modules.get(Module.Light)
-        fan = target.modules.get(Module.Fan)
-        if feature == "state":
-            await getattr(target, action)()
-        elif feature == "brightness" and light and light.has_feature("brightness"):
-            await handle_brightness(target, action, value)
-        elif feature == "color_temp" and light and light.has_feature("color_temp"):
-            await handle_color_temp(target, action, value, light_on)
-        elif feature == "fan_speed_level" and fan and fan.has_feature("fan_speed_level"):
-            await handle_fan_speed_level(target, action, value)
-        elif feature == 'hsv' and light and light.has_feature("hsv"):
-            await handle_hsv(target, action, feature, value, light_on)
-        else:
-            raise ValueError("Invalid feature or action")
-        return {"status": "success"}
-    except Exception as e:
-        log(f"Error performing action: {e}", level="ERROR", alias=device.alias)
-        return {"status": "error", "message": str(e)}
+    """Apply one action. Errors from the device propagate so the caller can count them."""
+    for attempt in range(2):
+        try:
+            await apply_device_action(device, feature, action, value, child_num, light_on)
+            return {"status": "success"}
+        except KasaException as e:
+            # Every action sets a value, so sending it again after a quick failure is safe.
+            if attempt == 0 and is_quick_connection_failure(e):
+                log(f"Retrying action after a connection failure: {e}", level="DEBUG", alias=device.alias)
+                await asyncio.sleep(COMMAND_RETRY_SECONDS)
+                continue
+            raise
+        except Exception as e:
+            log(f"Error performing action: {e}", level="ERROR", alias=device.alias)
+            return {"status": "error", "message": str(e)}
+    return {"status": "error", "message": "Action was not applied"}
+
+async def apply_device_action(
+    device: Device,
+    feature: str,
+    action: str,
+    value: Any,
+    child_num: int | None = None,
+    light_on: bool | None = None,
+):
+    if child_num is not None and device.children:
+        sorted_children = sorted(device.children, key=lambda c: _extract_child_suffix_index(c.device_id))
+        target = sorted_children[child_num]
+    else:
+        target = device
+    log(f"Performing action={action} on feature={feature}", alias=target.alias)
+    light = target.modules.get(Module.Light)
+    fan = target.modules.get(Module.Fan)
+    if feature == "state":
+        await getattr(target, action)()
+    elif feature == "brightness" and light and light.has_feature("brightness"):
+        await handle_brightness(target, action, value)
+    elif feature == "color_temp" and light and light.has_feature("color_temp"):
+        await handle_color_temp(target, action, value, light_on)
+    elif feature == "fan_speed_level" and fan and fan.has_feature("fan_speed_level"):
+        await handle_fan_speed_level(target, action, value)
+    elif feature == 'hsv' and light and light.has_feature("hsv"):
+        await handle_hsv(target, action, feature, value, light_on)
+    else:
+        raise ValueError("Invalid feature or action")
 
 async def handle_brightness(target: Device, action: str, value: int):
     log(f"Handling brightness: action={action}, value={value}", alias=target.alias)
@@ -561,16 +595,18 @@ async def safe_disconnect(device: Device | None):
             log(f"Disconnecting device: {e}", level="ERROR", host=device.host, alias=device.alias)
 
 async def handle_device_error(host: str, error: Exception | None = None) -> dict[str, Any]:
+    """Record a failed request. Callers hold the device's lock.
+
+    A short network drop keeps the connection, which python-kasa reopens on the next request.
+    After an authentication error, or several failures in a row, the connection is dropped, and
+    the next poll, command or discovery connects again. Polling marks the device offline if
+    requests keep failing.
+    """
     log(f"Handling device: {error}", level="ERROR", host=host)
-    try:
-        device_config_dict = device_config_cache.get(host)
-        if device_config_dict:
-            device_config = DeviceConfig.from_dict(device_config_dict)
-            device = await get_or_connect_device(host, device_config)
-            await safe_disconnect(device)
-        device_cache.pop(host, None)
-    except Exception as e:
-        log(f"Error handling: {e}", level="ERROR", host=host)
+    failures = device_failures.get(host, 0) + 1
+    device_failures[host] = failures
+    if isinstance(error, (AuthenticationError, UnsupportedDeviceError)) or failures >= DROP_AFTER_FAILURES:
+        await drop_device(host)
     return {"error": str(error)}
 
 async def disconnect_all_devices(devices: dict[str, Device]):
