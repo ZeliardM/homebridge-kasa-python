@@ -3,6 +3,7 @@
 
 ### Bug Fixes
 
+- [fix] Fix devices stuck after a failed write, slow writes during discovery, and Adaptive Lighting turning itself off [#396](https://github.com/ZeliardM/homebridge-kasa-python/pull/396) (@ZeliardM)
 - [fix] Stop deferAndCombine from dropping back-to-back requests [#388](https://github.com/ZeliardM/homebridge-kasa-python/pull/388) (@lmcquade)
 
 ### Other Changes
