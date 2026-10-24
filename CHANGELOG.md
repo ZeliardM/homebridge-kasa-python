@@ -1,5 +1,5 @@
 # Changelog
-## [v3.3.0-beta.5](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.5)
+## [v3.3.0-beta.5](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.5) (2026-10-24)
 
 ### Bug Fixes
 
@@ -8,6 +8,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v3.3.0-beta.5 [beta-release] (@github-actions)
 - [other] Fix Dependabot auto-merge when several pull requests open at once [#397](https://github.com/ZeliardM/homebridge-kasa-python/pull/397) (@ZeliardM)
 - npm-dev(deps-dev): bump typescript-eslint from 8.71.2 to 8.72.0 [#395](https://github.com/ZeliardM/homebridge-kasa-python/pull/395) (@dependabot[bot])
 - npm-dev(deps-dev): bump eslint from 10.12.0 to 10.13.0 [#394](https://github.com/ZeliardM/homebridge-kasa-python/pull/394) (@dependabot[bot])
