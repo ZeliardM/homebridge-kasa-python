@@ -42,8 +42,9 @@ DROP_AFTER_FAILURES = 3
 device_failures: dict[str, int] = {}
 # A command whose connection was refused or unreachable (what a short Wi-Fi drop looks like) tries
 # again after each of these pauses, in seconds, but only while another attempt as long as the last
-# one can still finish in time: within the time HomeKit still waits for the write (the plugin sends
-# it as deadline_ms), and never later than COMMAND_RETRY_DEADLINE seconds after the request arrived.
+# one can still finish within COMMAND_RETRY_DEADLINE seconds of the request arriving and within the
+# time HomeKit still waits for the write (the plugin sends it as deadline_ms). An attempt is
+# stopped when HomeKit's time runs out.
 COMMAND_RETRY_DELAYS = (1, 2)
 COMMAND_RETRY_DEADLINE = 8
 # The MAC of the device discovery accepted at each address (identified, filtered and checked for
@@ -454,18 +455,18 @@ async def control_device(
     log("Controlling device", host=host)
     # The clock starts when the request arrives, so time spent waiting for the device counts.
     start = time.monotonic()
-    budget = COMMAND_RETRY_DEADLINE
-    if deadline_ms is not None:
-        budget = min(budget, max(0.0, deadline_ms) / 1000)
+    # time_left is when HomeKit stops waiting for the write; retries are planned within retry_budget.
+    time_left = None if deadline_ms is None else max(0.0, deadline_ms) / 1000
+    retry_budget = COMMAND_RETRY_DEADLINE if time_left is None else min(COMMAND_RETRY_DEADLINE, time_left)
     async with host_lock(host):
-        if deadline_ms is not None and time.monotonic() - start >= budget:
+        if time_left is not None and time.monotonic() - start >= time_left:
             # HomeKit has given up on this write while it waited; applying it now would be late.
             return {"error": "HomeKit write expired before the device was free"}
         for delay in (*COMMAND_RETRY_DELAYS, None):
             attempt_start = time.monotonic()
             # python-kasa resends a request that timed out (about 6 s per try), so one attempt can
             # outlast the write; stop it when HomeKit stops waiting, so it cannot switch the device late.
-            remaining = None if deadline_ms is None else max(0.0, budget - (attempt_start - start))
+            remaining = None if time_left is None else max(0.0, time_left - (attempt_start - start))
             try:
                 async with asyncio.timeout(remaining):
                     device_config = DeviceConfig.from_dict(device_config_cache.get(host))
@@ -482,15 +483,17 @@ async def control_device(
                 if (
                     delay is None
                     or not is_quick_connection_failure(e)
-                    or (now - start) + delay + (now - attempt_start) > budget
+                    or (now - start) + delay + (now - attempt_start) > retry_budget
                 ):
                     return await handle_device_error(host, e)
                 log(f"Retrying action in {delay} s after a connection failure: {e}", level="DEBUG", host=host)
                 await asyncio.sleep(delay)
             except TimeoutError as e:
-                # python-kasa's own timeouts are KasaExceptions (above); this is the time HomeKit waits running out.
+                # python-kasa's own timeouts are KasaExceptions (above); this is HomeKit's time running
+                # out. Much of it may have gone to waiting for the device, so it is not held against it.
                 if remaining is not None and time.monotonic() - attempt_start >= remaining:
-                    e = TimeoutError("No answer within the time HomeKit waits for the write")
+                    log("No answer within the time HomeKit waits for the write", level="ERROR", host=host)
+                    return {"error": "No answer within the time HomeKit waits for the write"}
                 return await handle_device_error(host, e)
             except Exception as e:
                 return await handle_device_error(host, e)
