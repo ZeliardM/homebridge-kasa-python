@@ -40,6 +40,12 @@ discovery_run = 0
 # after this many connection failures in a row. A device rejecting a request does not count.
 DROP_AFTER_FAILURES = 3
 device_failures: dict[str, int] = {}
+# Hosts whose last request failed for any reason, including a device answering with an error.
+# Discovery checks these with a new connection instead of reporting what they last read.
+last_request_failed: set[str] = set()
+# Hosts a discovery run is connecting to. A device that never finishes connecting (python-kasa takes
+# about 23 s to give up) is left to that attempt, so later runs do not queue up behind it.
+discovery_connecting: set[str] = set()
 # A command whose connection was refused or unreachable (what a short Wi-Fi drop looks like) tries
 # again after each of these pauses, in seconds, but only while another attempt as long as the last
 # one can still finish within COMMAND_RETRY_DEADLINE seconds of the request arriving and within the
@@ -237,13 +243,19 @@ async def discover_devices(
             return
         discovered_hosts.add(device.host)
         log("Discovered device", host=device.host, alias=device.alias)
+        if device.host in discovery_connecting and device.host not in device_cache:
+            # An earlier run is still connecting to this device; that attempt reports it.
+            log("Still being connected by an earlier discovery run, skipping", level="DEBUG", host=device.host, alias=device.alias)
+            await safe_disconnect(device)
+            return
+        discovery_connecting.add(device.host)
         try:
             async with host_lock(device.host):
                 connected = device_cache.get(device.host)
                 if connected is not None and (
                     not admitted_here(device.host, device)
                     or not admitted_here(device.host, connected)
-                    or device_failures.get(device.host)
+                    or device.host in last_request_failed
                 ):
                     # A different device answers here, or the connection last read one (a poll after
                     # addresses were reassigned), or its last request failed: what it last read
@@ -278,6 +290,8 @@ async def discover_devices(
             log(f"Device discovery: {e}", level="ERROR", host=device.host, alias=device.alias)
             discovered_hosts.discard(device.host)
             await safe_disconnect(device)
+        finally:
+            discovery_connecting.discard(device.host)
 
     async def process_device(device: Device) -> dict[str, Any] | None:
         log("Processing device", host=device.host, alias=device.alias)
@@ -310,7 +324,7 @@ async def discover_devices(
             # This connection is the device's from now on; polling and control use it.
             device_cache[device.host] = device
             admitted_macs[device.host] = normalized_mac(device)
-            device_failures.pop(device.host, None)
+            record_success(device.host)
             device_info = await create_device_info(device)
             if isinstance(device_info, Exception):
                 log(f"Creating device info: {device_info}", level="ERROR", host=device.host, alias=device.alias)
@@ -354,7 +368,12 @@ def host_lock(host: str) -> asyncio.Lock:
 async def drop_device(host: str):
     """Close and forget a device's connection; the next access or discovery reconnects it."""
     device_failures.pop(host, None)
+    last_request_failed.discard(host)
     await safe_disconnect(device_cache.pop(host, None))
+
+def record_success(host: str):
+    device_failures.pop(host, None)
+    last_request_failed.discard(host)
 
 def error_chain(error: BaseException):
     """The error and its causes. Kasa (iot) devices wrap a failed request in another exception."""
@@ -422,7 +441,7 @@ async def get_sys_info(host: str) -> dict[str, Any]:
             await device.update()
             ensure_admitted_here(host, device)
             device_info = custom_serializer(device)
-            device_failures.pop(host, None)
+            record_success(host)
             return {"sys_info": device_info["sys_info"]}
         except Exception as e:
             return await handle_device_error(host, e)
@@ -474,7 +493,7 @@ async def control_device(
                     ensure_admitted_here(host, device)
                     result = await perform_device_action(device, feature, action, value, child_num, light_on)
                 if result.get("status") == "success":
-                    device_failures.pop(host, None)
+                    record_success(host)
                 return result
             except KasaException as e:
                 # Every action sets a value, so sending it again after a quick failure is safe. A
@@ -691,6 +710,8 @@ async def handle_device_error(host: str, error: Exception | None = None) -> dict
     keep failing.
     """
     log(f"Handling device: {error}", level="ERROR", host=host)
+    if not isinstance(error, AddressReassignedError):
+        last_request_failed.add(host)
     if isinstance(error, AddressReassignedError):
         # Keep the connection: each poll re-reads the address and is refused again with one
         # request, and discovery reconnects once it finds the device that answers there now.
@@ -716,4 +737,6 @@ async def cleanup():
     device_lock_cache.clear()
     device_config_cache.clear()
     device_failures.clear()
+    last_request_failed.clear()
+    discovery_connecting.clear()
     admitted_macs.clear()
