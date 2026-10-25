@@ -14,7 +14,7 @@ const HOMEKIT_WRITE_BUDGET_MS = 8500;
 const homeKitWriteDeadline = new AsyncLocalStorage<number>();
 
 export function runHomeKitWrite<T>(write: () => Promise<T>): Promise<T> {
-  return homeKitWriteDeadline.run(Date.now() + HOMEKIT_WRITE_BUDGET_MS, write);
+  return homeKitWriteDeadline.run(performance.now() + HOMEKIT_WRITE_BUDGET_MS, write);
 }
 
 export const deviceEventEmitter = new EventEmitter();
@@ -157,7 +157,7 @@ export default class DeviceManager {
   ): Promise<void> {
     const url = `${this.apiUrl}/controlDevice`;
     const deadline = homeKitWriteDeadline.getStore();
-    const remainingMs = deadline === undefined ? undefined : deadline - Date.now();
+    const remainingMs = deadline === undefined ? undefined : deadline - performance.now();
     if (remainingMs !== undefined && remainingMs <= 0) {
       // HomeKit has already given up on this write; sending it now would switch the device late.
       throw new Error(`HomeKit write expired before it could be sent (${feature}/${action}) to ${host}`);
