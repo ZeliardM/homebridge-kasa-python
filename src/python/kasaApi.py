@@ -463,11 +463,15 @@ async def control_device(
             return {"error": "HomeKit write expired before the device was free"}
         for delay in (*COMMAND_RETRY_DELAYS, None):
             attempt_start = time.monotonic()
+            # python-kasa resends a request that timed out (about 6 s per try), so one attempt can
+            # outlast the write; stop it when HomeKit stops waiting, so it cannot switch the device late.
+            remaining = None if deadline_ms is None else max(0.0, budget - (attempt_start - start))
             try:
-                device_config = DeviceConfig.from_dict(device_config_cache.get(host))
-                device = await get_or_connect_device(host, device_config)
-                ensure_admitted_here(host, device)
-                result = await perform_device_action(device, feature, action, value, child_num, light_on)
+                async with asyncio.timeout(remaining):
+                    device_config = DeviceConfig.from_dict(device_config_cache.get(host))
+                    device = await get_or_connect_device(host, device_config)
+                    ensure_admitted_here(host, device)
+                    result = await perform_device_action(device, feature, action, value, child_num, light_on)
                 if result.get("status") == "success":
                     device_failures.pop(host, None)
                 return result
@@ -483,6 +487,11 @@ async def control_device(
                     return await handle_device_error(host, e)
                 log(f"Retrying action in {delay} s after a connection failure: {e}", level="DEBUG", host=host)
                 await asyncio.sleep(delay)
+            except TimeoutError as e:
+                # python-kasa's own timeouts are KasaExceptions (above); this is the time HomeKit waits running out.
+                if remaining is not None and time.monotonic() - attempt_start >= remaining:
+                    e = TimeoutError("No answer within the time HomeKit waits for the write")
+                return await handle_device_error(host, e)
             except Exception as e:
                 return await handle_device_error(host, e)
 
