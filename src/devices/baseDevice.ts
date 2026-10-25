@@ -46,6 +46,10 @@ export default abstract class HomeKitDevice {
   protected primaryDescriptors: CharacteristicDescriptor[] = [];
   protected primaryService?: Service;
   private consecutivePollFailures = 0;
+  // Set when a poll of this device's address answered as another device (the address was given to
+  // a new one); writes are then refused instead of switching that device. Cleared when this device
+  // answers there again or discovery finds it.
+  private addressHeldByOther = false;
   private removedFromPlatform = false;
   private refreshAllAfterRecovery = false;
   private writeGeneration = 0;
@@ -211,10 +215,11 @@ export default abstract class HomeKitDevice {
     if (updatedSysInfo.device_id !== this.kasaDevice.sys_info.device_id) {
       // The address now belongs to another device (it was given to a new one); this device is not
       // there, and its accessory must not take on the other device's state.
-      this.log.debug(`Read of ${host} answered as another device (${updatedSysInfo.device_id})`);
-      this.recordPollCommunicationFailure(host);
+      this.addressHeldByOther = true;
+      this.recordPollCommunicationFailure(host, `${host} answered as another device (${updatedSysInfo.device_id})`);
       return false;
     }
+    this.addressHeldByOther = false;
     this.kasaDevice.sys_info = updatedSysInfo;
     const previousFailures = this.consecutivePollFailures;
     const wasOffline = this.kasaDevice.offline;
@@ -316,6 +321,7 @@ export default abstract class HomeKitDevice {
   // Discovery reads device state earlier than it reaches here, so only identity is taken
   // from it; current state comes from the next poll, under the device lock.
   public updateFromDiscovery(device: KasaDevice): void {
+    this.addressHeldByOther = false;
     this.kasaDevice.sys_info.host = device.sys_info.host;
     this.kasaDevice.sys_info.alias = device.sys_info.alias;
     this.kasaDevice.feature_info = device.feature_info;
@@ -460,6 +466,7 @@ export default abstract class HomeKitDevice {
       if (!this.deviceManager) {
         throw new Error('Device manager undefined');
       }
+      this.ensureAddressIsOwn();
       try {
         this.isUpdating = true;
         this.markWriteStarted();
@@ -702,6 +709,14 @@ export default abstract class HomeKitDevice {
     }
   }
 
+  // A write must not reach the device that now holds this device's address.
+  protected ensureAddressIsOwn(): void {
+    if (this.addressHeldByOther) {
+      this.log.debug(`Not sending the write: another device answers at ${this.kasaDevice.sys_info.host}`);
+      throw this.communicationFailure();
+    }
+  }
+
   protected communicationFailure(): HapStatusError {
     return new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
   }
@@ -716,7 +731,7 @@ export default abstract class HomeKitDevice {
     }
   }
 
-  private recordPollCommunicationFailure(host: string): void {
+  private recordPollCommunicationFailure(host: string, reason = `No sys_info returned for ${host}`): void {
     this.consecutivePollFailures += 1;
     const markedOffline = this.consecutivePollFailures >= MAX_CONSECUTIVE_POLL_FAILURES;
 
@@ -725,9 +740,9 @@ export default abstract class HomeKitDevice {
     }
 
     const message = markedOffline
-      ? `No sys_info returned for ${host} after ${this.consecutivePollFailures} consecutive poll failures. ` +
+      ? `${reason} after ${this.consecutivePollFailures} consecutive poll failures. ` +
         'Marking device offline but continuing to poll for recovery.'
-      : `No sys_info returned for ${host} (${this.consecutivePollFailures}/${MAX_CONSECUTIVE_POLL_FAILURES} ` +
+      : `${reason} (${this.consecutivePollFailures}/${MAX_CONSECUTIVE_POLL_FAILURES} ` +
         'failed polls before marking offline).';
 
     if (this.consecutivePollFailures <= MAX_CONSECUTIVE_POLL_FAILURES) {

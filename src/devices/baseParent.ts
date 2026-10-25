@@ -120,6 +120,7 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
       if (!this.deviceManager) {
         throw new Error('Device manager undefined');
       }
+      this.ensureAddressIsOwn();
       try {
         this.isUpdating = true;
         this.markWriteStarted();
