@@ -238,10 +238,14 @@ async def discover_devices(
         try:
             async with host_lock(device.host):
                 connected = device_cache.get(device.host)
-                if connected is not None and (not admitted_here(device.host, device) or device_failures.get(device.host)):
-                    # A different device answers here than the one this connection is for, or the
-                    # connection's last request failed, so what it last read cannot be trusted.
-                    # Connect to the device that answered and check it like any new device.
+                if connected is not None and (
+                    not admitted_here(device.host, device)
+                    or not admitted_here(device.host, connected)
+                    or device_failures.get(device.host)
+                ):
+                    # A different device answers here, or the connection last read one (a poll after
+                    # addresses were reassigned), or its last request failed: what it last read
+                    # cannot be trusted. Connect to the device that answered and check it like a new one.
                     log("Checking this address with a new connection", host=device.host, alias=device.alias)
                     await drop_device(device.host)
                     connected = None
