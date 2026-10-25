@@ -42,7 +42,8 @@ DROP_AFTER_FAILURES = 3
 device_failures: dict[str, int] = {}
 # A command whose connection was refused or unreachable (what a short Wi-Fi drop looks like) tries
 # again after each of these pauses, in seconds, but only while another attempt as long as the last
-# one can still finish within the deadline after the first, so HomeKit's 9 s limit is not passed.
+# one can still finish in time: within the time HomeKit still waits for the write (the plugin sends
+# it as deadline_ms), and never later than COMMAND_RETRY_DEADLINE seconds after the request arrived.
 COMMAND_RETRY_DELAYS = (1, 2)
 COMMAND_RETRY_DEADLINE = 8
 # The MAC of the device discovery accepted at each address (identified, filtered and checked for
@@ -448,10 +449,18 @@ async def control_device(
     value: Any,
     child_num: int | None = None,
     light_on: bool | None = None,
+    deadline_ms: float | None = None,
 ) -> dict[str, Any]:
     log("Controlling device", host=host)
+    # The clock starts when the request arrives, so time spent waiting for the device counts.
+    start = time.monotonic()
+    budget = COMMAND_RETRY_DEADLINE
+    if deadline_ms is not None:
+        budget = min(budget, max(0.0, deadline_ms) / 1000)
     async with host_lock(host):
-        start = time.monotonic()
+        if deadline_ms is not None and time.monotonic() - start >= budget:
+            # HomeKit has given up on this write while it waited; applying it now would be late.
+            return {"error": "HomeKit write expired before the device was free"}
         for delay in (*COMMAND_RETRY_DELAYS, None):
             attempt_start = time.monotonic()
             try:
@@ -469,7 +478,7 @@ async def control_device(
                 if (
                     delay is None
                     or not is_quick_connection_failure(e)
-                    or (now - start) + delay + (now - attempt_start) > COMMAND_RETRY_DEADLINE
+                    or (now - start) + delay + (now - attempt_start) > budget
                 ):
                     return await handle_device_error(host, e)
                 log(f"Retrying action in {delay} s after a connection failure: {e}", level="DEBUG", host=host)
@@ -640,7 +649,9 @@ async def control_device_route():
         child_num = data.get('child_num')
         light_on = data.get('light_on')
         light_on = light_on if isinstance(light_on, bool) else None
-        result = await control_device(host, feature, action, value, child_num, light_on)
+        deadline_ms = data.get('deadline_ms')
+        deadline_ms = float(deadline_ms) if isinstance(deadline_ms, (int, float)) and not isinstance(deadline_ms, bool) else None
+        result = await control_device(host, feature, action, value, child_num, light_on, deadline_ms)
         return jsonify(result)
     except Exception as e:
         log(f"ControlDevice route: {e}", level="ERROR")

@@ -2,10 +2,20 @@ import type { CharacteristicValue, Logger } from 'homebridge';
 
 import axios from 'axios';
 import { EventSource } from 'eventsource';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { EventEmitter } from 'node:events';
 
 import KasaPythonPlatform from '../platform.js';
 import type { FeatureInfo, HSV, KasaDevice, SysInfo } from './deviceTypes.js';
+
+// HomeKit answers a write within 9 s, then gives up on it. A command carries the time left, so the
+// Python service fits its retries into it, and a command HomeKit has given up on is not sent.
+const HOMEKIT_WRITE_BUDGET_MS = 8500;
+const homeKitWriteDeadline = new AsyncLocalStorage<number>();
+
+export function runHomeKitWrite<T>(write: () => Promise<T>): Promise<T> {
+  return homeKitWriteDeadline.run(Date.now() + HOMEKIT_WRITE_BUDGET_MS, write);
+}
 
 export const deviceEventEmitter = new EventEmitter();
 
@@ -146,6 +156,12 @@ export default class DeviceManager {
     lightOn?: boolean,
   ): Promise<void> {
     const url = `${this.apiUrl}/controlDevice`;
+    const deadline = homeKitWriteDeadline.getStore();
+    const remainingMs = deadline === undefined ? undefined : deadline - Date.now();
+    if (remainingMs !== undefined && remainingMs <= 0) {
+      // HomeKit has already given up on this write; sending it now would switch the device late.
+      throw new Error(`HomeKit write expired before it could be sent (${feature}/${action}) to ${host}`);
+    }
     const payload = {
       host,
       feature,
@@ -153,6 +169,7 @@ export default class DeviceManager {
       value,
       ...(childNumber !== undefined && { child_num: childNumber }),
       ...(lightOn !== undefined && { light_on: lightOn }),
+      ...(remainingMs !== undefined && { deadline_ms: remainingMs }),
     };
     let response;
     try {

@@ -1,6 +1,7 @@
 import type { CharacteristicValue, Service, WithUUID } from 'homebridge';
 
 import HomeKitDevice from './baseDevice.js';
+import { runHomeKitWrite } from './deviceManager.js';
 import type {
   CharacteristicDescriptor,
   ChildDevice,
@@ -152,12 +153,12 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
     };
 
     if (this.shouldBypassChildSetLock(child, descriptor)) {
-      await runSet();
+      await runHomeKitWrite(runSet);
       return;
     }
 
     const lockKey = this.makeLockKey();
-    await this.withLock(lockKey, runSet);
+    await runHomeKitWrite(() => this.withLock(lockKey, runSet));
   }
 
   private shouldBypassChildSetLock(child: ChildDevice, descriptor: CharacteristicDescriptor): boolean {

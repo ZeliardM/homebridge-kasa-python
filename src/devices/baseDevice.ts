@@ -14,7 +14,7 @@ import type {
 import { EventEmitter } from 'node:events';
 
 import accessoryInformation from './accessoryInformation.js';
-import DeviceManager from './deviceManager.js';
+import DeviceManager, { runHomeKitWrite } from './deviceManager.js';
 import { deferAndCombine, prefixLogger } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
 import type {
@@ -499,12 +499,12 @@ export default abstract class HomeKitDevice {
     };
 
     if (this.shouldBypassSetLock(descriptor)) {
-      await runSet();
+      await runHomeKitWrite(runSet);
       return;
     }
 
     const lockKey = this.makeLockKey();
-    await this.withLock(lockKey, runSet);
+    await runHomeKitWrite(() => this.withLock(lockKey, runSet));
   }
 
   private shouldBypassSetLock(descriptor: CharacteristicDescriptor): boolean {
