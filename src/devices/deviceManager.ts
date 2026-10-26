@@ -9,9 +9,9 @@ import KasaPythonPlatform from '../platform.js';
 import type { FeatureInfo, HSV, KasaDevice, SysInfo } from './deviceTypes.js';
 
 // HomeKit answers a write within 9 s, then gives up on it. A command carries the time left (keeping
-// ~100 ms for the reply), so the Python service fits its retries into it and stops when it runs
+// ~40 ms for the reply), so the Python service fits its retries into it and stops when it runs
 // out, and a command HomeKit has given up on is not sent.
-const HOMEKIT_WRITE_BUDGET_MS = 8900;
+const HOMEKIT_WRITE_BUDGET_MS = 8960;
 const homeKitWriteDeadline = new AsyncLocalStorage<number>();
 
 export function runHomeKitWrite<T>(write: () => Promise<T>): Promise<T> {
