@@ -23,7 +23,7 @@ concurrency:
 jobs:
   detect-fork:
     name: Detect Fork
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       is_fork: ${{ steps.detect-fork-context.outputs.is_fork }}
     steps:
@@ -39,7 +39,7 @@ jobs:
 
   prepare:
     name: Validate Environment
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: detect-fork
     if: needs.detect-fork.outputs.is_fork == 'false'
     steps:
@@ -55,7 +55,7 @@ jobs:
 
   retarget-base:
     name: Retarget Pull Request Base to Beta
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: prepare
     if: needs.prepare.result == 'success'
     steps:
@@ -96,7 +96,7 @@ jobs:
 
   refresh-dependabot-branch:
     name: Refresh Retargeted Dependabot Branch
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: retarget-base
     if: needs.retarget-base.result == 'success' && contains(github.event.pull_request.user.login, 'dependabot')
     outputs:
@@ -110,17 +110,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node 24
+      - name: Setup Node 26
         id: setup-node
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
 
-      - name: Setup Python 3.13
+      - name: Setup Python 3.15
         id: setup-python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.15'
 
       - name: Refresh Dependabot Branch from Beta
         id: refresh
@@ -133,7 +133,7 @@ jobs:
 
   label:
     name: Clear & Apply Labels
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [retarget-base, refresh-dependabot-branch]
     if: >
       !cancelled() &&
@@ -253,7 +253,7 @@ jobs:
 
   validate-pr:
     name: Validate Pull Request
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: label
     if: ${{ !cancelled() && needs.label.result == 'success' }}
     outputs:
@@ -265,6 +265,12 @@ jobs:
         with:
           ref: ${{ env.PULL_REQUEST_BASE_SHA }}
           fetch-depth: 0
+
+      - name: Setup Python 3.15
+        id: setup-python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.15'
 
       - name: Validate Pull Request
         id: validate-pr
@@ -334,7 +340,7 @@ jobs:
 
   fork-notice:
     name: Fork Notice
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: detect-fork
     if: needs.detect-fork.outputs.is_fork == 'true'
     steps:

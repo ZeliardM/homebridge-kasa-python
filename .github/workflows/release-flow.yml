@@ -19,7 +19,7 @@ env:
 jobs:
   detect-fork:
     name: Detect Fork
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       is_fork: ${{ steps.detect-fork-context.outputs.is_fork }}
     steps:
@@ -35,7 +35,7 @@ jobs:
 
   prepare:
     name: Validate Environment
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: detect-fork
     if: needs.detect-fork.outputs.is_fork == 'false'
     steps:
@@ -49,7 +49,7 @@ jobs:
 
   pr-merge:
     name: Pull Request Merge
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: prepare
     concurrency:
       group: release-flow-write-${{ github.event.pull_request.base.ref }}
@@ -79,17 +79,17 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.base.ref }}
 
-      - name: Setup Node 24
+      - name: Setup Node 26
         id: setup-node
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
 
-      - name: Setup Python 3.13
+      - name: Setup Python 3.15
         id: setup-python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.15'
 
       - name: Serialize Labels
         id: labels
@@ -110,7 +110,7 @@ jobs:
 
   manual-commit-push:
     name: Manual Commit Push
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: prepare
     concurrency:
       group: release-flow-write-${{ github.ref_name }}
@@ -131,17 +131,17 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.ref_name }}
 
-      - name: Setup Node 24
+      - name: Setup Node 26
         id: setup-node
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
 
-      - name: Setup Python 3.13
+      - name: Setup Python 3.15
         id: setup-python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.15'
 
       - name: Update CHANGELOG.md and Create/Update Draft Release
         id: update-release
@@ -154,7 +154,7 @@ jobs:
 
   fork-notice:
     name: Fork Notice
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: detect-fork
     if: needs.detect-fork.outputs.is_fork == 'true'
     steps:

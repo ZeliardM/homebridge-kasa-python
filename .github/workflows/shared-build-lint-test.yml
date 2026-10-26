@@ -11,7 +11,7 @@ concurrency:
 jobs:
   build_lint_test:
     name: Build, Lint, and Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -111,5 +111,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm list --outdated || true
+          npm outdated || true
           npm audit || true
