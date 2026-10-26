@@ -321,12 +321,15 @@ class PythonChecker {
 
   private async installRequirements(): Promise<void> {
     this.log.debug('Installing requirements from:', this.requirementsPath);
-    // When the newest release of a dependency has no wheel for this machine (cryptography on Intel
-    // Macs), take the newest one that has, instead of building it from source.
+    // This runs when a pinned version changes. Upgrade the packages those depend on too (aiohttp,
+    // cryptography, ...), so an existing venv ends up like a fresh one instead of keeping the
+    // versions from its first install. When the newest release of a dependency has no wheel for
+    // this machine (cryptography on Intel Macs), take the newest one that has, instead of building
+    // it from source.
     const [, , exitCode] = await runCommand(
       this.log,
       this.venvPipExecutable,
-      ['install', '--prefer-binary', '-r', this.requirementsPath],
+      ['install', '--upgrade', '--upgrade-strategy', 'eager', '--prefer-binary', '-r', this.requirementsPath],
       undefined,
       !this.advancedPythonLogging,
       !this.advancedPythonLogging,
