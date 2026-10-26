@@ -57,6 +57,9 @@ COMMAND_RETRY_DEADLINE = 8
 # native HomeKit/Matter). A connection is only used for that device: after addresses are
 # reassigned, a poll of the old address would read whatever device answers there now.
 admitted_macs: dict[str, str] = {}
+# Kasa devices that answered that they support HomeKit, by MAC. Support does not change while the
+# plugin runs, so a later check that times out does not bring the device back into Homebridge.
+native_homekit_macs: set[str] = set()
 
 
 class AddressReassignedError(Exception):
@@ -303,22 +306,22 @@ async def discover_devices(
             log("Excluding device due to MAC address exclusion", host=device.host, alias=device.alias)
             await safe_disconnect(device)
             return None
-        try:
-            if hide_homekit_matter:
-                iot_homekit_module = device.modules.get(Module.IotHomeKit)
-                homekit_component = device.modules.get(Module.HomeKit) or (iot_homekit_module and iot_homekit_module.info)
-                matter_component = device.modules.get(Module.Matter)
-                if homekit_component or matter_component:
-                    if homekit_component:
-                        log("Skipping device due to Native HomeKit support", host=device.host, alias=device.alias)
-                    if matter_component:
-                        log("Skipping device due to Native Matter support", host=device.host, alias=device.alias)
-                    await safe_disconnect(device)
-                    return None
-        except Exception as e:
-            log(f"Checking HomeKit and Matter modules: {e}", level="ERROR", host=device.host, alias=device.alias)
-            await safe_disconnect(device)
-            return None
+        if hide_homekit_matter:
+            try:
+                homekit_component, matter_component = await native_homekit_matter(device)
+            except Exception as e:
+                # Add the device rather than drop it: python-kasa already counts a timeout as no
+                # HomeKit, and a check that failed on every run would keep the device out for good.
+                log(f"Checking HomeKit and Matter modules, adding the device: {e}", level="ERROR",
+                    host=device.host, alias=device.alias)
+                homekit_component = matter_component = False
+            if homekit_component or matter_component:
+                if homekit_component:
+                    log("Skipping device due to Native HomeKit support", host=device.host, alias=device.alias)
+                if matter_component:
+                    log("Skipping device due to Native Matter support", host=device.host, alias=device.alias)
+                await safe_disconnect(device)
+                return None
         device_type = device.device_type.value
         if device_type and device_type not in UNSUPPORTED_TYPES:
             # This connection is the device's from now on; polling and control use it.
@@ -395,6 +398,27 @@ def is_quick_connection_failure(error: BaseException) -> bool:
     """Refused or unreachable at once, rather than timed out (TimeoutError is an OSError too)."""
     chain = list(error_chain(error))
     return not any(isinstance(e, TimeoutError) for e in chain) and any(isinstance(e, OSError) for e in chain)
+
+async def native_homekit_matter(device: Device) -> tuple[bool, bool]:
+    """Return (HomeKit, Matter) for hide_homekit_matter, for a device that was just connected."""
+    if not isinstance(device, IotDevice):
+        # Tapo (smart) devices list HomeKit and Matter among their modules; nothing is sent.
+        return await device.supports_module(Module.HomeKit), await device.supports_module(Module.Matter)
+    # Kasa (iot) devices have no Matter. HomeKit takes one query, which python-kasa sends without
+    # retries and reads a timeout as no HomeKit.
+    mac = normalized_mac(device)
+    if mac and mac in native_homekit_macs:
+        return True, False
+    try:
+        homekit = await device.supports_module(Module.IotHomeKit)
+    except Exception as e:
+        # The device answered a full update just before this, so a failure here is most likely a
+        # stale connection, which the failed query has already reset.
+        log(f"Checking HomeKit support, retrying once: {e}", level="DEBUG", host=device.host, alias=device.alias)
+        homekit = await device.supports_module(Module.IotHomeKit)
+    if homekit and mac:
+        native_homekit_macs.add(mac)
+    return homekit, False
 
 def normalized_mac(device: Device) -> str:
     try:
@@ -740,3 +764,4 @@ async def cleanup():
     last_request_failed.clear()
     discovery_connecting.clear()
     admitted_macs.clear()
+    native_homekit_macs.clear()
