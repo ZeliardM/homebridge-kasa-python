@@ -272,12 +272,14 @@ Some newer Kasa devices require authentication. These are marked with [*] in the
 
 ### Light Strips
 - **KL400L5**
+  - Hardware: 1.0 (US) / Firmware: 1.0.11
   - Hardware: 1.0 (US) / Firmware: 1.0.5
   - Hardware: 1.0 (US) / Firmware: 1.0.8
 - **KL400L10**
   - Hardware: 1.0 (US) / Firmware: 1.0.10
 - **KL420L5**
   - Hardware: 1.0 (US) / Firmware: 1.0.2
+  - Hardware: 1.0 (US) / Firmware: 1.0.7
 - **KL430**
   - Hardware: 2.0 (UN) / Firmware: 1.0.8
   - Hardware: 1.0 (US) / Firmware: 1.0.10
@@ -290,12 +292,16 @@ Some newer Kasa devices require authentication. These are marked with [*] in the
   - Hardware: 1.0 (EU) / Firmware: 1.2.3[*]
   - Hardware: 1.0 (EU) / Firmware: 1.5.12[*]
   - Hardware: 1.0 (UK) / Firmware: 1.5.6[*]
+  - Hardware: 1.0 (UK) / Firmware: 1.7.5[*]
 
 ### Hub-Connected Devices
 - **KE100**
   - Hardware: 1.0 (EU) / Firmware: 2.4.0[*]
   - Hardware: 1.0 (EU) / Firmware: 2.8.0[*]
+  - Hardware: 1.0 (UK) / Firmware: 2.15.0[*]
   - Hardware: 1.0 (UK) / Firmware: 2.8.0[*]
+- **KE110**
+  - Hardware: 1.0 (EU) / Firmware: 1.4.0[*]
 
 ## Tapo devices
 All Tapo devices require authentication.<br>Hub-Connected Devices may work across TAPO/KASA branded hubs even if they don't work across the native apps.
@@ -318,8 +324,11 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
 - **P115**
   - Hardware: 1.0 (EU) / Firmware: 1.2.3
   - Hardware: 1.0 (US) / Firmware: 1.1.3
+- **P116M**
+  - Hardware: 1.0 (IN) / Firmware: 1.4.4
 - **P125M**
   - Hardware: 1.0 (US) / Firmware: 1.1.0
+  - Hardware: 1.0 (US) / Firmware: 1.4.4
 - **P135**
   - Hardware: 1.0 (US) / Firmware: 1.0.5
   - Hardware: 1.0 (US) / Firmware: 1.2.0
@@ -384,6 +393,8 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 3.0 (EU) / Firmware: 1.1.6
   - Hardware: 2.0 (TW) / Firmware: 1.1.1
   - Hardware: 2.0 (US) / Firmware: 1.1.0
+- **L530EA**
+  - Hardware: 1.0 (EU) / Firmware: 1.4.2
 - **L535E**
   - Hardware: 3.0 (EU) / Firmware: 1.1.8
 - **L630**
@@ -408,10 +419,15 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
 ### Cameras
 - **C100**
   - Hardware: 4.0 / Firmware: 1.3.14
+- **C101**
+  - Hardware: 5.0 (US) / Firmware: 1.4.3
 - **C110**
   - Hardware: 2.0 (EU) / Firmware: 1.4.3
+- **C200**
+  - Hardware: 1.0 / Firmware: 1.3.17
 - **C210**
   - Hardware: 2.0 / Firmware: 1.3.11
+  - Hardware: 1.0 (EU) / Firmware: 1.4.7
   - Hardware: 2.0 (EU) / Firmware: 1.4.2
   - Hardware: 2.0 (EU) / Firmware: 1.4.3
 - **C220**
@@ -421,10 +437,14 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 2.0 (US) / Firmware: 1.0.11
 - **C325WB**
   - Hardware: 1.0 (EU) / Firmware: 1.1.17
+- **C460**
+  - Hardware: 1.0 (CA) / Firmware: 1.2.0
 - **C520WS**
   - Hardware: 1.0 (US) / Firmware: 1.2.8
 - **C720**
   - Hardware: 1.0 (US) / Firmware: 1.2.3
+- **TC40**
+  - Hardware: 2.0 (EU) / Firmware: 1.0.4
 - **TC65**
   - Hardware: 1.0 / Firmware: 1.3.9
 - **TC70**
@@ -437,6 +457,8 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (US) / Firmware: 1.1.9
 - **D230**
   - Hardware: 1.20 (EU) / Firmware: 1.1.19
+- **TD21**
+  - Hardware: 2.0 (EU) / Firmware: 1.1.5
 
 ### Vacuums
 - **RV20 Max Plus**
