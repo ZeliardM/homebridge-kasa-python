@@ -1,6 +1,8 @@
 import { Categories } from 'homebridge';
 import type { AdaptiveLightingController } from 'homebridge';
 
+import { AsyncResource } from 'node:async_hooks';
+
 import HomeKitDevice from './baseDevice.js';
 import {
   buildBrightnessDescriptor,
@@ -21,6 +23,9 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
   private pendingHSV: { hue?: number; saturation?: number } = {};
   private hsvFlushTimer: NodeJS.Timeout | null = null;
   private hsvFlushInProgress: boolean = false;
+  // Schedules the next flush from the write that arrived during a flush, so it carries that
+  // write's HomeKit deadline rather than the one of the write being flushed.
+  private hsvRescheduleFromWrite: (() => void) | null = null;
   private hsvWaiters: Array<{ resolve: () => void; reject: (error?: unknown) => void }> = [];
   private colorWrittenWhileOff = false;
   private colorWrittenSincePoll = false;
@@ -190,6 +195,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
 
   private scheduleHSVFlush(host: string): void {
     if (this.hsvFlushInProgress) {
+      this.hsvRescheduleFromWrite = AsyncResource.bind(() => this.scheduleHSVFlush(host));
       return;
     }
 
@@ -233,9 +239,11 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
       waiters.forEach(waiter => waiter.reject(error));
     } finally {
       this.hsvFlushInProgress = false;
+      const reschedule = this.hsvRescheduleFromWrite ?? (() => this.scheduleHSVFlush(host));
+      this.hsvRescheduleFromWrite = null;
 
       if (this.pendingHSV.hue !== undefined || this.pendingHSV.saturation !== undefined) {
-        this.scheduleHSVFlush(host);
+        reschedule();
       }
     }
   }

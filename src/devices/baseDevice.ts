@@ -14,7 +14,7 @@ import type {
 import { EventEmitter } from 'node:events';
 
 import accessoryInformation from './accessoryInformation.js';
-import DeviceManager from './deviceManager.js';
+import DeviceManager, { runHomeKitWrite } from './deviceManager.js';
 import { deferAndCombine, prefixLogger } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
 import type {
@@ -46,14 +46,14 @@ export default abstract class HomeKitDevice {
   protected primaryDescriptors: CharacteristicDescriptor[] = [];
   protected primaryService?: Service;
   private consecutivePollFailures = 0;
+  // Set when a poll of this device's address answered as another device (the address was given to
+  // a new one); writes are then refused instead of switching that device. Cleared when this device
+  // answers there again or discovery finds it.
+  private addressHeldByOther = false;
   private removedFromPlatform = false;
   private refreshAllAfterRecovery = false;
-  private pollAfterDiscoveryPending = false;
   private writeGeneration = 0;
   private turnedOnByBrightnessAt: Map<string, number> = new Map();
-  private readonly periodicDiscoveryCompleteHandler = () => {
-    this.updateEmitter.emit('periodicDeviceDiscoveryComplete');
-  };
 
   constructor(
     readonly platform: KasaPythonPlatform,
@@ -65,7 +65,6 @@ export default abstract class HomeKitDevice {
     this.log = prefixLogger(platform.log, `[${this.name}]`);
     this.homebridgeAccessory = this.initializeAccessory();
     this.homebridgeAccessory.on(PlatformAccessoryEvent.IDENTIFY, () => this.identify());
-    platform.periodicDeviceDiscoveryEmitter.on('periodicDeviceDiscoveryComplete', this.periodicDiscoveryCompleteHandler);
 
     this.getSysInfoDeferred = deferAndCombine(
       this.fetchSysInfoInternal.bind(this),
@@ -178,20 +177,9 @@ export default abstract class HomeKitDevice {
     return this.removedFromPlatform || this.platform.isShuttingDown;
   }
 
-  protected async waitForUpdateOrDiscovery(): Promise<void> {
-    let discoveryFinished = false;
-    await Promise.race([
-      new Promise<void>(resolve => this.updateEmitter.once('updateComplete', resolve)),
-      new Promise<void>(resolve => {
-        this.updateEmitter.once('periodicDeviceDiscoveryComplete', () => {
-          discoveryFinished = true;
-          resolve();
-        });
-      }),
-    ]);
-    if (discoveryFinished && this.pollingInterval) {
-      await new Promise(r => setTimeout(r, this.platform.config.discoveryOptions.pollingInterval));
-    }
+  // Wait for this device's own write to finish; every write ends by emitting updateComplete.
+  protected async waitForUpdate(): Promise<void> {
+    await new Promise<void>(resolve => this.updateEmitter.once('updateComplete', resolve));
   }
 
   protected async getSysInfo(): Promise<boolean> {
@@ -215,10 +203,23 @@ export default abstract class HomeKitDevice {
       this.log.debug('Discarding sys_info read that started before a write');
       return false;
     }
+    if (this.kasaDevice.sys_info.host !== host) {
+      // Discovery found the device at a new address while this read of the old one was in flight.
+      this.log.debug(`Discarding sys_info read of ${host}; the device is now at ${this.kasaDevice.sys_info.host}`);
+      return false;
+    }
     if (!updatedSysInfo) {
       this.recordPollCommunicationFailure(host);
       return false;
     }
+    if (updatedSysInfo.device_id !== this.kasaDevice.sys_info.device_id) {
+      // The address now belongs to another device (it was given to a new one); this device is not
+      // there, and its accessory must not take on the other device's state.
+      this.addressHeldByOther = true;
+      this.recordPollCommunicationFailure(host, `${host} answered as another device (${updatedSysInfo.device_id})`);
+      return false;
+    }
+    this.addressHeldByOther = false;
     this.kasaDevice.sys_info = updatedSysInfo;
     const previousFailures = this.consecutivePollFailures;
     const wasOffline = this.kasaDevice.offline;
@@ -244,20 +245,13 @@ export default abstract class HomeKitDevice {
       this.log.debug('Skipping poll; active update lock');
       return;
     }
-    // Discovery only refreshes identity, so a poll has no reason to run during it. Run it once
-    // discovery ends rather than wait under the device lock, which would hold HomeKit writes back.
-    if (!forceUpdate && this.platform.periodicDeviceDiscovering) {
-      this.log.debug('Deferring poll until periodic discovery ends');
-      this.pollAfterDiscovery();
-      return;
-    }
     await this.withLock(deviceKey, async () => {
       if (this.shouldSkipUpdate()) {
         await this.stopPolling();
         return;
       }
       if (this.isUpdating) {
-        await this.waitForUpdateOrDiscovery();
+        await this.waitForUpdate();
       }
       if (this.shouldSkipUpdate()) {
         await this.stopPolling();
@@ -313,11 +307,8 @@ export default abstract class HomeKitDevice {
   public removeFromPlatform(): void {
     this.removedFromPlatform = true;
     void this.stopPolling();
-    this.platform.periodicDeviceDiscoveryEmitter.off(
-      'periodicDeviceDiscoveryComplete',
-      this.periodicDiscoveryCompleteHandler,
-    );
-    this.updateEmitter.emit('periodicDeviceDiscoveryComplete');
+    // Release anything still waiting on this device.
+    this.updateEmitter.emit('updateComplete');
   }
 
   public markDeviceReachable(lastSeen: Date): void {
@@ -330,29 +321,15 @@ export default abstract class HomeKitDevice {
   // Discovery reads device state earlier than it reaches here, so only identity is taken
   // from it; current state comes from the next poll, under the device lock.
   public updateFromDiscovery(device: KasaDevice): void {
+    this.addressHeldByOther = false;
     this.kasaDevice.sys_info.host = device.sys_info.host;
     this.kasaDevice.sys_info.alias = device.sys_info.alias;
     this.kasaDevice.feature_info = device.feature_info;
   }
 
-  public updateAfterPeriodicDiscovery(force = false): void {
-    void this.refreshInBackground(force);
-  }
-
-  // A poll skipped during discovery runs once discovery ends. Otherwise a polling interval that
-  // keeps landing inside discovery windows (a multiple of the discovery interval, started during
-  // discovery) would never poll the device again.
-  private pollAfterDiscovery(): void {
-    if (this.pollAfterDiscoveryPending) {
-      return;
-    }
-    this.pollAfterDiscoveryPending = true;
-    this.updateEmitter.once('periodicDeviceDiscoveryComplete', () => {
-      this.pollAfterDiscoveryPending = false;
-      if (!this.shouldSkipUpdate()) {
-        void this.refreshInBackground(false);
-      }
-    });
+  // Discovery found a device that was offline or at a new address: read it now, not at the next poll.
+  public updateAfterPeriodicDiscovery(): void {
+    void this.refreshInBackground(true);
   }
 
   // Nothing awaits these refreshes, and an unhandled rejection makes Homebridge shut down.
@@ -489,6 +466,7 @@ export default abstract class HomeKitDevice {
       if (!this.deviceManager) {
         throw new Error('Device manager undefined');
       }
+      this.ensureAddressIsOwn();
       try {
         this.isUpdating = true;
         this.markWriteStarted();
@@ -528,12 +506,12 @@ export default abstract class HomeKitDevice {
     };
 
     if (this.shouldBypassSetLock(descriptor)) {
-      await runSet();
+      await runHomeKitWrite(runSet);
       return;
     }
 
     const lockKey = this.makeLockKey();
-    await this.withLock(lockKey, runSet);
+    await runHomeKitWrite(() => this.withLock(lockKey, runSet));
   }
 
   private shouldBypassSetLock(descriptor: CharacteristicDescriptor): boolean {
@@ -731,6 +709,14 @@ export default abstract class HomeKitDevice {
     }
   }
 
+  // A write must not reach the device that now holds this device's address.
+  protected ensureAddressIsOwn(): void {
+    if (this.addressHeldByOther) {
+      this.log.debug(`Not sending the write: another device answers at ${this.kasaDevice.sys_info.host}`);
+      throw this.communicationFailure();
+    }
+  }
+
   protected communicationFailure(): HapStatusError {
     return new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
   }
@@ -745,7 +731,7 @@ export default abstract class HomeKitDevice {
     }
   }
 
-  private recordPollCommunicationFailure(host: string): void {
+  private recordPollCommunicationFailure(host: string, reason = `No sys_info returned for ${host}`): void {
     this.consecutivePollFailures += 1;
     const markedOffline = this.consecutivePollFailures >= MAX_CONSECUTIVE_POLL_FAILURES;
 
@@ -754,9 +740,9 @@ export default abstract class HomeKitDevice {
     }
 
     const message = markedOffline
-      ? `No sys_info returned for ${host} after ${this.consecutivePollFailures} consecutive poll failures. ` +
+      ? `${reason} after ${this.consecutivePollFailures} consecutive poll failures. ` +
         'Marking device offline but continuing to poll for recovery.'
-      : `No sys_info returned for ${host} (${this.consecutivePollFailures}/${MAX_CONSECUTIVE_POLL_FAILURES} ` +
+      : `${reason} (${this.consecutivePollFailures}/${MAX_CONSECUTIVE_POLL_FAILURES} ` +
         'failed polls before marking offline).';
 
     if (this.consecutivePollFailures <= MAX_CONSECUTIVE_POLL_FAILURES) {

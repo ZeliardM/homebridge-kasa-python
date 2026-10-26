@@ -58,7 +58,7 @@ Thank you for contributing to homebridge-kasa-python!
 - docs / dependency
 
 ## Security / Quality
-- CodeQL runs on PRs.
+- CodeQL runs when a release is published.
 - Dependabot weekly updates target beta.
 
 ## Questions

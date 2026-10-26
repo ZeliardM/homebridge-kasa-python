@@ -15,7 +15,7 @@
   <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/latest"><img src="https://img.shields.io/npm/v/homebridge-kasa-python/latest?label=npm%40latest&color=blue" alt="latest npm version"></a>
   <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40latest-3.11%2C%203.12%2C%203.13%2C%203.14-blue" alt="latest PyPI pyversions"></a>
   <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/beta"><img src="https://img.shields.io/npm/v/homebridge-kasa-python/beta?label=npm%40beta&color=red" alt="beta npm version"></a>
-  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40beta-3.11%2C%203.12%2C%203.13%2C%203.14-red" alt="beta PyPI pyversions"></a>
+  <a href="https://pypi.org/project/python-kasa/"><img src="https://img.shields.io/badge/Python%40beta-3.11%2C%203.12%2C%203.13%2C%203.14%2C%203.15-red" alt="beta PyPI pyversions"></a>
   <a href="https://www.npmjs.com/package/homebridge-kasa-python/v/latest"><img src="https://img.shields.io/npm/dt/homebridge-kasa-python?color=brightgreen" alt="npm downloads total"></a>
   <a href="https://www.paypal.me/ZeliardM/USD/"><img src="https://img.shields.io/badge/donate-paypal-orange" alt="donate paypal"></a>
   <a href="https://github.com/sponsors/ZeliardM"><img src="https://img.shields.io/badge/donate-github-orange" alt="donate github"></a>
@@ -31,7 +31,7 @@ Automatic Discovery may be possible only for some devices. If your device is not
 ## Requirements
 - Homebridge Supported Versions: 1.11.2 or later, and 2.0.0 or later.
 - Node.js Supported Versions: 22.12 or later, 24, and 26.
-- Python Supported Versions: 3.11, 3.12, 3.13, and 3.14.
+- Python Supported Versions: 3.11, 3.12, 3.13, 3.14, and 3.15.
 - A supported Kasa/Tapo device.
 - Enabling Third Party Compatibility in the Tapo/Kasa App can improve device compatibility.
 
@@ -272,12 +272,14 @@ Some newer Kasa devices require authentication. These are marked with [*] in the
 
 ### Light Strips
 - **KL400L5**
+  - Hardware: 1.0 (US) / Firmware: 1.0.11
   - Hardware: 1.0 (US) / Firmware: 1.0.5
   - Hardware: 1.0 (US) / Firmware: 1.0.8
 - **KL400L10**
   - Hardware: 1.0 (US) / Firmware: 1.0.10
 - **KL420L5**
   - Hardware: 1.0 (US) / Firmware: 1.0.2
+  - Hardware: 1.0 (US) / Firmware: 1.0.7
 - **KL430**
   - Hardware: 2.0 (UN) / Firmware: 1.0.8
   - Hardware: 1.0 (US) / Firmware: 1.0.10
@@ -290,12 +292,16 @@ Some newer Kasa devices require authentication. These are marked with [*] in the
   - Hardware: 1.0 (EU) / Firmware: 1.2.3[*]
   - Hardware: 1.0 (EU) / Firmware: 1.5.12[*]
   - Hardware: 1.0 (UK) / Firmware: 1.5.6[*]
+  - Hardware: 1.0 (UK) / Firmware: 1.7.5[*]
 
 ### Hub-Connected Devices
 - **KE100**
   - Hardware: 1.0 (EU) / Firmware: 2.4.0[*]
   - Hardware: 1.0 (EU) / Firmware: 2.8.0[*]
+  - Hardware: 1.0 (UK) / Firmware: 2.15.0[*]
   - Hardware: 1.0 (UK) / Firmware: 2.8.0[*]
+- **KE110**
+  - Hardware: 1.0 (EU) / Firmware: 1.4.0[*]
 
 ## Tapo devices
 All Tapo devices require authentication.<br>Hub-Connected Devices may work across TAPO/KASA branded hubs even if they don't work across the native apps.
@@ -318,8 +324,11 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
 - **P115**
   - Hardware: 1.0 (EU) / Firmware: 1.2.3
   - Hardware: 1.0 (US) / Firmware: 1.1.3
+- **P116M**
+  - Hardware: 1.0 (IN) / Firmware: 1.4.4
 - **P125M**
   - Hardware: 1.0 (US) / Firmware: 1.1.0
+  - Hardware: 1.0 (US) / Firmware: 1.4.4
 - **P135**
   - Hardware: 1.0 (US) / Firmware: 1.0.5
   - Hardware: 1.0 (US) / Firmware: 1.2.0
@@ -384,6 +393,8 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 3.0 (EU) / Firmware: 1.1.6
   - Hardware: 2.0 (TW) / Firmware: 1.1.1
   - Hardware: 2.0 (US) / Firmware: 1.1.0
+- **L530EA**
+  - Hardware: 1.0 (EU) / Firmware: 1.4.2
 - **L535E**
   - Hardware: 3.0 (EU) / Firmware: 1.1.8
 - **L630**
@@ -408,10 +419,15 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
 ### Cameras
 - **C100**
   - Hardware: 4.0 / Firmware: 1.3.14
+- **C101**
+  - Hardware: 5.0 (US) / Firmware: 1.4.3
 - **C110**
   - Hardware: 2.0 (EU) / Firmware: 1.4.3
+- **C200**
+  - Hardware: 1.0 / Firmware: 1.3.17
 - **C210**
   - Hardware: 2.0 / Firmware: 1.3.11
+  - Hardware: 1.0 (EU) / Firmware: 1.4.7
   - Hardware: 2.0 (EU) / Firmware: 1.4.2
   - Hardware: 2.0 (EU) / Firmware: 1.4.3
 - **C220**
@@ -421,10 +437,14 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 2.0 (US) / Firmware: 1.0.11
 - **C325WB**
   - Hardware: 1.0 (EU) / Firmware: 1.1.17
+- **C460**
+  - Hardware: 1.0 (CA) / Firmware: 1.2.0
 - **C520WS**
   - Hardware: 1.0 (US) / Firmware: 1.2.8
 - **C720**
   - Hardware: 1.0 (US) / Firmware: 1.2.3
+- **TC40**
+  - Hardware: 2.0 (EU) / Firmware: 1.0.4
 - **TC65**
   - Hardware: 1.0 / Firmware: 1.3.9
 - **TC70**
@@ -437,6 +457,8 @@ All Tapo devices require authentication.<br>Hub-Connected Devices may work acros
   - Hardware: 1.0 (US) / Firmware: 1.1.9
 - **D230**
   - Hardware: 1.20 (EU) / Firmware: 1.1.19
+- **TD21**
+  - Hardware: 2.0 (EU) / Firmware: 1.1.5
 
 ### Vacuums
 - **RV20 Max Plus**

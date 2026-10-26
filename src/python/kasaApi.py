@@ -3,6 +3,7 @@ import json
 import os
 import re
 import sys
+import time
 
 from kasa import (
     AuthenticationError,
@@ -11,11 +12,16 @@ from kasa import (
     DeviceConfig,
     DeviceType,
     Discover,
+    KasaException,
     LightState,
     Module,
     UnsupportedDeviceError,
 )
 from kasa.iot import IotDevice
+try:
+    from kasa.exceptions import _ConnectionError
+except ImportError:  # private in python-kasa; the cause chain still has the OSError in most cases
+    _ConnectionError = OSError
 from quart import jsonify, request, Response, Quart
 from typing import Any
 
@@ -28,6 +34,36 @@ device_config_cache: dict[str, dict] = {}
 
 device_queue: asyncio.Queue = asyncio.Queue()
 discovery_run = 0
+
+# python-kasa retries a request itself and reopens a dropped socket on the next one, so one failed
+# request says little about the connection. It is replaced only after an authentication error, or
+# after this many connection failures in a row. A device rejecting a request does not count.
+DROP_AFTER_FAILURES = 3
+device_failures: dict[str, int] = {}
+# Hosts whose last request failed for any reason, including a device answering with an error.
+# Discovery checks these with a new connection instead of reporting what they last read.
+last_request_failed: set[str] = set()
+# Hosts a discovery run is connecting to. A device that never finishes connecting (python-kasa takes
+# about 23 s to give up) is left to that attempt, so later runs do not queue up behind it.
+discovery_connecting: set[str] = set()
+# A command whose connection was refused or unreachable (what a short Wi-Fi drop looks like) tries
+# again after each of these pauses, in seconds, but only while another attempt as long as the last
+# one can still finish within COMMAND_RETRY_DEADLINE seconds of the request arriving and within the
+# time HomeKit still waits for the write (the plugin sends it as deadline_ms). An attempt is
+# stopped when HomeKit's time runs out.
+COMMAND_RETRY_DELAYS = (1, 2)
+COMMAND_RETRY_DEADLINE = 8
+# The MAC of the device discovery accepted at each address (identified, filtered and checked for
+# native HomeKit/Matter). A connection is only used for that device: after addresses are
+# reassigned, a poll of the old address would read whatever device answers there now.
+admitted_macs: dict[str, str] = {}
+# Kasa devices that answered that they support HomeKit, by MAC. Support does not change while the
+# plugin runs, so a later check that times out does not bring the device back into Homebridge.
+native_homekit_macs: set[str] = set()
+
+
+class AddressReassignedError(Exception):
+    """A different device than the one accepted answers at this address."""
 
 UNSUPPORTED_TYPES = {
     DeviceType.Camera.value,
@@ -201,10 +237,6 @@ async def discover_devices(
     for item in leftover:
         device_queue.put_nowait(item)
 
-    if device_cache:
-        await close_all_connections()
-        log("All existing device connections closed.")
-
     discovered_hosts: set[str] = set()
 
     async def on_discovered(device: Device):
@@ -214,20 +246,45 @@ async def discover_devices(
             return
         discovered_hosts.add(device.host)
         log("Discovered device", host=device.host, alias=device.alias)
+        if device.host in discovery_connecting and device.host not in device_cache:
+            # An earlier run is still connecting to this device; that attempt reports it.
+            log("Still being connected by an earlier discovery run, skipping", level="DEBUG", host=device.host, alias=device.alias)
+            await safe_disconnect(device)
+            return
+        discovery_connecting.add(device.host)
         try:
-            if isinstance(device, IotDevice):
-                # Discovery picks the iot class from the device family alone, so a
-                # strip discovered over KLAP comes back as a plug. Connecting reads
-                # sysinfo first and picks the class from it.
-                discovered = device
-                device = await Device.connect(config=discovered.config)
-                await safe_disconnect(discovered)
-            else:
-                await device.update()
-            result = await process_device(device)
+            async with host_lock(device.host):
+                connected = device_cache.get(device.host)
+                if connected is not None and (
+                    not admitted_here(device.host, device)
+                    or not admitted_here(device.host, connected)
+                    or device.host in last_request_failed
+                ):
+                    # A different device answers here, or the connection last read one (a poll after
+                    # addresses were reassigned), or its last request failed: what it last read
+                    # cannot be trusted. Connect to the device that answered and check it like a new one.
+                    log("Checking this address with a new connection", host=device.host, alias=device.alias)
+                    await drop_device(device.host)
+                    connected = None
+                if connected is not None:
+                    # Discovery is for new devices and ones that lost their connection. A device
+                    # we are connected to keeps that connection for polling and control, and is
+                    # reported as seen from what it last read, without talking to it again.
+                    await safe_disconnect(device)
+                    result = await create_device_info(connected)
+                else:
+                    if isinstance(device, IotDevice):
+                        # Discovery picks the iot class from the device family alone, so a
+                        # strip discovered over KLAP comes back as a plug. Connecting reads
+                        # sysinfo first and picks the class from it.
+                        discovered = device
+                        device = await Device.connect(config=discovered.config)
+                        await safe_disconnect(discovered)
+                    else:
+                        await device.update()
+                    result = await process_device(device)
             if result is not None:
                 await device_queue.put(result)
-                await safe_disconnect(device)
         except (UnsupportedDeviceError, AuthenticationError) as e:
             log(f"{e.__class__.__name__}", level="ERROR", host=device.host, alias=device.alias)
             discovered_hosts.discard(device.host)
@@ -236,6 +293,8 @@ async def discover_devices(
             log(f"Device discovery: {e}", level="ERROR", host=device.host, alias=device.alias)
             discovered_hosts.discard(device.host)
             await safe_disconnect(device)
+        finally:
+            discovery_connecting.discard(device.host)
 
     async def process_device(device: Device) -> dict[str, Any] | None:
         log("Processing device", host=device.host, alias=device.alias)
@@ -247,28 +306,28 @@ async def discover_devices(
             log("Excluding device due to MAC address exclusion", host=device.host, alias=device.alias)
             await safe_disconnect(device)
             return None
-        try:
-            if hide_homekit_matter:
-                iot_homekit_module = device.modules.get(Module.IotHomeKit)
-                homekit_component = device.modules.get(Module.HomeKit) or (iot_homekit_module and iot_homekit_module.info)
-                matter_component = device.modules.get(Module.Matter)
-                if homekit_component or matter_component:
-                    if homekit_component:
-                        log("Skipping device due to Native HomeKit support", host=device.host, alias=device.alias)
-                    if matter_component:
-                        log("Skipping device due to Native Matter support", host=device.host, alias=device.alias)
-                    await safe_disconnect(device)
-                    return None
-        except Exception as e:
-            log(f"Checking HomeKit and Matter modules: {e}", level="ERROR", host=device.host, alias=device.alias)
-            await safe_disconnect(device)
-            return None
+        if hide_homekit_matter:
+            try:
+                homekit_component, matter_component = await native_homekit_matter(device)
+            except Exception as e:
+                # Add the device rather than drop it: python-kasa already counts a timeout as no
+                # HomeKit, and a check that failed on every run would keep the device out for good.
+                log(f"Checking HomeKit and Matter modules, adding the device: {e}", level="ERROR",
+                    host=device.host, alias=device.alias)
+                homekit_component = matter_component = False
+            if homekit_component or matter_component:
+                if homekit_component:
+                    log("Skipping device due to Native HomeKit support", host=device.host, alias=device.alias)
+                if matter_component:
+                    log("Skipping device due to Native Matter support", host=device.host, alias=device.alias)
+                await safe_disconnect(device)
+                return None
         device_type = device.device_type.value
         if device_type and device_type not in UNSUPPORTED_TYPES:
-            if device.host not in device_cache:
-                device_cache[device.host] = device
-            if device.host not in device_lock_cache:
-                device_lock_cache[device.host] = asyncio.Lock()
+            # This connection is the device's from now on; polling and control use it.
+            device_cache[device.host] = device
+            admitted_macs[device.host] = normalized_mac(device)
+            record_success(device.host)
             device_info = await create_device_info(device)
             if isinstance(device_info, Exception):
                 log(f"Creating device info: {device_info}", level="ERROR", host=device.host, alias=device.alias)
@@ -305,6 +364,82 @@ async def discover_devices(
     if run == discovery_run:
         await device_queue.put({"status": "discovery_complete"})
 
+def host_lock(host: str) -> asyncio.Lock:
+    """Serialize every access to one device: polls, control and discovery."""
+    return device_lock_cache.setdefault(host, asyncio.Lock())
+
+async def drop_device(host: str):
+    """Close and forget a device's connection; the next access or discovery reconnects it."""
+    device_failures.pop(host, None)
+    last_request_failed.discard(host)
+    await safe_disconnect(device_cache.pop(host, None))
+
+def record_success(host: str):
+    device_failures.pop(host, None)
+    last_request_failed.discard(host)
+
+def error_chain(error: BaseException):
+    """The error and its causes. Kasa (iot) devices wrap a failed request in another exception."""
+    seen: set[int] = set()
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        yield error
+        error = error.__cause__
+
+# Failures where the request got no answer: refused, unreachable, reset, timed out, or the device
+# closed the connection without replying (EOF on Kasa, a server disconnect on Tapo).
+NO_ANSWER_ERRORS = (OSError, EOFError, _ConnectionError)
+
+def is_connection_failure(error: BaseException) -> bool:
+    """The request did not get an answer, as opposed to the device answering with an error."""
+    return any(isinstance(e, NO_ANSWER_ERRORS) for e in error_chain(error))
+
+def is_quick_connection_failure(error: BaseException) -> bool:
+    """Refused or unreachable at once, rather than timed out (TimeoutError is an OSError too)."""
+    chain = list(error_chain(error))
+    return not any(isinstance(e, TimeoutError) for e in chain) and any(isinstance(e, OSError) for e in chain)
+
+async def native_homekit_matter(device: Device) -> tuple[bool, bool]:
+    """Return (HomeKit, Matter) for hide_homekit_matter, for a device that was just connected."""
+    if not isinstance(device, IotDevice):
+        # Tapo (smart) devices list HomeKit and Matter among their modules; nothing is sent.
+        return await device.supports_module(Module.HomeKit), await device.supports_module(Module.Matter)
+    # Kasa (iot) devices have no Matter. HomeKit takes one query, which python-kasa sends without
+    # retries; it remembers the answer, but reads a timeout as no HomeKit without remembering it.
+    mac = normalized_mac(device)
+    if mac and mac in native_homekit_macs:
+        return True, False
+    try:
+        homekit = await device.supports_module(Module.IotHomeKit)
+    except Exception as e:
+        # The device answered a full update just before this, so a failure here is most likely a
+        # stale connection, which the failed query has already reset.
+        log(f"Checking HomeKit support, retrying once: {e}", level="DEBUG", host=device.host, alias=device.alias)
+        homekit = await device.supports_module(Module.IotHomeKit)
+    else:
+        if not homekit:
+            # A remembered "no" comes back without a query; after a timeout this asks once more, so
+            # one lost reply does not add a native HomeKit device.
+            homekit = await device.supports_module(Module.IotHomeKit)
+    if homekit and mac:
+        native_homekit_macs.add(mac)
+    return homekit, False
+
+def normalized_mac(device: Device) -> str:
+    try:
+        return (device.mac or "").replace("-", ":").upper()
+    except Exception:
+        return ""
+
+def admitted_here(host: str, device: Device) -> bool:
+    """Whether this is the device discovery accepted at this address; unknown counts as yes."""
+    admitted, mac = admitted_macs.get(host), normalized_mac(device)
+    return not admitted or not mac or admitted == mac
+
+def ensure_admitted_here(host: str, device: Device):
+    if not admitted_here(host, device):
+        raise AddressReassignedError(f"A different device ({device.mac}) answers at {host} now")
+
 async def close_all_connections():
     log("Closing all existing device connections...")
     if device_cache:
@@ -328,17 +463,17 @@ async def create_device_info(device: Device) -> dict[str, Any]:
 
 async def get_sys_info(host: str) -> dict[str, Any]:
     log("Getting sys_info", host=host)
-    try:
-        device_config_dict = device_config_cache.get(host)
-        device_config = DeviceConfig.from_dict(device_config_dict)
-        device_lock = device_lock_cache.get(host, asyncio.Lock())
-        async with device_lock:
+    async with host_lock(host):
+        try:
+            device_config = DeviceConfig.from_dict(device_config_cache.get(host))
             device = await get_or_connect_device(host, device_config)
             await device.update()
+            ensure_admitted_here(host, device)
             device_info = custom_serializer(device)
+            record_success(host)
             return {"sys_info": device_info["sys_info"]}
-    except Exception as e:
-        return await handle_device_error(host, e)
+        except Exception as e:
+            return await handle_device_error(host, e)
 
 async def get_or_connect_device(host: str, device_config: DeviceConfig) -> Device:
     try:
@@ -363,17 +498,53 @@ async def control_device(
     value: Any,
     child_num: int | None = None,
     light_on: bool | None = None,
+    deadline_ms: float | None = None,
 ) -> dict[str, Any]:
     log("Controlling device", host=host)
-    try:
-        device_config_dict = device_config_cache.get(host)
-        device_config = DeviceConfig.from_dict(device_config_dict)
-        device_lock = device_lock_cache.get(host, asyncio.Lock())
-        async with device_lock:
-            device = await get_or_connect_device(host, device_config)
-            return await perform_device_action(device, feature, action, value, child_num, light_on)
-    except Exception as e:
-        return await handle_device_error(host, e)
+    # The clock starts when the request arrives, so time spent waiting for the device counts.
+    start = time.monotonic()
+    # time_left is when HomeKit stops waiting for the write; retries are planned within retry_budget.
+    time_left = None if deadline_ms is None else max(0.0, deadline_ms) / 1000
+    retry_budget = COMMAND_RETRY_DEADLINE if time_left is None else min(COMMAND_RETRY_DEADLINE, time_left)
+    async with host_lock(host):
+        if time_left is not None and time.monotonic() - start >= time_left:
+            # HomeKit has given up on this write while it waited; applying it now would be late.
+            return {"error": "HomeKit write expired before the device was free"}
+        for delay in (*COMMAND_RETRY_DELAYS, None):
+            attempt_start = time.monotonic()
+            # python-kasa resends a request that timed out (about 6 s per try), so one attempt can
+            # outlast the write; stop it when HomeKit stops waiting, so it cannot switch the device late.
+            remaining = None if time_left is None else max(0.0, time_left - (attempt_start - start))
+            try:
+                async with asyncio.timeout(remaining):
+                    device_config = DeviceConfig.from_dict(device_config_cache.get(host))
+                    device = await get_or_connect_device(host, device_config)
+                    ensure_admitted_here(host, device)
+                    result = await perform_device_action(device, feature, action, value, child_num, light_on)
+                if result.get("status") == "success":
+                    record_success(host)
+                return result
+            except KasaException as e:
+                # Every action sets a value, so sending it again after a quick failure is safe. A
+                # timeout is not retried here: python-kasa has already spent its retries on it.
+                now = time.monotonic()
+                if (
+                    delay is None
+                    or not is_quick_connection_failure(e)
+                    or (now - start) + delay + (now - attempt_start) > retry_budget
+                ):
+                    return await handle_device_error(host, e)
+                log(f"Retrying action in {delay} s after a connection failure: {e}", level="DEBUG", host=host)
+                await asyncio.sleep(delay)
+            except TimeoutError as e:
+                # python-kasa's own timeouts are KasaExceptions (above); this is HomeKit's time running
+                # out. Much of it may have gone to waiting for the device, so it is not held against it.
+                if remaining is not None and time.monotonic() - attempt_start >= remaining:
+                    log("No answer within the time HomeKit waits for the write", level="ERROR", host=host)
+                    return {"error": "No answer within the time HomeKit waits for the write"}
+                return await handle_device_error(host, e)
+            except Exception as e:
+                return await handle_device_error(host, e)
 
 async def perform_device_action(
     device: Device,
@@ -383,31 +554,44 @@ async def perform_device_action(
     child_num: int | None = None,
     light_on: bool | None = None,
 ) -> dict[str, Any]:
+    """Apply one action. Errors from the device propagate so the caller can retry or count them."""
     try:
-        if child_num is not None and device.children:
-            sorted_children = sorted(device.children, key=lambda c: _extract_child_suffix_index(c.device_id))
-            target = sorted_children[child_num]
-        else:
-            target = device
-        log(f"Performing action={action} on feature={feature}", alias=target.alias)
-        light = target.modules.get(Module.Light)
-        fan = target.modules.get(Module.Fan)
-        if feature == "state":
-            await getattr(target, action)()
-        elif feature == "brightness" and light and light.has_feature("brightness"):
-            await handle_brightness(target, action, value)
-        elif feature == "color_temp" and light and light.has_feature("color_temp"):
-            await handle_color_temp(target, action, value, light_on)
-        elif feature == "fan_speed_level" and fan and fan.has_feature("fan_speed_level"):
-            await handle_fan_speed_level(target, action, value)
-        elif feature == 'hsv' and light and light.has_feature("hsv"):
-            await handle_hsv(target, action, feature, value, light_on)
-        else:
-            raise ValueError("Invalid feature or action")
-        return {"status": "success"}
+        await apply_device_action(device, feature, action, value, child_num, light_on)
+    except KasaException:
+        raise
     except Exception as e:
         log(f"Error performing action: {e}", level="ERROR", alias=device.alias)
         return {"status": "error", "message": str(e)}
+    return {"status": "success"}
+
+async def apply_device_action(
+    device: Device,
+    feature: str,
+    action: str,
+    value: Any,
+    child_num: int | None = None,
+    light_on: bool | None = None,
+):
+    if child_num is not None and device.children:
+        sorted_children = sorted(device.children, key=lambda c: _extract_child_suffix_index(c.device_id))
+        target = sorted_children[child_num]
+    else:
+        target = device
+    log(f"Performing action={action} on feature={feature}", alias=target.alias)
+    light = target.modules.get(Module.Light)
+    fan = target.modules.get(Module.Fan)
+    if feature == "state":
+        await getattr(target, action)()
+    elif feature == "brightness" and light and light.has_feature("brightness"):
+        await handle_brightness(target, action, value)
+    elif feature == "color_temp" and light and light.has_feature("color_temp"):
+        await handle_color_temp(target, action, value, light_on)
+    elif feature == "fan_speed_level" and fan and fan.has_feature("fan_speed_level"):
+        await handle_fan_speed_level(target, action, value)
+    elif feature == 'hsv' and light and light.has_feature("hsv"):
+        await handle_hsv(target, action, feature, value, light_on)
+    else:
+        raise ValueError("Invalid feature or action")
 
 async def handle_brightness(target: Device, action: str, value: int):
     log(f"Handling brightness: action={action}, value={value}", alias=target.alias)
@@ -525,7 +709,9 @@ async def control_device_route():
         child_num = data.get('child_num')
         light_on = data.get('light_on')
         light_on = light_on if isinstance(light_on, bool) else None
-        result = await control_device(host, feature, action, value, child_num, light_on)
+        deadline_ms = data.get('deadline_ms')
+        deadline_ms = float(deadline_ms) if isinstance(deadline_ms, (int, float)) and not isinstance(deadline_ms, bool) else None
+        result = await control_device(host, feature, action, value, child_num, light_on, deadline_ms)
         return jsonify(result)
     except Exception as e:
         log(f"ControlDevice route: {e}", level="ERROR")
@@ -543,16 +729,29 @@ async def safe_disconnect(device: Device | None):
             log(f"Disconnecting device: {e}", level="ERROR", host=device.host, alias=device.alias)
 
 async def handle_device_error(host: str, error: Exception | None = None) -> dict[str, Any]:
+    """Record a failed request. Callers hold the device's lock.
+
+    A short network drop keeps the connection, which python-kasa reopens on the next request.
+    After an authentication error, or several connection failures in a row, the connection is
+    dropped, and the next poll, command or discovery connects again. A different device
+    answering at the address is refused but keeps the connection. A device that answers with
+    an error is reachable, so that does not count. Polling marks the device offline if requests
+    keep failing.
+    """
     log(f"Handling device: {error}", level="ERROR", host=host)
-    try:
-        device_config_dict = device_config_cache.get(host)
-        if device_config_dict:
-            device_config = DeviceConfig.from_dict(device_config_dict)
-            device = await get_or_connect_device(host, device_config)
-            await safe_disconnect(device)
-        device_cache.pop(host, None)
-    except Exception as e:
-        log(f"Error handling: {e}", level="ERROR", host=host)
+    if not isinstance(error, AddressReassignedError):
+        last_request_failed.add(host)
+    if isinstance(error, AddressReassignedError):
+        # Keep the connection: each poll re-reads the address and is refused again with one
+        # request, and discovery reconnects once it finds the device that answers there now.
+        pass
+    elif isinstance(error, (AuthenticationError, UnsupportedDeviceError)):
+        await drop_device(host)
+    elif error is not None and is_connection_failure(error):
+        failures = device_failures.get(host, 0) + 1
+        device_failures[host] = failures
+        if failures >= DROP_AFTER_FAILURES:
+            await drop_device(host)
     return {"error": str(error)}
 
 async def disconnect_all_devices(devices: dict[str, Device]):
@@ -566,3 +765,8 @@ async def cleanup():
     await close_all_connections()
     device_lock_cache.clear()
     device_config_cache.clear()
+    device_failures.clear()
+    last_request_failed.clear()
+    discovery_connecting.clear()
+    admitted_macs.clear()
+    native_homekit_macs.clear()

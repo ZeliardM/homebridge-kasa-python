@@ -11,7 +11,6 @@ import type {
 
 import path from 'node:path';
 import { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { EventEmitter } from 'node:events';
 import { fileURLToPath } from 'node:url';
 
 import HomeKitDevice from './devices/baseDevice.js';
@@ -35,6 +34,7 @@ import {
 import { createEnergyCharacteristics } from './devices/energyCharacteristics.js';
 import type { KasaPythonConfig } from './config.js';
 import type { KasaDevice } from './devices/deviceTypes.js';
+import type { PackageConfig } from './utils.js';
 import type { EnergyCharacteristics } from './devices/energyCharacteristics.js';
 
 export type KasaPythonAccessoryContext = {
@@ -43,7 +43,7 @@ export type KasaPythonAccessoryContext = {
   offline?: boolean;
 };
 
-let packageConfig: { name: string; version: string; engines: { node: string } };
+let packageConfig: PackageConfig;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
@@ -57,7 +57,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public energyCharacteristics: EnergyCharacteristics | undefined;
   public isShuttingDown: boolean = false;
   public periodicDeviceDiscovering: boolean = false;
-  public periodicDeviceDiscoveryEmitter: EventEmitter;
   public port: number = 0;
   public taskQueue: TaskQueue;
   public venvPythonExecutable: string = '';
@@ -79,10 +78,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.energyCharacteristics = this.config.energyOptions.enableEnergyMonitoring
       ? createEnergyCharacteristics(this.api.hap)
       : undefined;
-    this.periodicDeviceDiscoveryEmitter = new EventEmitter();
     this.taskQueue = new TaskQueue(this.log, () => this.isShuttingDown);
 
-    this.periodicDeviceDiscoveryEmitter.setMaxListeners(255);
     this.setupDeviceEventEmitter('firstDiscovery');
 
     this.platformInitialization = this.initializePlatform();
@@ -167,19 +164,14 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       }
 
       this.log.debug('Checking Homebridge version');
-      if (
-        this.api.versionGreaterOrEqual &&
-        !(
-          this.api.versionGreaterOrEqual('1.8.0') ||
-          this.api.versionGreaterOrEqual('2.0.0')
-        )
-      ) {
+      if (!satisfiesVersion(this.api.serverVersion, packageConfig.engines.homebridge)) {
         throw new Error(
-          `homebridge-kasa-python requires Homebridge ^1.8.0 || ^2.0.0-beta.0. Currently running: ${this.api.serverVersion}`,
+          `homebridge-kasa-python requires Homebridge ${packageConfig.engines.homebridge}. ` +
+          `Currently running: ${this.api.serverVersion}`,
         );
       } else {
         this.log.debug(
-          `Homebridge version ${this.api.serverVersion} satisfies the requirement ^1.8.0 || ^2.0.0-beta.0`,
+          `Homebridge version ${this.api.serverVersion} satisfies the requirement ${packageConfig.engines.homebridge}`,
         );
       }
     } catch (error) {
@@ -275,10 +267,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       } else {
         this.log.warn('Skipping offline accessory reconciliation because periodic discovery did not complete successfully');
       }
-      // Clear the flag before emitting: devices poll on this event, and a poll that still saw the
-      // flag set would wait for the next discovery.
       this.periodicDeviceDiscovering = false;
-      this.periodicDeviceDiscoveryEmitter.emit('periodicDeviceDiscoveryComplete');
       this.log.debug('Finished periodic device discovery');
     }
   }
@@ -353,20 +342,19 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.updateAccessoryStatus(accessory, now, false);
     const existingDevice = this.homekitDevicesById.get(device.sys_info.device_id);
     if (existingDevice) {
-      if (!existingDevice.isUpdating) {
-        const comingOnline = existingDevice.kasaDevice.offline && !device.offline;
-        existingDevice.updateFromDiscovery(device);
-        existingDevice.markDeviceReachable(device.last_seen);
-        if (comingOnline) {
-          this.log.debug(`Device [${device.sys_info.device_id}] was offline and is now online. Updating and restarting polling.`);
-          existingDevice.updateAfterPeriodicDiscovery(true);
-          existingDevice.startPolling();
-        } else {
-          this.log.debug(`Updating existing HomeKit device [${device.sys_info.device_id}].`);
-          existingDevice.updateAfterPeriodicDiscovery();
-        }
+      // Discovery only refreshes identity, so it applies even while a poll or write is in flight.
+      // Otherwise a slow, failing read of an old address keeps every later report from landing.
+      const comingOnline = existingDevice.kasaDevice.offline && !device.offline;
+      const moved = existingDevice.kasaDevice.sys_info.host !== device.sys_info.host;
+      existingDevice.updateFromDiscovery(device);
+      existingDevice.markDeviceReachable(device.last_seen);
+      if (comingOnline || moved) {
+        this.log.debug(`Device [${device.sys_info.device_id}] is back online or at a new address. Updating and restarting polling.`);
+        existingDevice.updateAfterPeriodicDiscovery();
+        existingDevice.startPolling();
       } else {
-        this.log.debug(`HomeKit device [${device.sys_info.device_id}] is currently updating. Skipping update.`);
+        // Its own polling keeps the state current; discovery only refreshed its identity.
+        this.log.debug(`Updated existing HomeKit device [${device.sys_info.device_id}] from discovery.`);
       }
     } else {
       await this.addNewDevice(device);
@@ -396,7 +384,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private async checkPython(): Promise<void> {
     try {
       this.log.debug('Running PythonChecker');
-      await new PythonChecker(this).allInOne();
+      await new PythonChecker(this, packageConfig.engines.python).allInOne();
     } catch (error) {
       this.log.error('Error checking python environment:', error);
       throw error;
@@ -519,6 +507,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       }
     }
 
+    this.refuseWritesUntilFound(accessory);
+
     if (!this.configuredAccessories.has(accessory.UUID)) {
       this.log.debug(
         `Platform Accessory [${accessory.displayName}] with UUID [${accessory.UUID}] ` +
@@ -530,6 +520,23 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         `Platform Accessory [${accessory.displayName}] with UUID ` +
         `[${accessory.UUID}] is already in configuredAccessories.`,
       );
+    }
+  }
+
+  // A cached accessory has no handlers until discovery finds its device and the device class sets
+  // its own. Until then HomeKit would accept a write and drop it, so it answers No Response instead.
+  private refuseWritesUntilFound(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
+    const { Characteristic: C, HapStatusError, HAPStatus } = this.api.hap;
+    const writable = [C.On, C.Brightness, C.ColorTemperature, C.Hue, C.Saturation, C.Active, C.RotationSpeed];
+    for (const service of accessory.services) {
+      for (const type of writable) {
+        if (service.testCharacteristic(type)) {
+          service.getCharacteristic(type).onSet(() => {
+            this.log.warn(`[${accessory.displayName}] has not been found since Homebridge started, so the write was not sent.`);
+            throw new HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+          });
+        }
+      }
     }
   }
 

@@ -5,6 +5,7 @@ on:
   workflow_call: {}
 
 permissions:
+  actions: read
   contents: write
   issues: write
   pull-requests: write
@@ -24,7 +25,7 @@ concurrency:
 jobs:
   auto-merge:
     name: Auto-Merge Dependabot Pull Request
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       is_merged: ${{ steps.merge_output.outputs.is_merged }}
     steps:
@@ -53,7 +54,7 @@ jobs:
           set -euo pipefail
           if [ "${{ steps.safety.outputs.block }}" = "false" ]; then
             {
-              echo "✅ Dependabot Update is Safe and will be Auto-Merged."
+              echo "✅ Dependabot Update is Safe and will be Auto-Merged once the Pull Request Build passes."
               echo
               echo "<!-- COPILOT-STICKY:DEPENDABOT -->"
             } > body.txt
@@ -75,10 +76,52 @@ jobs:
           marker: "<!-- COPILOT-STICKY:DEPENDABOT -->"
           body_file: body.txt
 
-      - name: Auto-Merge Pull Request
-        id: auto_merge
+      - name: Wait for the Pull Request Build
+        id: build
         if: steps.safety.outcome == 'success' && steps.safety.outputs.block == 'false'
         shell: bash
+        run: |
+          set -euo pipefail
+          # Merge only a commit whose Pull Request Build passed. The build covers every Node and
+          # Python version the plugin supports, and an update can break one of them (quart 0.23
+          # needs Python 3.13). A new commit gets its own run of this workflow.
+          max_wait=${BUILD_WAIT_SECONDS:-1800}
+          interval=${BUILD_POLL_SECONDS:-20}
+          head_oid="$(gh pr view "$PULL_REQUEST_URL" --json headRefOid --jq .headRefOid)"
+          runs_api="repos/${GITHUB_REPOSITORY}/actions/workflows/pull-request-build.yml/runs"
+          waited=0
+          while :; do
+            run="$(gh api "${runs_api}?head_sha=${head_oid}&event=pull_request&per_page=1" \
+              --jq '.workflow_runs[0] | select(. != null) | [.status, (.conclusion // "none"), .html_url] | @tsv' || true)"
+            IFS=$'\t' read -r status conclusion url <<< "$run"
+            if [ "$status" = "completed" ]; then
+              break
+            fi
+            current="$(gh pr view "$PULL_REQUEST_URL" --json headRefOid --jq .headRefOid || echo "$head_oid")"
+            if [ "$current" != "$head_oid" ]; then
+              echo "::notice::The branch changed while waiting for the build; the run for the new commit merges it."
+              exit 0
+            fi
+            if [ "$waited" -ge "$max_wait" ]; then
+              echo "::error::No finished Pull Request Build for ${head_oid} after ${max_wait} s. Merge it by hand once the build passes."
+              exit 1
+            fi
+            sleep "$interval"
+            waited=$(( waited + interval ))
+          done
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::The Pull Request Build for ${head_oid} ended with '${conclusion}', so it is not merged: ${url}"
+            exit 1
+          fi
+          echo "::notice::The Pull Request Build passed for ${head_oid}: ${url}"
+          echo "head=${head_oid}" >> "$GITHUB_OUTPUT"
+
+      - name: Auto-Merge Pull Request
+        id: auto_merge
+        if: steps.build.outputs.head != ''
+        shell: bash
+        env:
+          BUILT_HEAD: ${{ steps.build.outputs.head }}
         run: |
           set -euo pipefail
           # Dependabot opens several pull requests at once. Each merge moves beta, and GitHub then
@@ -86,7 +129,7 @@ jobs:
           # giving up. A real conflict is left to Dependabot, whose rebase starts a new run.
           max_attempts=${MAX_ATTEMPTS:-16}
           sleep_seconds=${SLEEP_SECONDS:-10}
-          start_head=""
+          start_head="$BUILT_HEAD"
           tmp_err="$(mktemp)"
           for attempt in $(seq 1 "$max_attempts"); do
             if [ "$attempt" -gt 1 ]; then
@@ -154,7 +197,7 @@ jobs:
 
   post-merge-release:
     name: Update CHANGELOG.md and Release from Dependabot Merge
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: auto-merge
     if: ${{ !cancelled() && needs.auto-merge.outputs.is_merged == 'true' }}
     steps:
@@ -164,17 +207,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node 24
+      - name: Setup Node 26
         id: setup-node
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
 
-      - name: Setup Python 3.13
+      - name: Setup Python 3.15
         id: setup-python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.15'
 
       - name: Fetch current labels for Pull Request
         id: fetch-labels

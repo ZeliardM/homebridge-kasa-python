@@ -8,12 +8,12 @@ import { delay, prefixLogger, runCommand } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
 
 const __dirname: string = path.dirname(fileURLToPath(import.meta.url));
-const SUPPORTED_PYTHON_VERSIONS: string[] = ['3.11', '3.12', '3.13', '3.14'];
 
 class PythonChecker {
   private readonly log: Logger;
   private readonly platform: KasaPythonPlatform;
   private readonly advancedPythonLogging: boolean;
+  private readonly supportedVersions: string[];
   private readonly pythonExecutables: string[];
   private readonly pluginDirPath: string;
   private readonly venvPath: string;
@@ -24,15 +24,14 @@ class PythonChecker {
   private venvPipExecutable: string = '';
   private venvPythonExecutable: string = '';
 
-  public constructor(platform: KasaPythonPlatform) {
+  public constructor(platform: KasaPythonPlatform, pythonEngines: string) {
     this.platform = platform;
     this.log = prefixLogger(this.platform.log, '[Python Check]');
     this.advancedPythonLogging = this.platform.config.advancedOptions?.advancedPythonLogging ?? false;
+    // package.json engines.python lists each supported minor version: "^3.11 || ^3.12 || ...".
+    this.supportedVersions = pythonEngines.split('||').map(range => range.trim().replace(/^\^/, ''));
     this.pythonExecutables = [
-      'python3.14',
-      'python3.13',
-      'python3.12',
-      'python3.11',
+      ...[...this.supportedVersions].reverse().map(version => `python${version}`),
       'python3',
       'python',
     ];
@@ -75,7 +74,7 @@ class PythonChecker {
         );
       } else {
         const version = await this.getPythonVersion(userPythonPath);
-        if (version && SUPPORTED_PYTHON_VERSIONS.includes(version)) {
+        if (version && this.supportedVersions.includes(version)) {
           this.setPythonExecutables(userPythonPath, version);
           return;
         } else {
@@ -87,14 +86,17 @@ class PythonChecker {
       const resolved = await this.resolvePythonExecutable(executable);
       if (resolved) {
         const version = await this.getPythonVersion(resolved);
-        if (version && SUPPORTED_PYTHON_VERSIONS.includes(version)) {
+        if (version && this.supportedVersions.includes(version)) {
           this.setPythonExecutables(resolved, version);
           return;
         }
       }
     }
-    this.log.error('No supported Python version found. Install Python 3.11, 3.12, 3.13, or 3.14 and restart Homebridge.');
-    throw new Error('No supported Python version found. Install Python 3.11, 3.12, 3.13, or 3.14 and restart Homebridge.');
+    const versions = this.supportedVersions;
+    const message = 'No supported Python version found. ' +
+      `Install Python ${versions.slice(0, -1).join(', ')}, or ${versions.at(-1)} and restart Homebridge.`;
+    this.log.error(message);
+    throw new Error(message);
   }
 
   private async getPythonVersion(executablePath: string): Promise<string | null> {
@@ -319,10 +321,15 @@ class PythonChecker {
 
   private async installRequirements(): Promise<void> {
     this.log.debug('Installing requirements from:', this.requirementsPath);
+    // This runs when a pinned version changes. Upgrade the packages those depend on too (aiohttp,
+    // cryptography, ...), so an existing venv ends up like a fresh one instead of keeping the
+    // versions from its first install. When the newest release of a dependency has no wheel for
+    // this machine (cryptography on Intel Macs), take the newest one that has, instead of building
+    // it from source.
     const [, , exitCode] = await runCommand(
       this.log,
       this.venvPipExecutable,
-      ['install', '-r', this.requirementsPath],
+      ['install', '--upgrade', '--upgrade-strategy', 'eager', '--prefer-binary', '-r', this.requirementsPath],
       undefined,
       !this.advancedPythonLogging,
       !this.advancedPythonLogging,

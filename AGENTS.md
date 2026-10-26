@@ -16,7 +16,7 @@ node -e "import('./dist/index.js').then(() => console.log('import OK'))"
 npm pack --dry-run   # when package contents change
 ```
 
-There are no unit tests. CI runs Node 22, 24 and 26 with Python 3.11 to 3.14: it installs `requirements.txt`, lints, builds, imports `dist/index.js` and imports every module in `requirements.txt`. Validate the TypeScript and Python halves separately for what you changed, and say what was not covered.
+There are no unit tests. CI runs Node 22, 24 and 26 with Python 3.11 to 3.15: it installs `requirements.txt`, lints, builds, imports `dist/index.js` and imports every module in `requirements.txt`. Validate the TypeScript and Python halves separately for what you changed, and say what was not covered.
 
 Deploy: `homebridge-deploy --plugin homebridge-kasa-python` (only after my yes).
 

@@ -76,7 +76,13 @@ export function isObjectLike(candidate: unknown): candidate is Record<string, un
   return typeof candidate === 'object' && candidate !== null || typeof candidate === 'function';
 }
 
-export async function loadPackageConfig(logger: Logging): Promise<{ name: string; version: string; engines: { node: string } }> {
+export interface PackageConfig {
+  name: string;
+  version: string;
+  engines: { homebridge: string; node: string; python: string };
+}
+
+export async function loadPackageConfig(logger: Logging): Promise<PackageConfig> {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const packageConfigPath = path.join(__dirname, '..', 'package.json');
   const log: Logger = prefixLogger(logger, '[Package Config]');
@@ -211,10 +217,10 @@ export async function runCommand(
     }).on('error', (error: NodeJS.ErrnoException) => {
       const errorMessage = error.message.toLowerCase();
       const shouldSuppress =
-    suppressErrors.some(err =>
-      (error.code && error.code.toString().toLowerCase() === err.toLowerCase()) ||
-      errorMessage.includes(err.toLowerCase()),
-    );
+        suppressErrors.some(err =>
+          (error.code && error.code.toString().toLowerCase() === err.toLowerCase()) ||
+          errorMessage.includes(err.toLowerCase()),
+        );
       if (!shouldSuppress) {
         logger.error('Command encountered an error:', error);
       }
