@@ -1,25 +1,13 @@
 import js from '@eslint/js';
 import stylistic from '@stylistic/eslint-plugin';
 import tseslint from 'typescript-eslint';
-import path from 'node:path';
-import { FlatCompat } from '@eslint/eslintrc';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-  recommendedConfig: js.configs.recommended,
-  allConfig: js.configs.all,
-});
 
 export default [{
   ignores: ['**/dist'],
-}, ...compat.extends(
-  'eslint:recommended',
-  'plugin:@typescript-eslint/eslint-recommended',
-  'plugin:@typescript-eslint/recommended',
-), {
+},
+js.configs.recommended,
+...tseslint.configs.recommended,
+{
   languageOptions: {
     parser: tseslint.parser,
     ecmaVersion: 2018,
