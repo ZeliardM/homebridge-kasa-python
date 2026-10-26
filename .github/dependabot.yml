@@ -10,6 +10,12 @@ updates:
     target-branch: "beta"
     assignees: ["ZeliardM"]
     versioning-strategy: "increase"
+    ignore:
+      # typescript-eslint 8.x needs typescript <6.1.0 (TypeScript 7 has no compiler API for it).
+      # Dependabot updates with `npm install --force`, so it would still open a TypeScript 7 PR
+      # whose lockfile `npm ci` rejects. Remove once a typescript-eslint release accepts TypeScript 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "npm"
       prefix-development: "npm-dev"
