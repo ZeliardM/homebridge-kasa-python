@@ -405,7 +405,7 @@ async def native_homekit_matter(device: Device) -> tuple[bool, bool]:
         # Tapo (smart) devices list HomeKit and Matter among their modules; nothing is sent.
         return await device.supports_module(Module.HomeKit), await device.supports_module(Module.Matter)
     # Kasa (iot) devices have no Matter. HomeKit takes one query, which python-kasa sends without
-    # retries and reads a timeout as no HomeKit.
+    # retries; it remembers the answer, but reads a timeout as no HomeKit without remembering it.
     mac = normalized_mac(device)
     if mac and mac in native_homekit_macs:
         return True, False
@@ -416,6 +416,11 @@ async def native_homekit_matter(device: Device) -> tuple[bool, bool]:
         # stale connection, which the failed query has already reset.
         log(f"Checking HomeKit support, retrying once: {e}", level="DEBUG", host=device.host, alias=device.alias)
         homekit = await device.supports_module(Module.IotHomeKit)
+    else:
+        if not homekit:
+            # A remembered "no" comes back without a query; after a timeout this asks once more, so
+            # one lost reply does not add a native HomeKit device.
+            homekit = await device.supports_module(Module.IotHomeKit)
     if homekit and mac:
         native_homekit_macs.add(mac)
     return homekit, False
