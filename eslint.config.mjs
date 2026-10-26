@@ -31,27 +31,26 @@ export default [{
   },
 
   rules: {
-    quotes: ['warn', 'single'],
-    indent: ['warn', 2, {
+    '@stylistic/quotes': ['warn', 'single'],
+    '@stylistic/indent': ['warn', 2, {
       SwitchCase: 1,
     }],
-    semi: ['off'],
-    'comma-dangle': ['warn', 'always-multiline'],
+    '@stylistic/comma-dangle': ['warn', 'always-multiline'],
     'dot-notation': 'off',
     eqeqeq: 'warn',
     curly: ['warn', 'all'],
-    'brace-style': ['warn'],
+    '@stylistic/brace-style': ['warn'],
     'prefer-arrow-callback': ['warn'],
-    'max-len': ['warn', 140],
+    '@stylistic/max-len': ['warn', 140],
     'no-console': ['warn'],
     'no-non-null-assertion': ['off'],
-    'comma-spacing': ['error'],
-    'no-multi-spaces': ['warn', {
+    '@stylistic/comma-spacing': ['error'],
+    '@stylistic/no-multi-spaces': ['warn', {
       ignoreEOLComments: true,
     }],
-    'no-trailing-spaces': ['warn'],
+    '@stylistic/no-trailing-spaces': ['warn'],
     'no-constant-condition': 'off',
-    'lines-between-class-members': ['warn', 'always', {
+    '@stylistic/lines-between-class-members': ['warn', 'always', {
       exceptAfterSingleLine: true,
     }],
     '@typescript-eslint/explicit-function-return-type': 'off',

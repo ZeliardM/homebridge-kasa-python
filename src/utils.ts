@@ -211,10 +211,10 @@ export async function runCommand(
     }).on('error', (error: NodeJS.ErrnoException) => {
       const errorMessage = error.message.toLowerCase();
       const shouldSuppress =
-    suppressErrors.some(err =>
-      (error.code && error.code.toString().toLowerCase() === err.toLowerCase()) ||
-      errorMessage.includes(err.toLowerCase()),
-    );
+        suppressErrors.some(err =>
+          (error.code && error.code.toString().toLowerCase() === err.toLowerCase()) ||
+          errorMessage.includes(err.toLowerCase()),
+        );
       if (!shouldSuppress) {
         logger.error('Command encountered an error:', error);
       }
