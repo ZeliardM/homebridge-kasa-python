@@ -34,6 +34,7 @@ import {
 import { createEnergyCharacteristics } from './devices/energyCharacteristics.js';
 import type { KasaPythonConfig } from './config.js';
 import type { KasaDevice } from './devices/deviceTypes.js';
+import type { PackageConfig } from './utils.js';
 import type { EnergyCharacteristics } from './devices/energyCharacteristics.js';
 
 export type KasaPythonAccessoryContext = {
@@ -42,7 +43,7 @@ export type KasaPythonAccessoryContext = {
   offline?: boolean;
 };
 
-let packageConfig: { name: string; version: string; engines: { node: string } };
+let packageConfig: PackageConfig;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
@@ -163,19 +164,14 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       }
 
       this.log.debug('Checking Homebridge version');
-      if (
-        this.api.versionGreaterOrEqual &&
-        !(
-          this.api.versionGreaterOrEqual('1.8.0') ||
-          this.api.versionGreaterOrEqual('2.0.0')
-        )
-      ) {
+      if (!satisfiesVersion(this.api.serverVersion, packageConfig.engines.homebridge)) {
         throw new Error(
-          `homebridge-kasa-python requires Homebridge ^1.8.0 || ^2.0.0-beta.0. Currently running: ${this.api.serverVersion}`,
+          `homebridge-kasa-python requires Homebridge ${packageConfig.engines.homebridge}. ` +
+          `Currently running: ${this.api.serverVersion}`,
         );
       } else {
         this.log.debug(
-          `Homebridge version ${this.api.serverVersion} satisfies the requirement ^1.8.0 || ^2.0.0-beta.0`,
+          `Homebridge version ${this.api.serverVersion} satisfies the requirement ${packageConfig.engines.homebridge}`,
         );
       }
     } catch (error) {
@@ -388,7 +384,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private async checkPython(): Promise<void> {
     try {
       this.log.debug('Running PythonChecker');
-      await new PythonChecker(this).allInOne();
+      await new PythonChecker(this, packageConfig.engines.python).allInOne();
     } catch (error) {
       this.log.error('Error checking python environment:', error);
       throw error;

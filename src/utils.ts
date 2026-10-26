@@ -76,7 +76,13 @@ export function isObjectLike(candidate: unknown): candidate is Record<string, un
   return typeof candidate === 'object' && candidate !== null || typeof candidate === 'function';
 }
 
-export async function loadPackageConfig(logger: Logging): Promise<{ name: string; version: string; engines: { node: string } }> {
+export interface PackageConfig {
+  name: string;
+  version: string;
+  engines: { homebridge: string; node: string; python: string };
+}
+
+export async function loadPackageConfig(logger: Logging): Promise<PackageConfig> {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const packageConfigPath = path.join(__dirname, '..', 'package.json');
   const log: Logger = prefixLogger(logger, '[Package Config]');
