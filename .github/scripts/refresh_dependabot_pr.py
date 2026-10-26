@@ -130,10 +130,7 @@ def _push_branch(head_ref: str, *, dry_run: bool) -> None:
     if dry_run:
         print(f"[refresh] DRY_RUN enabled; skipping push to {head_ref}")
         return
-    common.run(
-        ["git", "push", "--force-with-lease", "origin", f"HEAD:refs/heads/{head_ref}"],
-        check=True,
-    )
+    common.git_push(["--force-with-lease", "origin", f"HEAD:refs/heads/{head_ref}"])
 
 
 def _should_refresh(pr: dict, changed_files: list[str], original_base_ref: str) -> tuple[bool, str]:

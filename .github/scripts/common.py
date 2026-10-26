@@ -6,6 +6,8 @@ import json
 import os
 import shlex
 import subprocess
+import sys
+import time
 import urllib.request
 import urllib.error
 
@@ -224,6 +226,37 @@ def git_checkout_tag(tag: str) -> None:
     if cp.returncode != 0:
         run(["git", "checkout", "-f", f"refs/tags/{tag}"], check=True)
 
+# Pushes GitHub turns down on purpose (not a fast-forward, a stale lease, no permission, a protected
+# branch) fail at once, so callers that re-sync on a race still see it. Anything else, such as GitHub
+# answering 500 Internal Server Error, is tried again after 2, 4 and 8 s.
+PUSH_RETRY_DELAYS = (2, 4, 8)
+_PUSH_REFUSALS = (
+    "[rejected]",
+    "non-fast-forward",
+    "fetch first",
+    "stale info",
+    "permission",
+    "403",
+    "protected branch",
+    "hook declined",
+)
+
+def git_push(args: Sequence[str]) -> None:
+    cmd = ["git", "push", *args]
+    for attempt, delay in enumerate((*PUSH_RETRY_DELAYS, None), start=1):
+        proc = run(cmd, check=False, capture=True)
+        if proc.stdout:
+            print(proc.stdout, end="")
+        if proc.stderr:
+            print(proc.stderr, end="", file=sys.stderr)
+        if proc.returncode == 0:
+            return
+        refused = any(s in (proc.stderr or "").lower() for s in _PUSH_REFUSALS)
+        if refused or delay is None:
+            raise subprocess.CalledProcessError(proc.returncode, cmd, output=proc.stdout, stderr=proc.stderr)
+        print(f"::warning::[common] git push failed (attempt {attempt}); trying again in {delay}s")
+        time.sleep(delay)
+
 def git_commit_files(files: Sequence[str], message: str) -> None:
     run(["git", "config", "--local", "user.email", "action@github.com"], check=False)
     run(["git", "config", "--local", "user.name", "GitHub Action"], check=False)
@@ -237,7 +270,7 @@ def git_commit_files(files: Sequence[str], message: str) -> None:
     if run(["git", "diff", "--cached", "--quiet"], check=False).returncode == 0:
         return
     run(["git", "commit", "-m", message], check=True)
-    run(["git", "push"], check=True)
+    git_push([])
 
 def git_delete_tag(tag: str) -> None:
     try:
@@ -261,7 +294,7 @@ def git_force_tag(tag: str) -> None:
     try:
         run(["git", "fetch", "--tags"], check=False)
         run(["git", "tag", "-f", tag], check=True)
-        run(["git", "push", "--force", "origin", tag], check=True)
+        git_push(["--force", "origin", tag])
         print(f"[common] Tag {tag} updated to HEAD")
     except subprocess.CalledProcessError as e:
         print(f"::warning::[common] Failed to update tag {tag}: {e}")
