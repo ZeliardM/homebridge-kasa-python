@@ -321,10 +321,12 @@ class PythonChecker {
 
   private async installRequirements(): Promise<void> {
     this.log.debug('Installing requirements from:', this.requirementsPath);
+    // When the newest release of a dependency has no wheel for this machine (cryptography on Intel
+    // Macs), take the newest one that has, instead of building it from source.
     const [, , exitCode] = await runCommand(
       this.log,
       this.venvPipExecutable,
-      ['install', '-r', this.requirementsPath],
+      ['install', '--prefer-binary', '-r', this.requirementsPath],
       undefined,
       !this.advancedPythonLogging,
       !this.advancedPythonLogging,
