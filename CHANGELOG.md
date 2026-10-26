@@ -1,8 +1,9 @@
 # Changelog
-## [v3.3.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.7)
+## [v3.3.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.7) (2026-10-26)
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v3.3.0-beta.7 [beta-release] (@github-actions)
 - [other] Retry release pushes when GitHub fails them [#399](https://github.com/ZeliardM/homebridge-kasa-python/pull/399) (@ZeliardM)
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.6...v3.3.0-beta.7
