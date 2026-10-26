@@ -189,7 +189,7 @@ def main() -> None:
         return
 
     if push_enabled:
-        common.run(["git", "push", "origin", f"HEAD:refs/heads/{beta_branch}"], check=True)
+        common.git_push(["origin", f"HEAD:refs/heads/{beta_branch}"])
         print(
             f"[sync-latest-to-beta] Synced origin/{latest_branch} into {beta_branch} "
             f"after stable release {stable_tag}."
