@@ -1,4 +1,12 @@
 # Changelog
+## [v3.3.0-beta.6](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.6)
+
+### Bug Fixes
+
+- [fix] Keep devices working through discovery and network drops, move to python-kasa 0.12.0 and support Python 3.15 [#398](https://github.com/ZeliardM/homebridge-kasa-python/pull/398) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.5...v3.3.0-beta.6
+
 ## [v3.3.0-beta.5](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.5) (2026-10-24)
 
 ### Bug Fixes
