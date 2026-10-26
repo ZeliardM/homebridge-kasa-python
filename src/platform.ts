@@ -507,6 +507,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       }
     }
 
+    this.refuseWritesUntilFound(accessory);
+
     if (!this.configuredAccessories.has(accessory.UUID)) {
       this.log.debug(
         `Platform Accessory [${accessory.displayName}] with UUID [${accessory.UUID}] ` +
@@ -518,6 +520,23 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         `Platform Accessory [${accessory.displayName}] with UUID ` +
         `[${accessory.UUID}] is already in configuredAccessories.`,
       );
+    }
+  }
+
+  // A cached accessory has no handlers until discovery finds its device and the device class sets
+  // its own. Until then HomeKit would accept a write and drop it, so it answers No Response instead.
+  private refuseWritesUntilFound(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
+    const { Characteristic: C, HapStatusError, HAPStatus } = this.api.hap;
+    const writable = [C.On, C.Brightness, C.ColorTemperature, C.Hue, C.Saturation, C.Active, C.RotationSpeed];
+    for (const service of accessory.services) {
+      for (const type of writable) {
+        if (service.testCharacteristic(type)) {
+          service.getCharacteristic(type).onSet(() => {
+            this.log.warn(`[${accessory.displayName}] has not been found since Homebridge started, so the write was not sent.`);
+            throw new HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+          });
+        }
+      }
     }
   }
 
