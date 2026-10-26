@@ -14,6 +14,8 @@ import type { FeatureInfo, HSV, KasaDevice, SysInfo } from './deviceTypes.js';
 const HOMEKIT_WRITE_BUDGET_MS = 8960;
 const homeKitWriteDeadline = new AsyncLocalStorage<number>();
 
+const DISCOVERY_STREAM_MAX_MS = 30000;
+
 export function runHomeKitWrite<T>(write: () => Promise<T>): Promise<T> {
   return homeKitWriteDeadline.run(performance.now() + HOMEKIT_WRITE_BUDGET_MS, write);
 }
@@ -67,14 +69,26 @@ export default class DeviceManager {
         authConfig,
       );
 
+      // The service sends discovery_complete once it has handled every device this run found, so
+      // a device that takes longer (a HomeKit check that times out) is still reported in this run.
+      // A run held up longer than that ends here; its late results come with the next run.
       const eventSource = new EventSource(`${this.apiUrl}/stream`);
+      let finish: () => void = () => undefined;
+      const finished = new Promise<void>(resolve => {
+        const timer = setTimeout(() => finish(), DISCOVERY_STREAM_MAX_MS);
+        finish = () => {
+          clearTimeout(timer);
+          eventSource.close();
+          resolve();
+        };
+      });
       eventSource.onmessage = (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data);
           this.log.debug('SSE event data:', data);
           if (data.status === 'discovery_complete') {
             this.log.debug('Device discovery complete.');
-            eventSource.close();
+            finish();
             return;
           }
           if (!data.sys_info || !data.sys_info.host) {
@@ -96,11 +110,10 @@ export default class DeviceManager {
       };
       eventSource.onerror = (error: Event) => {
         this.log.error('Discovery EventSource error:', error);
-        eventSource.close();
+        finish();
       };
 
-      await new Promise(resolve => setTimeout(resolve, 10000));
-      eventSource.close();
+      await finished;
     } catch (error) {
       this.handleAxiosError(error, 'discoverDevices');
     }
