@@ -198,6 +198,10 @@ export default abstract class HomeKitDevice {
     }
     const generation = this.writeGeneration;
     const updatedSysInfo = await this.deviceManager.getSysInfo(host);
+    if (this.shouldSkipUpdate()) {
+      // Shutdown stopped the service during this read, or the device was removed; neither is the device's failure
+      return false;
+    }
     if (generation !== this.writeGeneration) {
       // A write started while this read was in flight, so the reading may predate it.
       this.log.debug('Discarding sys_info read that started before a write');

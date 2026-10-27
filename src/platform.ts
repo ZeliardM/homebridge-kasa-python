@@ -30,6 +30,7 @@ import {
   lookupCharacteristicNameByUUID,
   runCommand,
   satisfiesVersion,
+  settlesWithin,
   waitForServer,
 } from './utils.js';
 import { createEnergyCharacteristics } from './devices/energyCharacteristics.js';
@@ -54,6 +55,10 @@ const KASA_API_RESTART_MAX_MS = 300000;
 const KASA_API_STABLE_MS = 600000;
 // Lines of the service's stderr logged when it exits
 const KASA_API_STDERR_LINES = 20;
+// Uvicorn waits for open connections, such as a discovery stream, before it exits on SIGTERM
+const KASA_API_KILL_AFTER_MS = 3000;
+// Homebridge exits 5 s after the signal without waiting for the shutdown listener
+const SHUTDOWN_WAIT_MS = 2000;
 
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   // Passed to the Python service in its environment, never on its command line, and sent with every request to it.
@@ -144,24 +149,22 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
 
     this.api.on('shutdown', async () => {
       this.log.debug('KasaPython shutting down');
-      if (!this.isShuttingDown) {
-        this.isShuttingDown = true;
-      }
+      this.isShuttingDown = true;
       if (this.discoveryInterval) {
         clearInterval(this.discoveryInterval);
         this.log.debug('Cleared periodic device discovery interval');
       }
+      // First: Homebridge exits 5 s after the signal without waiting for this listener, and a service left running
+      // then keeps running on its own. Polls, writes and discovery still talking to it fail at once.
+      this.stopKasaApi();
       this.log.debug('Stopping all polling tasks');
       for (const device of this.homekitDevicesById.values()) {
-        await device.stopPolling(true);
+        void device.stopPolling();
       }
       this.log.debug('Waiting for tasks to complete');
-      try {
-        await this.taskQueue.waitForEmptyQueue();
-      } catch (error) {
-        this.log.error('Error while waiting for task queue to empty during shutdown:', error);
+      if (!await settlesWithin(this.taskQueue.waitForEmptyQueue(), SHUTDOWN_WAIT_MS)) {
+        this.log.debug(`Tasks were still running ${SHUTDOWN_WAIT_MS / 1000} s after shutdown started`);
       }
-      this.stopKasaApi();
     });
   }
 
@@ -233,6 +236,10 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     try {
       this.log.debug('Checking Python environment');
       await this.checkPython();
+      // Creating the venv can take minutes; Homebridge may be stopping by then
+      if (this.isShuttingDown) {
+        return;
+      }
 
       this.log.debug('Initializing DeviceManager');
       this.deviceManager = new DeviceManager(this);
@@ -242,13 +249,23 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         await this.startKasaApi();
       } catch (error) {
         // Periodic discovery is still set up; it waits for the service, which is started again
-        this.log.error(`The Kasa API did not start: ${error instanceof Error ? error.message : String(error)}`);
+        if (!this.isShuttingDown) {
+          this.log.error(`The Kasa API did not start: ${error instanceof Error ? error.message : String(error)}`);
+        }
         this.stopKasaApi();
         this.scheduleKasaApiRestart();
+      }
+      if (this.isShuttingDown) {
+        // The shutdown listener ran while the service was starting
+        this.stopKasaApi();
+        return;
       }
 
       if (this.kasaApiAvailable) {
         await this.discoverDevices();
+      }
+      if (this.isShuttingDown) {
+        return;
       }
 
       const discoveredDeviceIds = new Set<string>();
@@ -598,9 +615,17 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.kasaProcess = null;
     this.kasaApiAvailable = false;
 
-    if (kasaProcess) {
+    if (kasaProcess && kasaProcess.exitCode === null && kasaProcess.signalCode === null) {
       this.log.debug('Kasa API process found, attempting to kill the process');
       kasaProcess.kill();
+      // Not unref'd: during shutdown this keeps Homebridge up until the service is gone (it exits after 5 s anyway)
+      const killTimer = setTimeout(() => {
+        if (kasaProcess.exitCode === null && kasaProcess.signalCode === null) {
+          this.log.debug(`Kasa API process still running ${KASA_API_KILL_AFTER_MS / 1000} s after SIGTERM, sending SIGKILL`);
+          kasaProcess.kill('SIGKILL');
+        }
+      }, KASA_API_KILL_AFTER_MS);
+      kasaProcess.once('exit', () => clearTimeout(killTimer));
       this.log.debug('Kasa API process successfully killed');
     } else {
       this.log.debug('No Kasa API process found to stop');
