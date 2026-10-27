@@ -189,7 +189,6 @@ class PythonChecker {
       );
       if (!stdout.includes('not created successfully') && this.isVenvCreated()) {
         this.log.debug('Virtual environment created successfully');
-        await this.updatePip();
         return;
       }
       if (attempt < maxAttempts) {
@@ -235,20 +234,40 @@ class PythonChecker {
     return pythonHome;
   }
 
+  // pip trusts the CA bundle it vendors (certifi) besides the system's, so a pip that was current when the venv was
+  // created keeps trusting root certificates that were withdrawn since. pip only downloads when the requirements are
+  // installed, so it is upgraded right before every install, not only in a new venv. A failed upgrade does not stop
+  // the install: that runs with the pip the venv already has, and fails on its own if it cannot work.
   private async updatePip(): Promise<void> {
     this.log.debug('Updating pip in virtual environment');
-    const [, , exitCode] = await runCommand(
-      this.log,
-      this.venvPipExecutable,
-      ['install', '--upgrade', 'pip'],
-      undefined,
-      !this.advancedPythonLogging,
-      !this.advancedPythonLogging,
-    );
-    if (exitCode !== 0) {
-      throw new Error(`Failed to upgrade pip in virtual environment (exit code ${exitCode})`);
+    let failure: string;
+    try {
+      // `python -m pip`, not the pip executable: on Windows pip.exe cannot replace itself while it runs.
+      const [stdout, stderr, exitCode] = await runCommand(
+        this.log,
+        this.venvPythonExecutable,
+        ['-m', 'pip', 'install', '--upgrade', 'pip'],
+        undefined,
+        !this.advancedPythonLogging,
+        !this.advancedPythonLogging,
+      );
+      if (exitCode === 0) {
+        // pip also exits with 0 when it cannot reach the index and keeps the version it has.
+        const upgraded = stdout.match(/^Successfully installed .*\bpip-(\S+)/m)?.[1];
+        const kept = stdout.match(/^Requirement already satisfied: pip .*\(([^)]+)\)\s*$/m)?.[1];
+        this.log.debug(upgraded ? `Pip upgraded to ${upgraded}` : `No newer pip found${kept ? `, keeping pip ${kept}` : ''}`);
+        return;
+      }
+      failure = `exit code ${exitCode}${this.lastLine(stderr)}`;
+    } catch (error) {
+      failure = error instanceof Error ? error.message : String(error);
     }
-    this.log.debug('Pip updated successfully');
+    this.log.warn(`Could not upgrade pip in the virtual environment (${failure}); installing requirements with the current pip.`);
+  }
+
+  private lastLine(output: string): string {
+    const line = output.trim().split(/\r?\n/).at(-1)?.trim();
+    return line ? `: ${line}` : '';
   }
 
   private async ensureVenvRequirementsSatisfied(): Promise<void> {
@@ -320,6 +339,7 @@ class PythonChecker {
   }
 
   private async installRequirements(): Promise<void> {
+    await this.updatePip();
     this.log.debug('Installing requirements from:', this.requirementsPath);
     // This runs when a pinned version changes. Upgrade the packages those depend on too (aiohttp,
     // cryptography, ...), so an existing venv ends up like a fresh one instead of keeping the
