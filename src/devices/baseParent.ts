@@ -244,24 +244,6 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
     }
   }
 
-  protected pushCommunicationFailure(): void {
-    super.pushCommunicationFailure();
-    const children = this.kasaDevice.sys_info.children;
-    if (!Array.isArray(children)) {
-      return;
-    }
-    for (const child of children) {
-      const service = this.getChildService(child);
-      const descriptors = this.childDescriptorMap.get(this.childKey(child));
-      if (!service || !descriptors) {
-        continue;
-      }
-      for (const descriptor of descriptors) {
-        service.getCharacteristic(descriptor.type).updateValue(this.communicationFailure());
-      }
-    }
-  }
-
   protected abstract getChildServiceType(child: ChildDevice): WithUUID<typeof this.platform.Service>;
   protected abstract buildChildDescriptors(child: ChildDevice): CharacteristicDescriptor[];
 }
