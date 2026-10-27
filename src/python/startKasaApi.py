@@ -11,9 +11,10 @@ def start_api(port: int, hideHomeKitMatter: bool):
 
         os.environ["HIDE_HOMEKIT_MATTER"] = "true" if hideHomeKitMatter else "false"
 
+        # Only the plugin talks to the service, and always over 127.0.0.1.
         uvicorn.run(
             "kasaApi:app",
-            host="0.0.0.0",
+            host="127.0.0.1",
             port=port,
             loop="asyncio",
             workers=1,
