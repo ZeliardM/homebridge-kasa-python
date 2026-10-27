@@ -58,6 +58,7 @@ Thank you for contributing to homebridge-kasa-python!
 - docs / dependency
 
 ## Security / Quality
+- Build, lint and import checks run on Node 22, 24 and 26 with Python 3.11 to 3.15 when a pull request into beta is opened or reopened, and on every push to it. A pull request opened against latest is moved to beta without them; they run from its next push, or once it is closed and reopened. Never close a Dependabot pull request for this, since Dependabot deletes its branch when its pull request is closed: comment `@dependabot rebase`, or push an empty commit to its branch when Dependabot cannot rebase it because the workflow refreshed the branch.
 - CodeQL runs when a release is published.
 - Dependabot weekly updates target beta.
 

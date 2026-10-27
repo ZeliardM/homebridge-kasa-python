@@ -5,7 +5,8 @@ Thank you for your contribution!
 
 Default base branch
 - Pull requests should target the 'beta' branch by default.
-- If you chose a different base, the workflow will retarget this PR to 'beta'.
+- If you chose a different base, the workflow will retarget this PR to 'beta', and the build checks
+  run only from your next push (or after closing and reopening the PR).
 
 Please complete the sections below to help with review and release notes.
 -->
