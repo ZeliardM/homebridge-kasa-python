@@ -75,6 +75,10 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.Characteristic = this.api.hap.Characteristic;
     this.storagePath = this.api.user.storagePath();
     this.config = parseConfig(config);
+    if (!this.config.enableCredentials && (this.config.username || this.config.password)) {
+      this.log.warn('A username or password is set, but Enable Credentials is off, so they are not used. ' +
+        'Turn on Enable Credentials if your devices need your TP-Link account.');
+    }
     if (this.config.discoveryOptions.disableBroadcast && this.config.discoveryOptions.manualDevices.length === 0) {
       this.log.warn('Broadcast discovery is disabled and no Manual Devices are configured, so no devices will be discovered.');
     }

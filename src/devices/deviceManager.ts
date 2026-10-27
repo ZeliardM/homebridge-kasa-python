@@ -34,6 +34,7 @@ export default class DeviceManager {
   private apiUrl!: string;
   private api!: AxiosInstance;
   private apiToken!: string;
+  private enableCredentials!: boolean;
   private username!: string;
   private password!: string;
   private disableBroadcast!: boolean;
@@ -48,6 +49,7 @@ export default class DeviceManager {
 
   private refreshConfigSnapshot(): void {
     this.log = this.platform.log;
+    this.enableCredentials = this.platform.config.enableCredentials;
     this.username = this.platform.config.username;
     this.password = this.platform.config.password;
     this.apiUrl = `http://127.0.0.1:${this.platform.port}`;
@@ -63,7 +65,9 @@ export default class DeviceManager {
   async discoverDevices(): Promise<void> {
     this.log.debug('Starting device discovery...');
     try {
-      const authConfig = this.username && this.password
+      // python-kasa logs in with these to every device that answers discovery, so they are sent only
+      // when the user turned Enable Credentials on, not merely because they are still in the config.
+      const authConfig = this.enableCredentials && this.username && this.password
         ? { auth: { username: this.username, password: this.password } }
         : {};
       await this.api.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
