@@ -67,6 +67,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private deviceDiscoveredHandler?: (device: KasaDevice) => Promise<void>;
   private discoveryInterval?: NodeJS.Timeout;
   private hideHomeKitMatter: boolean = true;
+  private configInvalid = false;
   private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
   private platformInitialization: Promise<void>;
 
@@ -74,12 +75,23 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.Service = this.api.hap.Service;
     this.Characteristic = this.api.hap.Characteristic;
     this.storagePath = this.api.user.storagePath();
-    this.config = parseConfig(config);
-    if (!this.config.enableCredentials && (this.config.username || this.config.password)) {
+    // Homebridge does not catch errors thrown here, so a bad config would stop the whole bridge.
+    // Log it and stay idle instead; cached accessories stay registered.
+    try {
+      this.config = parseConfig(config, message => this.log.warn(message));
+    } catch (error) {
+      this.log.error(
+        `Invalid configuration, so ${PLATFORM_NAME} will not start. Fix the plugin settings and restart Homebridge. ` +
+        (error instanceof Error ? error.message : String(error)),
+      );
+      this.config = parseConfig({});
+      this.configInvalid = true;
+    }
+    if (!this.configInvalid && !this.config.enableCredentials && (this.config.username || this.config.password)) {
       this.log.warn('A username or password is set, but Enable Credentials is off, so they are not used. ' +
         'Turn on Enable Credentials if your devices need your TP-Link account.');
     }
-    if (this.config.discoveryOptions.disableBroadcast && this.config.discoveryOptions.manualDevices.length === 0) {
+    if (!this.configInvalid && this.config.discoveryOptions.disableBroadcast && this.config.discoveryOptions.manualDevices.length === 0) {
       this.log.warn('Broadcast discovery is disabled and no Manual Devices are configured, so no devices will be discovered.');
     }
     this.energyCharacteristics = this.config.energyOptions.enableEnergyMonitoring
@@ -103,6 +115,9 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
           `Platform initialization failed, so ${PLATFORM_NAME} will not start: ` +
           (error instanceof Error ? error.message : String(error)),
         );
+        return;
+      }
+      if (this.configInvalid) {
         return;
       }
       await this.didFinishLaunching();
@@ -501,7 +516,8 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       accessory.context.offline = false;
     }
 
-    if (accessory.context.lastSeen) {
+    // With an invalid config the offline interval is not known, so nothing is removed.
+    if (accessory.context.lastSeen && !this.configInvalid) {
       const now = new Date();
       const timeSinceLastSeen = now.getTime() - new Date(accessory.context.lastSeen).getTime();
       const offlineInterval = this.config.discoveryOptions.offlineInterval;
