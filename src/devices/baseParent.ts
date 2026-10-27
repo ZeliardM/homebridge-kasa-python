@@ -71,7 +71,7 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
   }
 
   private async childOnGet(service: Service, child: ChildDevice, descriptor: CharacteristicDescriptor) {
-    if (this.kasaDevice.offline) {
+    if (this.kasaDevice.offline || !this.platform.isKasaApiAvailable) {
       throw this.communicationFailure();
     }
     const context = this.buildChildDescriptorContext(child);

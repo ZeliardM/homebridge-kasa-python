@@ -199,7 +199,15 @@ export default abstract class HomeKitDevice {
       return false;
     }
     const generation = this.writeGeneration;
-    const updatedSysInfo = await this.deviceManager.getSysInfo(host);
+    let updatedSysInfo: SysInfo | undefined;
+    try {
+      updatedSysInfo = await this.deviceManager.getSysInfo(host);
+    } catch (error) {
+      // The local service failed the request, not the device: this poll neither counts toward No Response nor resets
+      // the count. While the service is down, HomeKit reads get No Response (genericOnGet).
+      this.log.debug(`Poll not counted: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
     if (this.shouldSkipUpdate()) {
       // Shutdown stopped the service during this read, or the device was removed; neither is the device's failure
       return false;
@@ -436,7 +444,7 @@ export default abstract class HomeKitDevice {
   }
 
   private async genericOnGet(descriptor: CharacteristicDescriptor): Promise<CharacteristicValue> {
-    if (this.kasaDevice.offline) {
+    if (this.kasaDevice.offline || !this.platform.isKasaApiAvailable) {
       throw this.communicationFailure();
     }
     const context = this.buildDescriptorContext();
