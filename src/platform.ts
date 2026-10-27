@@ -90,10 +90,21 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.setupDeviceEventEmitter('firstDiscovery');
 
     this.platformInitialization = this.initializePlatform();
+    // Handled in the didFinishLaunching listener; without this, a failure before that listener runs is an
+    // unhandled rejection, which stops Homebridge
+    this.platformInitialization.catch(() => undefined);
 
     this.api.on('didFinishLaunching', async () => {
       this.log.debug('KasaPython Platform finished launching');
-      await this.platformInitialization;
+      try {
+        await this.platformInitialization;
+      } catch (error) {
+        this.log.error(
+          `Platform initialization failed, so ${PLATFORM_NAME} will not start: ` +
+          (error instanceof Error ? error.message : String(error)),
+        );
+        return;
+      }
       await this.didFinishLaunching();
       if (this.offlineAccessories.size > 0) {
         this.log.debug('Unregistering offline accessories');
