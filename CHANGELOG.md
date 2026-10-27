@@ -3,6 +3,7 @@
 
 ### Bug Fixes
 
+- [fix] Keep accessories through Python service crashes, shutdowns, long downtime and bad configs [#402](https://github.com/ZeliardM/homebridge-kasa-python/pull/402) (@ZeliardM)
 - [fix] Close the Python service to the network, honour Enable Credentials, and keep Homebridge running on a failed version check [#401](https://github.com/ZeliardM/homebridge-kasa-python/pull/401) (@ZeliardM)
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.7...v3.3.0-beta.8
