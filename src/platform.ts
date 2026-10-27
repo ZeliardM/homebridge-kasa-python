@@ -224,7 +224,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     try {
       this.log.debug('Checking Node.js version');
       if (!satisfiesVersion(process.version, packageConfig.engines.node)) {
-        this.log.error(`Error: not using minimum node version ${packageConfig.engines.node}`);
+        this.log.error(`Node.js ${process.version} is not a supported version; this plugin supports ${packageConfig.engines.node}`);
       } else {
         this.log.debug(`Node.js version ${process.version} satisfies the requirement ${packageConfig.engines.node}`);
       }
