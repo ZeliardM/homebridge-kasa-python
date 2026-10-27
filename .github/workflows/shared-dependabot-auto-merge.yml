@@ -14,6 +14,7 @@ env:
   GITHUB_REPOSITORY: ${{ github.repository }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   PULL_REQUEST_AUTHOR: ${{ github.event.pull_request.user.login }}
+  PULL_REQUEST_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
   PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
   PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
   PULL_REQUEST_URL: ${{ github.event.pull_request.html_url }}
@@ -41,9 +42,17 @@ jobs:
         run: |
           set -euo pipefail
           LABELS="$(gh api repos/"$GITHUB_REPOSITORY"/issues/"$PULL_REQUEST_NUMBER"/labels --jq '.[].name' || true)"
+          # Merge only what the label job marked auto-merge: minor and patch updates, and lockfile-only
+          # changes when Dependabot's metadata could not be read. A major update, any other update without
+          # metadata, or a failed label lookup waits for review.
           block=true
-          if ! printf '%s\n' "$LABELS" | grep -qi '^dependency-major$'; then
+          if printf '%s\n' "$LABELS" | grep -qi '^auto-merge$' && ! printf '%s\n' "$LABELS" | grep -qi '^dependency-major$'; then
             block=false
+          fi
+          # Merge only Dependabot's own pull requests from a branch in this repository, whatever the caller checks
+          if [ "$PULL_REQUEST_AUTHOR" != 'dependabot[bot]' ] || [ "$PULL_REQUEST_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+            echo "::warning::Not merged automatically: opened by ${PULL_REQUEST_AUTHOR} from ${PULL_REQUEST_HEAD_REPOSITORY:-a deleted repository}."
+            block=true
           fi
           echo "block=$block" >> "$GITHUB_OUTPUT"
 
