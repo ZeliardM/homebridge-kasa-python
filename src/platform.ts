@@ -148,12 +148,19 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       if (this.configInvalid) {
         return;
       }
-      await this.didFinishLaunching();
+      // Before startup, which can take minutes: if the initial discovery finds one of these devices again, it
+      // registers a new accessory with the same UUID, which Homebridge refuses while the old one is still there
       if (this.offlineAccessories.size > 0) {
-        this.log.debug('Unregistering offline accessories');
+        for (const accessory of this.offlineAccessories.values()) {
+          this.log.warn(
+            `Removing [${accessory.displayName}] from HomeKit: discovery has not found it for ` +
+            `${formatDays(accessory.context.missingFor ?? 0)} while Homebridge was running.`,
+          );
+        }
         this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, Array.from(this.offlineAccessories.values()));
         this.offlineAccessories.clear();
       }
+      await this.didFinishLaunching();
     });
 
     this.api.on('shutdown', async () => {
@@ -722,21 +729,20 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       accessory.context.offline = false;
     }
 
+    // Also for an accessory moved to offlineAccessories below: it stays in HomeKit until it is unregistered, and
+    // for good when the config is invalid or initialization fails
+    this.refuseWritesUntilFound(accessory);
+
     // Only completed discovery runs that missed the device count, and only while Homebridge was running: a long
     // downtime removes nothing. This catches an offline interval lowered since then. With an invalid config the
     // offline interval is not known, so nothing is removed.
     const missingFor = accessory.context.missingFor ?? 0;
     if (!this.configInvalid && accessory.context.offline === true && missingFor >= this.config.discoveryOptions.offlineInterval) {
-      this.log.warn(
-        `Removing [${accessory.displayName}] from HomeKit: discovery has not found it for ` +
-        `${formatDays(missingFor)} while Homebridge was running.`,
-      );
+      this.log.debug(`Platform Accessory [${accessory.displayName}] has been missing too long, moving to offlineAccessories`);
       this.configuredAccessories.delete(accessory.UUID);
       this.offlineAccessories.set(accessory.UUID, accessory);
       return;
     }
-
-    this.refuseWritesUntilFound(accessory);
 
     if (!this.configuredAccessories.has(accessory.UUID)) {
       this.log.debug(
