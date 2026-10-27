@@ -233,7 +233,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       await waitForServer(`http://127.0.0.1:${this.port}/health`, this.log, { [API_TOKEN_HEADER]: this.apiToken });
 
       await this.discoverDevices();
-      this.log.debug('Device discovery completed');
 
       const discoveredDeviceIds = new Set<string>();
       this.setupPeriodicDiscovery(discoveredDeviceIds);
@@ -267,9 +266,15 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     try {
       if (this.deviceManager) {
         await this.deviceManager.discoverDevices();
+        this.log.debug('Device discovery completed');
       }
     } catch (error) {
-      this.log.error('Error during discoverDevices:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (this.isShuttingDown) {
+        this.log.debug(`Device discovery stopped by shutdown: ${message}`);
+      } else {
+        this.log.error(`Device discovery did not complete: ${message}`);
+      }
     }
   }
 
@@ -284,21 +289,28 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       return;
     }
     this.periodicDeviceDiscovering = true;
-    let discoverySucceeded = false;
+    let discoveryCompleted = false;
     discoveredDeviceIds.clear();
     this.log.debug('Cleared discoveredDeviceIds set before discovery.');
     try {
       if (this.deviceManager) {
+        // Only a run that reported every device it found tells which devices are gone
         await this.deviceManager.discoverDevices();
-        discoverySucceeded = true;
+        discoveryCompleted = true;
       }
     } catch (error) {
-      this.log.error('Error during periodic device discovery:', error);
-    } finally {
-      if (discoverySucceeded) {
-        this.handleOfflineDevices(discoveredDeviceIds);
+      const message = error instanceof Error ? error.message : String(error);
+      if (this.isShuttingDown) {
+        this.log.debug(`Periodic device discovery stopped by shutdown: ${message}`);
       } else {
-        this.log.warn('Skipping offline accessory reconciliation because periodic discovery did not complete successfully');
+        this.log.warn(`Periodic device discovery did not complete, so offline accessories were not reconciled: ${message}`);
+      }
+    } finally {
+      if (this.isShuttingDown) {
+        // Shutdown stops the service, and the devices it had not reported yet would all look gone
+        this.log.debug('Skipping offline accessory reconciliation because Homebridge is shutting down');
+      } else if (discoveryCompleted) {
+        this.handleOfflineDevices(discoveredDeviceIds);
       }
       this.periodicDeviceDiscovering = false;
       this.log.debug('Finished periodic device discovery');
