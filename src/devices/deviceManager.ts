@@ -33,7 +33,6 @@ type ControlValue = CharacteristicValue | HSV;
 
 export default class DeviceManager {
   private log!: Logger;
-  private apiUrl!: string;
   private api!: AxiosInstance;
   private apiToken!: string;
   private enableCredentials!: boolean;
@@ -49,14 +48,18 @@ export default class DeviceManager {
     this.refreshConfigSnapshot();
   }
 
+  // The service gets a new port each time it is started again
+  private get apiUrl(): string {
+    return `http://127.0.0.1:${this.platform.port}`;
+  }
+
   private refreshConfigSnapshot(): void {
     this.log = this.platform.log;
     this.enableCredentials = this.platform.config.enableCredentials;
     this.username = this.platform.config.username;
     this.password = this.platform.config.password;
-    this.apiUrl = `http://127.0.0.1:${this.platform.port}`;
     this.apiToken = this.platform.apiToken;
-    this.api = axios.create({ baseURL: this.apiUrl, headers: { [API_TOKEN_HEADER]: this.apiToken } });
+    this.api = axios.create({ headers: { [API_TOKEN_HEADER]: this.apiToken } });
     this.disableBroadcast = this.platform.config.discoveryOptions.disableBroadcast;
     this.additionalBroadcasts = this.platform.config.discoveryOptions.additionalBroadcasts;
     this.manualDeviceHosts = this.platform.config.discoveryOptions.manualDevices.map(d => d.host);
@@ -76,7 +79,7 @@ export default class DeviceManager {
       : {};
     try {
       await this.api.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
-        '/discover',
+        `${this.apiUrl}/discover`,
         {
           disableBroadcast: this.disableBroadcast,
           additionalBroadcasts: this.additionalBroadcasts,
@@ -144,7 +147,7 @@ export default class DeviceManager {
 
   async getSysInfo(host: string): Promise<SysInfo | undefined> {
     try {
-      const response = await this.api.post('/getSysInfo', { host });
+      const response = await this.api.post(`${this.apiUrl}/getSysInfo`, { host });
       const sysInfo: SysInfo | undefined = response.data?.sys_info;
       if (!sysInfo) {
         this.log.debug(`[getSysInfo] No sys_info payload returned for host ${host}`);
@@ -209,7 +212,7 @@ export default class DeviceManager {
     };
     let response;
     try {
-      response = await this.api.post('/controlDevice', payload);
+      response = await this.api.post(`${this.apiUrl}/controlDevice`, payload);
     } catch (error) {
       throw this.requestFailed(`Control request failed (${feature}/${action}) on ${host}`, error);
     }

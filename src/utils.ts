@@ -198,14 +198,34 @@ export async function runCommand(
   if (returnProcess) {
     logger.debug('Command started and returning process.');
 
-    const stderrReady = new Promise<void>((resolve) => {
-      p.stderr.once('data', () => {
+    // A process that cannot be started emits 'error' instead of throwing, and one that fails at once exits without
+    // a word on stderr. Either rejects here; an 'error' without a listener would be an uncaught exception, which
+    // stops Homebridge.
+    await new Promise<void>((resolve, reject) => {
+      const onData = () => {
+        cleanup();
         logger.debug('Process data received.');
         resolve();
-      });
+      };
+      const onError = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+      const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
+        cleanup();
+        const output = stderr.trim().split('\n').slice(-5).join(' | ');
+        reject(new Error(`${command} exited (${code ?? signal}) before it started${output ? `: ${output}` : ''}`));
+      };
+      const cleanup = () => {
+        p.stderr.off('data', onData);
+        p.off('error', onError);
+        p.off('close', onClose);
+      };
+      p.stderr.once('data', onData);
+      p.once('error', onError);
+      p.once('close', onClose);
     });
-
-    await stderrReady;
+    p.on('error', (error: Error) => logger.error(`Command error: ${error.message}`));
 
     return [stdout, stderr, null, p];
   }
@@ -269,19 +289,26 @@ export function satisfiesVersion(currentVersion: string, requiredVersion: string
   });
 }
 
+export interface WaitForServerOptions {
+  headers?: Record<string, string>;
+  timeout?: number;
+  interval?: number;
+  signal?: AbortSignal;
+}
+
 export async function waitForServer(
   url: string,
   log: Logging,
-  headers: Record<string, string> = {},
-  timeout: number = 30000,
-  interval: number = 1000,
+  { headers = {}, timeout = 30000, interval = 1000, signal }: WaitForServerOptions = {},
 ): Promise<void> {
   const startTime = Date.now();
   log.debug(`Waiting for server at ${url} with timeout ${timeout}ms and interval ${interval}ms`);
 
   while (Date.now() - startTime < timeout) {
+    // Given up on by the caller (the server exited): stop asking
+    signal?.throwIfAborted();
     try {
-      const response = await axios.get(url, { headers });
+      const response = await axios.get(url, { headers, timeout: 5000 });
       if (response.status === 200) {
         log.debug('Server responded successfully');
         return;
@@ -292,7 +319,6 @@ export async function waitForServer(
     await new Promise(resolve => setTimeout(resolve, interval));
   }
 
-  log.error(`Server did not respond within ${timeout / 1000} seconds`);
   throw new Error(`Server did not respond within ${timeout / 1000} seconds`);
 }
 

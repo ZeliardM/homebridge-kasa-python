@@ -47,6 +47,14 @@ export type KasaPythonAccessoryContext = {
 let packageConfig: PackageConfig;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// A Python service that exits is started again after 5 s, and after twice as long each time it exits again soon after,
+// up to 5 minutes. One that ran for 10 minutes starts over at 5 s.
+const KASA_API_RESTART_MIN_MS = 5000;
+const KASA_API_RESTART_MAX_MS = 300000;
+const KASA_API_STABLE_MS = 600000;
+// Lines of the service's stderr logged when it exits
+const KASA_API_STDERR_LINES = 20;
+
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   // Passed to the Python service in its environment, never on its command line, and sent with every request to it.
   public readonly apiToken: string = randomBytes(32).toString('hex');
@@ -68,7 +76,13 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private discoveryInterval?: NodeJS.Timeout;
   private hideHomeKitMatter: boolean = true;
   private configInvalid = false;
-  private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
+  private deferredDiscoveryTask?: () => Promise<void>;
+  private kasaApiAvailable = false;
+  private kasaApiRestartDelayMs = KASA_API_RESTART_MIN_MS;
+  private kasaApiRestartTimer?: NodeJS.Timeout;
+  private kasaApiStartedAt = 0;
+  private kasaApiStderrTail: string[] = [];
+  private kasaProcess: ChildProcessWithoutNullStreams | null = null;
   private platformInitialization: Promise<void>;
 
   constructor(public readonly log: Logging, config: PlatformConfig, public readonly api: API) {
@@ -220,19 +234,22 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       this.log.debug('Checking Python environment');
       await this.checkPython();
 
-      this.log.debug('Getting available port');
-      this.port = await getAvailablePort();
-      this.log.debug(`Port assigned: ${this.port}`);
-
       this.log.debug('Initializing DeviceManager');
       this.deviceManager = new DeviceManager(this);
       this.log.debug('DeviceManager initialized');
 
-      await this.startKasaApi();
+      try {
+        await this.startKasaApi();
+      } catch (error) {
+        // Periodic discovery is still set up; it waits for the service, which is started again
+        this.log.error(`The Kasa API did not start: ${error instanceof Error ? error.message : String(error)}`);
+        this.stopKasaApi();
+        this.scheduleKasaApiRestart();
+      }
 
-      await waitForServer(`http://127.0.0.1:${this.port}/health`, this.log, { [API_TOKEN_HEADER]: this.apiToken });
-
-      await this.discoverDevices();
+      if (this.kasaApiAvailable) {
+        await this.discoverDevices();
+      }
 
       const discoveredDeviceIds = new Set<string>();
       this.setupPeriodicDiscovery(discoveredDeviceIds);
@@ -250,6 +267,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     };
 
     const deferredDiscoveryTask = deferAndCombine(discoveryTask, this.config.advancedOptions.waitTimeUpdate);
+    this.deferredDiscoveryTask = deferredDiscoveryTask;
 
     this.discoveryInterval = setInterval(() => {
       try {
@@ -286,6 +304,11 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
     if (this.isShuttingDown) {
       this.log.debug('Platform is shutting down, skipping periodic device discovery');
+      return;
+    }
+    if (!this.kasaApiAvailable) {
+      // Nothing is found while it is down, and that must not count against any device
+      this.log.debug('The Kasa API is not running, skipping periodic device discovery');
       return;
     }
     this.periodicDeviceDiscovering = true;
@@ -436,13 +459,17 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
   }
 
+  // Starts the service on a free port and waits until it answers /health; throws if it does not.
   private async startKasaApi(): Promise<void> {
     const scriptPath = path.join(__dirname, 'python', 'startKasaApi.py');
     this.hideHomeKitMatter = this.config.homekitOptions.hideHomeKitMatter;
-    this.log.debug('Starting Kasa API with script:', scriptPath);
+    this.port = await getAvailablePort();
+    this.log.debug(`Starting Kasa API with script: ${scriptPath} on port ${this.port}`);
 
+    let kasaProcess: ChildProcessWithoutNullStreams;
+    let firstOutput: string;
     try {
-      const [, , , kasaProcessInstance] = await runCommand(
+      const [, stderr, , kasaProcessInstance] = await runCommand(
         this.log,
         this.venvPythonExecutable,
         [scriptPath, this.port.toString(), this.hideHomeKitMatter.toString()],
@@ -451,22 +478,129 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         this.config.advancedOptions.advancedPythonLogging ? false : true,
         true,
       );
-
-      this.kasaProcess = kasaProcessInstance;
-      this.log.debug('Kasa API process started successfully');
+      kasaProcess = kasaProcessInstance!;
+      firstOutput = stderr;
     } catch (error) {
-      this.log.error(`Error starting kasaApi.py process: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw error;
+      throw new Error(`Error starting kasaApi.py process: ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
+    }
+
+    this.kasaProcess = kasaProcess;
+    this.kasaApiStartedAt = performance.now();
+    this.kasaApiStderrTail = [];
+    this.recordKasaApiStderr(firstOutput);
+    kasaProcess.stderr.on('data', (data: string) => this.recordKasaApiStderr(data));
+    // An exit before /health answers fails this start, and the caller handles it; a later one is handled by
+    // onKasaApiExit
+    const healthCheck = new AbortController();
+    const exited = new Promise<never>((_, reject) => {
+      kasaProcess.once('close', (code, signal) => {
+        healthCheck.abort();
+        const output = this.kasaApiStderrTail.join('\n');
+        reject(new Error(`kasaApi.py exited (${code ?? signal}) before it answered${output ? `. Its last output:\n${output}` : ''}`));
+        this.onKasaApiExit(kasaProcess, code, signal);
+      });
+    });
+    exited.catch(() => undefined);
+    this.log.debug('Kasa API process started successfully');
+
+    try {
+      await Promise.race([
+        waitForServer(`http://127.0.0.1:${this.port}/health`, this.log, {
+          headers: { [API_TOKEN_HEADER]: this.apiToken },
+          signal: healthCheck.signal,
+        }),
+        exited,
+      ]);
+    } finally {
+      healthCheck.abort();
+    }
+    if (this.kasaProcess === kasaProcess) {
+      this.kasaApiAvailable = true;
+    }
+  }
+
+  private recordKasaApiStderr(data: string): void {
+    const lines = data.split('\n').map(line => line.trimEnd()).filter(line => line.length > 0);
+    this.kasaApiStderrTail.push(...lines);
+    this.kasaApiStderrTail.splice(0, Math.max(0, this.kasaApiStderrTail.length - KASA_API_STDERR_LINES));
+  }
+
+  // Nothing else notices when the service dies: every poll and write fails, and discovery finds nothing.
+  private onKasaApiExit(kasaProcess: ChildProcessWithoutNullStreams, code: number | null, signal: NodeJS.Signals | null): void {
+    if (kasaProcess !== this.kasaProcess) {
+      // Stopped on purpose (stopKasaApi clears kasaProcess first)
+      return;
+    }
+    const wasAvailable = this.kasaApiAvailable;
+    this.kasaProcess = null;
+    this.kasaApiAvailable = false;
+    if (this.isShuttingDown || !wasAvailable) {
+      // Still starting: startKasaApi fails, and its caller logs it and starts it again
+      return;
+    }
+    const output = this.kasaApiStderrTail.join('\n');
+    this.log.error(
+      `The Kasa API (kasaApi.py) exited unexpectedly (${code !== null ? `exit code ${code}` : `signal ${signal}`}). ` +
+      (output ? `Its last output:\n${output}` : 'It wrote nothing to stderr.'),
+    );
+    if (performance.now() - this.kasaApiStartedAt >= KASA_API_STABLE_MS) {
+      this.kasaApiRestartDelayMs = KASA_API_RESTART_MIN_MS;
+    }
+    this.scheduleKasaApiRestart();
+  }
+
+  private scheduleKasaApiRestart(): void {
+    if (this.isShuttingDown || this.kasaApiRestartTimer) {
+      return;
+    }
+    const delay = this.kasaApiRestartDelayMs;
+    this.kasaApiRestartDelayMs = Math.min(delay * 2, KASA_API_RESTART_MAX_MS);
+    this.log.warn(`Starting the Kasa API again in ${delay / 1000} s. Until then devices show No Response.`);
+    this.kasaApiRestartTimer = setTimeout(() => {
+      this.kasaApiRestartTimer = undefined;
+      void this.restartKasaApi();
+    }, delay);
+  }
+
+  private async restartKasaApi(): Promise<void> {
+    if (this.isShuttingDown) {
+      return;
+    }
+    try {
+      await this.startKasaApi();
+    } catch (error) {
+      if (this.isShuttingDown) {
+        return;
+      }
+      this.log.error(`The Kasa API did not start: ${error instanceof Error ? error.message : String(error)}`);
+      this.stopKasaApi();
+      this.scheduleKasaApiRestart();
+      return;
+    }
+    if (this.isShuttingDown) {
+      this.stopKasaApi();
+      return;
+    }
+    this.log.info('The Kasa API is running again. Discovering devices to connect to them again.');
+    // The new service has no device connections until discovery makes them; polls fail until then
+    if (this.deferredDiscoveryTask) {
+      this.taskQueue.addTask(this.deferredDiscoveryTask);
     }
   }
 
   private stopKasaApi(): void {
     this.log.debug('Stopping Kasa API');
+    if (this.kasaApiRestartTimer) {
+      clearTimeout(this.kasaApiRestartTimer);
+      this.kasaApiRestartTimer = undefined;
+    }
+    const kasaProcess = this.kasaProcess;
+    this.kasaProcess = null;
+    this.kasaApiAvailable = false;
 
-    if (this.kasaProcess) {
+    if (kasaProcess) {
       this.log.debug('Kasa API process found, attempting to kill the process');
-      this.kasaProcess.kill();
-      this.kasaProcess = null;
+      kasaProcess.kill();
       this.log.debug('Kasa API process successfully killed');
     } else {
       this.log.debug('No Kasa API process found to stop');
