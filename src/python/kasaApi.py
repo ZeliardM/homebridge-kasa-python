@@ -53,6 +53,15 @@ discovery_connecting: set[str] = set()
 # stopped when HomeKit's time runs out.
 COMMAND_RETRY_DELAYS = (1, 2)
 COMMAND_RETRY_DEADLINE = 8
+# The actions the plugin sends for each feature (mapFeatureToAction in deviceManager.ts). The action
+# names a device or module method, so anything else (factory_reset, reboot) is refused.
+ALLOWED_ACTIONS: dict[str, set[str]] = {
+    "state": {"turn_on", "turn_off"},
+    "brightness": {"set_brightness"},
+    "color_temp": {"set_color_temp"},
+    "fan_speed_level": {"set_fan_speed_level"},
+    "hsv": {"set_hsv"},
+}
 # The MAC of the device discovery accepted at each address (identified, filtered and checked for
 # native HomeKit/Matter). A connection is only used for that device: after addresses are
 # reassigned, a poll of the old address would read whatever device answers there now.
@@ -705,6 +714,9 @@ async def control_device_route():
         host = data['host']
         feature = data['feature']
         action = data['action']
+        if action not in ALLOWED_ACTIONS.get(feature, ()):
+            log(f"ControlDevice route: refused action={action!r} for feature={feature!r}", level="ERROR", host=host)
+            return jsonify({"error": f"Unsupported action {action} for feature {feature}"}), 400
         value = data.get('value')
         child_num = data.get('child_num')
         light_on = data.get('light_on')
