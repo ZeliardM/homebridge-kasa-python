@@ -159,8 +159,11 @@ def _refresh_npm_lockfile(head_ref: str, pr_number: str, *, dry_run: bool) -> tu
     common.run(["git", "checkout", "-B", head_ref, f"origin/{head_ref}"], check=True)
     common.run(["git", "reset", "--hard", "origin/beta"], check=True)
 
+    # `npm audit fix` exits 1 while any advisory is left, including ones whose only fix is a
+    # breaking update. Those must not fail the refresh; --audit-level=none keeps the exit code
+    # for real errors only.
     audit = common.run(
-        [_npm_executable(), "audit", "fix", "--package-lock-only"],
+        [_npm_executable(), "audit", "fix", "--package-lock-only", "--audit-level=none"],
         check=False,
     )
     if audit.returncode != 0:
