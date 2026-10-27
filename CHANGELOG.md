@@ -1,4 +1,12 @@
 # Changelog
+## [v3.3.0-beta.8](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.8)
+
+### Bug Fixes
+
+- [fix] Close the Python service to the network, honour Enable Credentials, and keep Homebridge running on a failed version check [#401](https://github.com/ZeliardM/homebridge-kasa-python/pull/401) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.7...v3.3.0-beta.8
+
 ## [v3.3.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.7) (2026-10-26)
 
 ### Other Changes
