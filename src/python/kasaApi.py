@@ -288,6 +288,10 @@ async def discover_devices(
                     # reported as seen from what it last read, without talking to it again.
                     await safe_disconnect(device)
                     result = await create_device_info(connected)
+                    if "error" in result:
+                        # Reported as a failure, not sent as a device: the next run checks it with a new connection.
+                        await handle_device_error(device.host, RuntimeError(result["error"]))
+                        result = None
                 else:
                     if isinstance(device, IotDevice):
                         # Discovery picks the iot class from the device family alone, so a
@@ -345,9 +349,10 @@ async def discover_devices(
             admitted_macs[device.host] = normalized_mac(device)
             record_success(device.host)
             device_info = await create_device_info(device)
-            if isinstance(device_info, Exception):
-                log(f"Creating device info: {device_info}", level="ERROR", host=device.host, alias=device.alias)
-                return await handle_device_error(device.host)
+            if "error" in device_info:
+                # create_device_info has logged it; the device is not reported, and the next run checks it again.
+                await handle_device_error(device.host, RuntimeError(device_info["error"]))
+                return None
             return device_info
         else:
             log("Skipping unsupported device", host=device.host, alias=device.alias)
