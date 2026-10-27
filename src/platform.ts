@@ -42,7 +42,10 @@ import type { EnergyCharacteristics } from './devices/energyCharacteristics.js';
 export type KasaPythonAccessoryContext = {
   deviceId?: string;
   lastSeen?: Date;
+  // Set by discovery only: completed discovery runs have not found the device
   offline?: boolean;
+  // How long (ms) completed discovery runs have kept missing it, counting only time Homebridge was running
+  missingFor?: number;
 };
 
 let packageConfig: PackageConfig;
@@ -59,6 +62,11 @@ const KASA_API_STDERR_LINES = 20;
 const KASA_API_KILL_AFTER_MS = 3000;
 // Homebridge exits 5 s after the signal without waiting for the shutdown listener
 const SHUTDOWN_WAIT_MS = 2000;
+
+function formatDays(ms: number): string {
+  const days = ms / (24 * 60 * 60 * 1000);
+  return `${days.toFixed(days < 10 ? 1 : 0)} days`;
+}
 
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   // Passed to the Python service in its environment, never on its command line, and sent with every request to it.
@@ -88,6 +96,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private kasaApiStartedAt = 0;
   private kasaApiStderrTail: string[] = [];
   private kasaProcess: ChildProcessWithoutNullStreams | null = null;
+  private lastReconciledAt?: number;
   private platformInitialization: Promise<void>;
 
   constructor(public readonly log: Logging, config: PlatformConfig, public readonly api: API) {
@@ -374,8 +383,17 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
   }
 
+  // After a completed discovery run. An accessory it did not find, whose device has not answered a poll within the
+  // last discovery interval either, is flagged offline in the accessory cache, and it is removed once completed runs
+  // have missed it for the offline interval. Only time Homebridge was running counts, so downtime removes nothing.
   private handleOfflineDevices(discoveredDeviceIds: Set<string>): void {
     const now = new Date();
+    const reconciledAt = performance.now();
+    const discoveryInterval = this.config.discoveryOptions.discoveryPollingInterval;
+    // Since the previous completed run, at most two discovery intervals: a failed run in between still counts, an
+    // outage of the service does not
+    const elapsed = this.lastReconciledAt === undefined ? 0 : Math.min(reconciledAt - this.lastReconciledAt, 2 * discoveryInterval);
+    this.lastReconciledAt = reconciledAt;
     this.configuredAccessories.forEach((accessory, uuid) => {
       const deviceId = accessory.context.deviceId;
       if (!deviceId) {
@@ -385,27 +403,41 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       if (discoveredDeviceIds.has(deviceId)) {
         this.log.debug(`Accessory [${accessory.displayName}] was discovered and is online.`);
         this.updateAccessoryStatus(accessory, now, false);
-      } else {
-        this.handleOfflineAccessory(accessory, uuid, now);
+        return;
       }
+      const answeredAt = this.homekitDevicesById.get(deviceId)?.lastAnsweredAt;
+      if (answeredAt !== undefined && reconciledAt - answeredAt <= discoveryInterval) {
+        // Discovery does not reach every device that answers at its address (a device on another subnet)
+        this.log.debug(`Accessory [${accessory.displayName}] was not discovered but answers polls.`);
+        this.updateAccessoryStatus(accessory, accessory.context.lastSeen ?? now, false);
+        return;
+      }
+      this.handleOfflineAccessory(accessory, uuid, elapsed, now);
     });
   }
 
   private handleOfflineAccessory(
     accessory: PlatformAccessory<KasaPythonAccessoryContext>,
     uuid: string,
+    elapsed: number,
     now: Date,
   ): void {
-    const timeSinceLastSeen = now.getTime() - new Date(accessory.context.lastSeen || 0).getTime();
+    const missingFor = accessory.context.offline ? (accessory.context.missingFor ?? 0) + elapsed : 0;
+    accessory.context.missingFor = missingFor;
     const offlineInterval = this.config.discoveryOptions.offlineInterval;
-    if (timeSinceLastSeen > offlineInterval) {
-      this.log.debug(`Accessory [${accessory.displayName}] is offline and outside the offline interval. Removing.`);
+    if (missingFor >= offlineInterval) {
+      this.log.warn(
+        `Removing [${accessory.displayName}] from HomeKit: discovery has not found it for ` +
+        `${formatDays(missingFor)} while Homebridge was running.`,
+      );
       this.removeTrackedDevice(accessory.context.deviceId, accessory.UUID);
       this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       this.configuredAccessories.delete(uuid);
     } else if (!accessory.context.offline) {
-      this.log.debug(`Accessory [${accessory.displayName}] is offline but within the offline interval.`);
+      this.log.debug(`Accessory [${accessory.displayName}] was not discovered; flagging it offline.`);
       this.updateAccessoryStatus(accessory, accessory.context.lastSeen || now, true);
+    } else {
+      this.log.debug(`Accessory [${accessory.displayName}] has not been discovered for ${formatDays(missingFor)}.`);
     }
   }
 
@@ -460,6 +492,9 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
 
     accessory.context.lastSeen = lastSeen;
     accessory.context.offline = offline;
+    if (!offline) {
+      delete accessory.context.missingFor;
+    }
 
     if (offlineStatusChanged) {
       this.api.updatePlatformAccessories([accessory]);
@@ -687,29 +722,18 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       accessory.context.offline = false;
     }
 
-    // With an invalid config the offline interval is not known, so nothing is removed.
-    if (accessory.context.lastSeen && !this.configInvalid) {
-      const now = new Date();
-      const timeSinceLastSeen = now.getTime() - new Date(accessory.context.lastSeen).getTime();
-      const offlineInterval = this.config.discoveryOptions.offlineInterval;
-
-      this.log.debug(`Platform Accessory [${accessory.displayName}] last seen ${timeSinceLastSeen}ms ago, ` +
-        `offline interval is ${offlineInterval}ms, offline status: ${accessory.context.offline}`);
-
-      if (timeSinceLastSeen > offlineInterval && accessory.context.offline === true) {
-        this.log.debug(
-          `Platform Accessory [${accessory.displayName}] is offline and outside the offline interval, ` +
-          'moving to offlineAccessories',
-        );
-        this.configuredAccessories.delete(accessory.UUID);
-        this.offlineAccessories.set(accessory.UUID, accessory);
-        return;
-      } else if (timeSinceLastSeen < offlineInterval && accessory.context.offline === true) {
-        this.log.debug(`Platform Accessory [${accessory.displayName}] is offline and within offline interval.`);
-      } else if (accessory.context.offline === false) {
-        this.log.debug(`Platform Accessory [${accessory.displayName}] is online, updating lastSeen time.`);
-        this.updateAccessoryStatus(accessory, now, false);
-      }
+    // Only completed discovery runs that missed the device count, and only while Homebridge was running: a long
+    // downtime removes nothing. This catches an offline interval lowered since then. With an invalid config the
+    // offline interval is not known, so nothing is removed.
+    const missingFor = accessory.context.missingFor ?? 0;
+    if (!this.configInvalid && accessory.context.offline === true && missingFor >= this.config.discoveryOptions.offlineInterval) {
+      this.log.warn(
+        `Removing [${accessory.displayName}] from HomeKit: discovery has not found it for ` +
+        `${formatDays(missingFor)} while Homebridge was running.`,
+      );
+      this.configuredAccessories.delete(accessory.UUID);
+      this.offlineAccessories.set(accessory.UUID, accessory);
+      return;
     }
 
     this.refuseWritesUntilFound(accessory);

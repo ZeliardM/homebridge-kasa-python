@@ -34,6 +34,8 @@ export default abstract class HomeKitDevice {
   protected deviceManager: DeviceManager | undefined;
   public homebridgeAccessory: PlatformAccessory<KasaPythonAccessoryContext>;
   public isUpdating = false;
+  // When the device last answered a poll or discovery found it (performance.now())
+  public lastAnsweredAt?: number;
   protected previousSnapshot?: KasaDevice;
   protected pollingInterval?: NodeJS.Timeout;
   protected updateEmitter = new EventEmitter();
@@ -317,6 +319,7 @@ export default abstract class HomeKitDevice {
 
   public markDeviceReachable(lastSeen: Date): void {
     this.consecutivePollFailures = 0;
+    this.lastAnsweredAt = performance.now();
     this.kasaDevice.last_seen = lastSeen;
     this.homebridgeAccessory.context.lastSeen = lastSeen;
     this.setOfflineState(false);
@@ -694,22 +697,16 @@ export default abstract class HomeKitDevice {
     );
   }
 
+  // Polls only change what HomeKit is shown (No Response). The cached accessory's offline flag, which decides when it
+  // is removed, is left to discovery: a short network drop must not be saved, nor count toward removal.
   protected setOfflineState(offline: boolean): void {
-    const offlineStatusChanged =
-      this.kasaDevice.offline !== offline || this.homebridgeAccessory.context.offline !== offline;
-
     const wasOffline = this.kasaDevice.offline;
     this.kasaDevice.offline = offline;
-    this.homebridgeAccessory.context.offline = offline;
 
     if (offline && !wasOffline) {
       this.pushCommunicationFailure();
     } else if (!offline && wasOffline) {
       this.refreshAllAfterRecovery = true;
-    }
-
-    if (offlineStatusChanged) {
-      this.platform.api.updatePlatformAccessories([this.homebridgeAccessory]);
     }
   }
 
