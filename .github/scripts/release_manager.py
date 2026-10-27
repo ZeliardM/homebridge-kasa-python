@@ -1302,7 +1302,8 @@ def _handle_commit_push(context: Context) -> None:
                     pr = p if isinstance(p, dict) else {}
                 pr_user = (pr.get("user") or {}).get("login") or ""
                 base_ref = (pr.get("base") or {}).get("ref", "") or ""
-                if pr.get("merged") is True and base_ref == "beta" and "dependabot" not in str(pr_user).lower():
+                # Dependabot's pull requests are handled like any other, including the already-recorded check.
+                if pr.get("merged") is True and base_ref == "beta":
                     if _pr_already_recorded(context, pr_num_int, content):
                         print(f"[release-manager] PR #{pr_num_int} already recorded; skipping.")
                         processed_prs.add(pr_num_int)
@@ -1319,41 +1320,8 @@ def _handle_commit_push(context: Context) -> None:
                     else:
                         labels_list = [((l.get("name") or "").lower()) for l in pr.get("labels", []) if isinstance(l, dict)]
                     labels_path = _write_labels_temp(labels_list)
-                    try:
-                        pr_context = Context(
-                            github_repository=context.github_repository,
-                            github_token=context.github_token,
-                            mode="pr-merge",
-                        )
-                        pr_context.pull_request_author = pr_user
-                        pr_context.pull_request_branch = base_ref
-                        pr_context.pull_request_number = str(pr_num_int)
-                        pr_context.pull_request_title = pr.get("title") or ""
-                        pr_context.pull_request_labels = labels_path
-                        _handle_pr_merge(pr_context)
-                        processed_prs.add(pr_num_int)
-                        content = _read_changelog()
-                        _, last_beta = _latest_versions(content)
-                        final_target_version = last_beta or final_target_version
-                        if first_sha7 is None:
-                            first_sha7 = sha7
-                        last_sha7 = sha7
-                        processed_this_sha = True
-                        break
-                    finally:
-                        if labels_path and os.path.exists(labels_path):
-                            try:
-                                os.unlink(labels_path)
-                            except Exception:
-                                pass
-                if "dependabot" in str(pr_user).lower() and pr.get("merged") is True:
-                    print(f"[release-manager] Commit {sha7} is part of Dependabot PR #{pr_num_int}; delegating to PR merge handler.")
-                    label_code, label_data = common.github_api(context.github_repository, context.github_token, f"/issues/{pr_num_int}/labels")
-                    if label_code == 200 and isinstance(label_data, list):
-                        labels_list = [((l.get("name") or "").lower()) for l in label_data]
-                    else:
-                        labels_list = [((l.get("name") or "").lower()) for l in pr.get("labels", []) if isinstance(l, dict)]
-                    labels_path = _write_labels_temp(labels_list)
+                    if pr_user == "dependabot[bot]":
+                        print(f"[release-manager] Commit {sha7} is part of Dependabot PR #{pr_num_int}; delegating to PR merge handler.")
                     try:
                         pr_context = Context(
                             github_repository=context.github_repository,
@@ -1382,7 +1350,7 @@ def _handle_commit_push(context: Context) -> None:
                             except Exception:
                                 pass
             if processed_this_sha:
-                print(f"[release-manager] Commit {sha7} handled via Dependabot PR; skipping manual commit handling.")
+                print(f"[release-manager] Commit {sha7} handled via its PR; skipping manual commit handling.")
                 continue
             print(f"[release-manager] Commit {sha7} is part of PR(s) {pr_nums}; skipping manual changelog entry.")
             continue

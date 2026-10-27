@@ -99,6 +99,11 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private lastReconciledAt?: number;
   private platformInitialization: Promise<void>;
 
+  // Whether the Python service is running and answered /health; HomeKit reads get No Response while it is not
+  public get isKasaApiAvailable(): boolean {
+    return this.kasaApiAvailable;
+  }
+
   constructor(public readonly log: Logging, config: PlatformConfig, public readonly api: API) {
     this.Service = this.api.hap.Service;
     this.Characteristic = this.api.hap.Characteristic;
@@ -224,7 +229,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     try {
       this.log.debug('Checking Node.js version');
       if (!satisfiesVersion(process.version, packageConfig.engines.node)) {
-        this.log.error(`Error: not using minimum node version ${packageConfig.engines.node}`);
+        this.log.error(`Node.js ${process.version} is not a supported version; this plugin supports ${packageConfig.engines.node}`);
       } else {
         this.log.debug(`Node.js version ${process.version} satisfies the requirement ${packageConfig.engines.node}`);
       }

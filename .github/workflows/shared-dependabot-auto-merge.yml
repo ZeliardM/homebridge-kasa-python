@@ -13,6 +13,8 @@ permissions:
 env:
   GITHUB_REPOSITORY: ${{ github.repository }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # The base when the event fired, before the pull request workflow moved the pull request to beta
+  ORIGINAL_PULL_REQUEST_BASE_REF: ${{ github.event.pull_request.base.ref }}
   PULL_REQUEST_AUTHOR: ${{ github.event.pull_request.user.login }}
   PULL_REQUEST_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
   PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
@@ -61,7 +63,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ steps.safety.outputs.block }}" = "false" ]; then
+          if [ "${{ steps.safety.outputs.block }}" = "false" ] && [ "$ORIGINAL_PULL_REQUEST_BASE_REF" != "beta" ]; then
+            {
+              echo "⚠️ Dependabot Update was opened against ${ORIGINAL_PULL_REQUEST_BASE_REF} and moved to beta, so no Pull Request Build runs for it."
+              echo "Comment \`@dependabot rebase\` on it: the push from Dependabot runs the Pull Request Build and the Auto-Merge."
+              echo "If Dependabot cannot rebase it because this workflow refreshed the branch, push an empty commit to the branch instead."
+              echo "Do not close it: Dependabot deletes its branch when its pull request is closed."
+              echo
+              echo "<!-- COPILOT-STICKY:DEPENDABOT -->"
+            } > body.txt
+          elif [ "${{ steps.safety.outputs.block }}" = "false" ]; then
             {
               echo "✅ Dependabot Update is Safe and will be Auto-Merged once the Pull Request Build passes."
               echo
@@ -91,6 +102,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # The build runs only for pull requests into beta, and moving one to beta (an edit made with
+          # GITHUB_TOKEN, like the refresh push) starts no workflow, so a pull request opened against
+          # another branch has no build to wait for. A push to the branch runs the build and this again.
+          # Never ask for a close and reopen: Dependabot deletes its branch when its pull request is closed.
+          if [ "$ORIGINAL_PULL_REQUEST_BASE_REF" != "beta" ]; then
+            echo "::error::This pull request was opened against ${ORIGINAL_PULL_REQUEST_BASE_REF} and moved to beta, so no Pull Request Build runs for it. Comment '@dependabot rebase' on it: the push from Dependabot runs the build and the auto-merge. If Dependabot cannot rebase it because this workflow refreshed the branch, push an empty commit to the branch instead. Do not close it: Dependabot deletes its branch when its pull request is closed."
+            exit 1
+          fi
           # Merge only a commit whose Pull Request Build passed. The build covers every Node and
           # Python version the plugin supports, and an update can break one of them (quart 0.23
           # needs Python 3.13). A new commit gets its own run of this workflow.
@@ -112,7 +131,7 @@ jobs:
               exit 0
             fi
             if [ "$waited" -ge "$max_wait" ]; then
-              echo "::error::No finished Pull Request Build for ${head_oid} after ${max_wait} s. Merge it by hand once the build passes."
+              echo "::error::No finished Pull Request Build for ${head_oid} after ${max_wait} s. Check the Pull Request Build for this commit, or start one with a push: comment '@dependabot rebase', or push an empty commit to the branch if Dependabot cannot rebase it. Do not close the pull request: Dependabot deletes its branch when its pull request is closed."
               exit 1
             fi
             sleep "$interval"
@@ -184,7 +203,7 @@ jobs:
             echo "merged=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "::error::Not merged after ${max_attempts} attempts. Merge it by hand, or comment '@dependabot rebase' to try again."
+          echo "::error::Not merged after ${max_attempts} attempts. Merge it by hand, or start a new run with a push: comment '@dependabot rebase', or push an empty commit to the branch if Dependabot cannot rebase it because this workflow refreshed it."
           exit 1
 
       - name: Set Merge Result Output

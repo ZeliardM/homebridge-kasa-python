@@ -29,6 +29,15 @@ export function runHomeKitWrite<T>(write: () => Promise<T>): Promise<T> {
 
 export const deviceEventEmitter = new EventEmitter();
 
+// The Python service failed a request (it did not answer, or answered with an HTTP error), which says nothing about
+// the device the request was for.
+export class KasaApiError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'KasaApiError';
+  }
+}
+
 type ControlValue = CharacteristicValue | HSV;
 
 export default class DeviceManager {
@@ -43,6 +52,7 @@ export default class DeviceManager {
   private manualDeviceHosts!: string[];
   private excludeMacs!: string[];
   private includeMacs!: string[];
+  private pollsFailingInService = false;
 
   constructor(private platform: KasaPythonPlatform) {
     this.refreshConfigSnapshot();
@@ -145,20 +155,33 @@ export default class DeviceManager {
     });
   }
 
+  // Undefined when the device did not answer or answered with an error. Throws a KasaApiError when the service itself
+  // failed the request; that is logged once here, not against each device.
   async getSysInfo(host: string): Promise<SysInfo | undefined> {
+    let response;
     try {
-      const response = await this.api.post(`${this.apiUrl}/getSysInfo`, { host });
-      const sysInfo: SysInfo | undefined = response.data?.sys_info;
-      if (!sysInfo) {
-        this.log.debug(`[getSysInfo] No sys_info payload returned for host ${host}`);
-        return undefined;
-      }
-      this.updateDeviceAlias(sysInfo);
-      return sysInfo;
+      response = await this.api.post(`${this.apiUrl}/getSysInfo`, { host });
     } catch (error) {
       this.handleAxiosError(error, 'getSysInfo', 'debug');
+      const failure = this.requestFailed(`Poll of ${host} failed in the Kasa API`, error);
+      // A service that exited is logged by the platform
+      if (!this.pollsFailingInService && this.platform.isKasaApiAvailable) {
+        this.pollsFailingInService = true;
+        this.log.warn(`${failure.message}. Polls the Kasa API cannot answer do not count against the devices.`);
+      }
+      throw failure;
+    }
+    if (this.pollsFailingInService) {
+      this.pollsFailingInService = false;
+      this.log.info('The Kasa API answers polls again.');
+    }
+    const sysInfo: SysInfo | undefined = response.data?.sys_info;
+    if (!sysInfo) {
+      this.log.debug(`[getSysInfo] No sys_info payload returned for host ${host}`);
       return undefined;
     }
+    this.updateDeviceAlias(sysInfo);
+    return sysInfo;
   }
 
   async controlDevice(
@@ -242,8 +265,8 @@ export default class DeviceManager {
 
   // An error for a failed request to the service, with a one-line reason. Its cause is only the error code: the axios
   // error holds the request, the token and the TP-Link account included, and a logged error prints its cause in full.
-  private requestFailed(message: string, error: unknown): Error {
-    return new Error(`${message}: ${this.describeError(error)}`, {
+  private requestFailed(message: string, error: unknown): KasaApiError {
+    return new KasaApiError(`${message}: ${this.describeError(error)}`, {
       cause: axios.isAxiosError(error) ? (error.code ?? 'AxiosError') : error,
     });
   }

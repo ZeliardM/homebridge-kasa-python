@@ -71,7 +71,7 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
   }
 
   private async childOnGet(service: Service, child: ChildDevice, descriptor: CharacteristicDescriptor) {
-    if (this.kasaDevice.offline) {
+    if (this.kasaDevice.offline || !this.platform.isKasaApiAvailable) {
       throw this.communicationFailure();
     }
     const context = this.buildChildDescriptorContext(child);
@@ -240,24 +240,6 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
         } catch (error) {
           this.log.error(`Child update diff error (${child.alias}) ${descriptor.name}`, error);
         }
-      }
-    }
-  }
-
-  protected pushCommunicationFailure(): void {
-    super.pushCommunicationFailure();
-    const children = this.kasaDevice.sys_info.children;
-    if (!Array.isArray(children)) {
-      return;
-    }
-    for (const child of children) {
-      const service = this.getChildService(child);
-      const descriptors = this.childDescriptorMap.get(this.childKey(child));
-      if (!service || !descriptors) {
-        continue;
-      }
-      for (const descriptor of descriptors) {
-        service.getCharacteristic(descriptor.type).updateValue(this.communicationFailure());
       }
     }
   }

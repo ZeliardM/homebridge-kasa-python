@@ -283,13 +283,16 @@ export function satisfiesVersion(currentVersion: string, requiredVersion: string
   const versions = requiredVersion.split('||').map(v => v.trim());
   const [currentMajor, currentMinor, currentPatch] = parseVersionParts(currentVersion);
 
+  // Each alternative is a caret range (a bare version is read as one): at least that version, within the same major
+  // version, or the same minor version for 0.x. So "^22.12 || ^24" accepts 22.12 and later 22.x and 24.x, but not
+  // 23 or 25.
   return versions.some(version => {
     const [requiredMajor, requiredMinor, requiredPatch] = parseVersionParts(version);
 
-    if (currentMajor > requiredMajor) {
-      return true;
+    if (currentMajor !== requiredMajor) {
+      return false;
     }
-    if (currentMajor < requiredMajor) {
+    if (requiredMajor === 0 && currentMinor !== requiredMinor) {
       return false;
     }
     if (currentMinor > requiredMinor) {

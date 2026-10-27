@@ -199,7 +199,15 @@ export default abstract class HomeKitDevice {
       return false;
     }
     const generation = this.writeGeneration;
-    const updatedSysInfo = await this.deviceManager.getSysInfo(host);
+    let updatedSysInfo: SysInfo | undefined;
+    try {
+      updatedSysInfo = await this.deviceManager.getSysInfo(host);
+    } catch (error) {
+      // The local service failed the request, not the device: this poll neither counts toward No Response nor resets
+      // the count. While the service is down, HomeKit reads get No Response (genericOnGet).
+      this.log.debug(`Poll not counted: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
     if (this.shouldSkipUpdate()) {
       // Shutdown stopped the service during this read, or the device was removed; neither is the device's failure
       return false;
@@ -269,8 +277,8 @@ export default abstract class HomeKitDevice {
         if (!didUpdateSysInfo || this.shouldSkipUpdate()) {
           return;
         }
-        // After an offline period every characteristic still carries the "No Response"
-        // status, so push all current values once instead of only the changed ones.
+        // After an offline period HomeKit still shows the values from before it: take the device's
+        // values at once instead of debouncing them.
         const forceAll = forceUpdate || this.refreshAllAfterRecovery;
         await this.updateAllServicesAndCharacteristics(forceAll);
         this.refreshAllAfterRecovery = false;
@@ -436,7 +444,7 @@ export default abstract class HomeKitDevice {
   }
 
   private async genericOnGet(descriptor: CharacteristicDescriptor): Promise<CharacteristicValue> {
-    if (this.kasaDevice.offline) {
+    if (this.kasaDevice.offline || !this.platform.isKasaApiAvailable) {
       throw this.communicationFailure();
     }
     const context = this.buildDescriptorContext();
@@ -697,15 +705,13 @@ export default abstract class HomeKitDevice {
     );
   }
 
-  // Polls only change what HomeKit is shown (No Response). The cached accessory's offline flag, which decides when it
-  // is removed, is left to discovery: a short network drop must not be saved, nor count toward removal.
+  // Polls only change what HomeKit is shown: reads get No Response while the device is offline (HAP has no way to
+  // push that before the next read). The cached accessory's offline flag, which decides when it is removed, is left
+  // to discovery: a short network drop must not be saved, nor count toward removal.
   protected setOfflineState(offline: boolean): void {
     const wasOffline = this.kasaDevice.offline;
     this.kasaDevice.offline = offline;
-
-    if (offline && !wasOffline) {
-      this.pushCommunicationFailure();
-    } else if (!offline && wasOffline) {
+    if (!offline && wasOffline) {
       this.refreshAllAfterRecovery = true;
     }
   }
@@ -720,16 +726,6 @@ export default abstract class HomeKitDevice {
 
   protected communicationFailure(): HapStatusError {
     return new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-  }
-
-  // Shows the device as "No Response" in HomeKit right away, without waiting for a read.
-  protected pushCommunicationFailure(): void {
-    if (!this.primaryService) {
-      return;
-    }
-    for (const descriptor of this.primaryDescriptors) {
-      this.primaryService.getCharacteristic(descriptor.type).updateValue(this.communicationFailure());
-    }
   }
 
   private recordPollCommunicationFailure(host: string, reason = `No sys_info returned for ${host}`): void {
