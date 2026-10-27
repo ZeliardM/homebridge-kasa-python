@@ -99,7 +99,7 @@ jobs:
     name: Refresh Retargeted Dependabot Branch
     runs-on: ubuntu-26.04
     needs: retarget-base
-    if: needs.retarget-base.result == 'success' && contains(github.event.pull_request.user.login, 'dependabot')
+    if: needs.retarget-base.result == 'success' && github.event.pull_request.user.login == 'dependabot[bot]'
     outputs:
       refreshed: ${{ steps.refresh.outputs.refreshed }}
       status: ${{ steps.refresh.outputs.status }}
@@ -164,7 +164,7 @@ jobs:
 
       - name: Fetch Dependabot Metadata
         id: metadata
-        if: contains(github.event.pull_request.user.login, 'dependabot')
+        if: github.event.pull_request.user.login == 'dependabot[bot]'
         continue-on-error: true
         uses: dependabot/fetch-metadata@v3
         with:
@@ -217,7 +217,7 @@ jobs:
 
       - name: Apply Fallback Dependabot Labels
         id: apply-dependabot-fallback-labels
-        if: contains(github.event.pull_request.user.login, 'dependabot') && steps.metadata.outcome != 'success'
+        if: github.event.pull_request.user.login == 'dependabot[bot]' && steps.metadata.outcome != 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -336,7 +336,12 @@ jobs:
   dependabot-auto-merge:
     name: Dependabot Auto-Merge
     needs: validate-pr
-    if: needs.validate-pr.result == 'success' && needs.validate-pr.outputs.ok == 'true' && contains(github.event.pull_request.user.login, 'dependabot')
+    # Only Dependabot's own pull requests, from a branch in this repository: users cannot register a login with
+    # '[bot]' in it, while logins that merely contain 'dependabot' exist.
+    if: >
+      needs.validate-pr.result == 'success' && needs.validate-pr.outputs.ok == 'true' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/shared-dependabot-auto-merge.yml
 
   fork-notice:

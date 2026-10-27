@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import json
 import os
 import re
@@ -27,6 +28,12 @@ from typing import Any
 
 app = Quart(__name__)
 
+# The plugin starts this service with a random token in its environment and sends it with every
+# request, so nothing else on this machine that finds the port can use the service. Without a
+# token every request is refused.
+API_TOKEN_HEADER = "X-Kasa-Api-Token"
+API_TOKEN = os.environ.pop("KASA_API_TOKEN", "")
+
 hide_homekit_matter = os.getenv("HIDE_HOMEKIT_MATTER", "false").lower() == "true"
 device_cache: dict[str, Device] = {}
 device_lock_cache: dict[str, asyncio.Lock] = {}
@@ -53,6 +60,15 @@ discovery_connecting: set[str] = set()
 # stopped when HomeKit's time runs out.
 COMMAND_RETRY_DELAYS = (1, 2)
 COMMAND_RETRY_DEADLINE = 8
+# The actions the plugin sends for each feature (mapFeatureToAction in deviceManager.ts). The action
+# names a device or module method, so anything else (factory_reset, reboot) is refused.
+ALLOWED_ACTIONS: dict[str, set[str]] = {
+    "state": {"turn_on", "turn_off"},
+    "brightness": {"set_brightness"},
+    "color_temp": {"set_color_temp"},
+    "fan_speed_level": {"set_fan_speed_level"},
+    "hsv": {"set_hsv"},
+}
 # The MAC of the device discovery accepted at each address (identified, filtered and checked for
 # native HomeKit/Matter). A connection is only used for that device: after addresses are
 # reassigned, a poll of the old address would read whatever device answers there now.
@@ -651,6 +667,15 @@ async def handle_hsv(target: Device, action: str, feature: str, value: dict, lig
         return
     await getattr(light, action)(new_h, new_s, new_v)
 
+@app.before_request
+async def require_api_token():
+    token = request.headers.get(API_TOKEN_HEADER, "")
+    if not API_TOKEN or not hmac.compare_digest(token.encode(), API_TOKEN.encode()):
+        # Quoted, like uvicorn's access log: the path is the caller's and may hold a line break.
+        log(f"Refused {request.method} {request.path!r}: missing or wrong API token", level="ERROR")
+        return jsonify({"error": "Unauthorized"}), 401
+    return None
+
 @app.route('/discover', methods=['POST'])
 async def discover_route():
     try:
@@ -705,6 +730,9 @@ async def control_device_route():
         host = data['host']
         feature = data['feature']
         action = data['action']
+        if action not in ALLOWED_ACTIONS.get(feature, ()):
+            log(f"ControlDevice route: refused action={action!r} for feature={feature!r}", level="ERROR", host=host)
+            return jsonify({"error": f"Unsupported action {action} for feature {feature}"}), 400
         value = data.get('value')
         child_num = data.get('child_num')
         light_on = data.get('light_on')

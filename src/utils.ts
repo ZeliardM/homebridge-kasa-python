@@ -269,13 +269,19 @@ export function satisfiesVersion(currentVersion: string, requiredVersion: string
   });
 }
 
-export async function waitForServer(url: string, log: Logging, timeout: number = 30000, interval: number = 1000): Promise<void> {
+export async function waitForServer(
+  url: string,
+  log: Logging,
+  headers: Record<string, string> = {},
+  timeout: number = 30000,
+  interval: number = 1000,
+): Promise<void> {
   const startTime = Date.now();
   log.debug(`Waiting for server at ${url} with timeout ${timeout}ms and interval ${interval}ms`);
 
   while (Date.now() - startTime < timeout) {
     try {
-      const response = await axios.get(url);
+      const response = await axios.get(url, { headers });
       if (response.status === 200) {
         log.debug('Server responded successfully');
         return;
@@ -290,10 +296,11 @@ export async function waitForServer(url: string, log: Logging, timeout: number =
   throw new Error(`Server did not respond within ${timeout / 1000} seconds`);
 }
 
+// A free port on 127.0.0.1, the only address the Python service listens on.
 export async function getAvailablePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
-    server.listen(0, () => {
+    server.listen(0, '127.0.0.1', () => {
       const port = (server.address() as net.AddressInfo).port;
       server.close(() => resolve(port));
     });
