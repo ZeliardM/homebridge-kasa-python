@@ -11,11 +11,12 @@ import type {
 
 import path from 'node:path';
 import { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import HomeKitDevice from './devices/baseDevice.js';
 import create from './devices/create.js';
-import DeviceManager, { deviceEventEmitter } from './devices/deviceManager.js';
+import DeviceManager, { API_TOKEN_HEADER, deviceEventEmitter } from './devices/deviceManager.js';
 import PythonChecker from './python/pythonChecker.js';
 import { parseConfig } from './config.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
@@ -47,6 +48,8 @@ let packageConfig: PackageConfig;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
+  // Passed to the Python service in its environment, never on its command line, and sent with every request to it.
+  public readonly apiToken: string = randomBytes(32).toString('hex');
   public readonly Characteristic: typeof Characteristic;
   public readonly configuredAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
   public readonly offlineAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
@@ -197,7 +200,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
 
       await this.startKasaApi();
 
-      await waitForServer(`http://127.0.0.1:${this.port}/health`, this.log);
+      await waitForServer(`http://127.0.0.1:${this.port}/health`, this.log, { [API_TOKEN_HEADER]: this.apiToken });
 
       await this.discoverDevices();
       this.log.debug('Device discovery completed');
@@ -401,7 +404,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
         this.log,
         this.venvPythonExecutable,
         [scriptPath, this.port.toString(), this.hideHomeKitMatter.toString()],
-        undefined,
+        { env: { KASA_API_TOKEN: this.apiToken } },
         this.config.advancedOptions.advancedPythonLogging ? false : true,
         this.config.advancedOptions.advancedPythonLogging ? false : true,
         true,

@@ -269,13 +269,19 @@ export function satisfiesVersion(currentVersion: string, requiredVersion: string
   });
 }
 
-export async function waitForServer(url: string, log: Logging, timeout: number = 30000, interval: number = 1000): Promise<void> {
+export async function waitForServer(
+  url: string,
+  log: Logging,
+  headers: Record<string, string> = {},
+  timeout: number = 30000,
+  interval: number = 1000,
+): Promise<void> {
   const startTime = Date.now();
   log.debug(`Waiting for server at ${url} with timeout ${timeout}ms and interval ${interval}ms`);
 
   while (Date.now() - startTime < timeout) {
     try {
-      const response = await axios.get(url);
+      const response = await axios.get(url, { headers });
       if (response.status === 200) {
         log.debug('Server responded successfully');
         return;

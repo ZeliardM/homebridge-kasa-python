@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import json
 import os
 import re
@@ -26,6 +27,12 @@ from quart import jsonify, request, Response, Quart
 from typing import Any
 
 app = Quart(__name__)
+
+# The plugin starts this service with a random token in its environment and sends it with every
+# request, so nothing else on this machine that finds the port can use the service. Without a
+# token every request is refused.
+API_TOKEN_HEADER = "X-Kasa-Api-Token"
+API_TOKEN = os.environ.pop("KASA_API_TOKEN", "")
 
 hide_homekit_matter = os.getenv("HIDE_HOMEKIT_MATTER", "false").lower() == "true"
 device_cache: dict[str, Device] = {}
@@ -659,6 +666,15 @@ async def handle_hsv(target: Device, action: str, feature: str, value: dict, lig
         await light.set_state(LightState(light_on=False, hue=new_h, saturation=new_s, color_temp=0))
         return
     await getattr(light, action)(new_h, new_s, new_v)
+
+@app.before_request
+async def require_api_token():
+    token = request.headers.get(API_TOKEN_HEADER, "")
+    if not API_TOKEN or not hmac.compare_digest(token.encode(), API_TOKEN.encode()):
+        # Quoted, like uvicorn's access log: the path is the caller's and may hold a line break.
+        log(f"Refused {request.method} {request.path!r}: missing or wrong API token", level="ERROR")
+        return jsonify({"error": "Unauthorized"}), 401
+    return None
 
 @app.route('/discover', methods=['POST'])
 async def discover_route():

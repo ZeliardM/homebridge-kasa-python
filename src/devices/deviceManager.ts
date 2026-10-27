@@ -1,7 +1,9 @@
 import type { CharacteristicValue, Logger } from 'homebridge';
 
 import axios from 'axios';
+import type { AxiosInstance } from 'axios';
 import { EventSource } from 'eventsource';
+import type { ErrorEvent } from 'eventsource';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { EventEmitter } from 'node:events';
 
@@ -16,6 +18,9 @@ const homeKitWriteDeadline = new AsyncLocalStorage<number>();
 
 const DISCOVERY_STREAM_MAX_MS = 30000;
 
+// Every request to the Python service carries the token it was started with (see kasaApi.py).
+export const API_TOKEN_HEADER = 'X-Kasa-Api-Token';
+
 export function runHomeKitWrite<T>(write: () => Promise<T>): Promise<T> {
   return homeKitWriteDeadline.run(performance.now() + HOMEKIT_WRITE_BUDGET_MS, write);
 }
@@ -27,6 +32,8 @@ type ControlValue = CharacteristicValue | HSV;
 export default class DeviceManager {
   private log!: Logger;
   private apiUrl!: string;
+  private api!: AxiosInstance;
+  private apiToken!: string;
   private username!: string;
   private password!: string;
   private disableBroadcast!: boolean;
@@ -44,6 +51,8 @@ export default class DeviceManager {
     this.username = this.platform.config.username;
     this.password = this.platform.config.password;
     this.apiUrl = `http://127.0.0.1:${this.platform.port}`;
+    this.apiToken = this.platform.apiToken;
+    this.api = axios.create({ baseURL: this.apiUrl, headers: { [API_TOKEN_HEADER]: this.apiToken } });
     this.disableBroadcast = this.platform.config.discoveryOptions.disableBroadcast;
     this.additionalBroadcasts = this.platform.config.discoveryOptions.additionalBroadcasts;
     this.manualDeviceHosts = this.platform.config.discoveryOptions.manualDevices.map(d => d.host);
@@ -57,8 +66,8 @@ export default class DeviceManager {
       const authConfig = this.username && this.password
         ? { auth: { username: this.username, password: this.password } }
         : {};
-      await axios.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
-        `${this.apiUrl}/discover`,
+      await this.api.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
+        '/discover',
         {
           disableBroadcast: this.disableBroadcast,
           additionalBroadcasts: this.additionalBroadcasts,
@@ -72,7 +81,9 @@ export default class DeviceManager {
       // The service sends discovery_complete once it has handled every device this run found, so
       // a device that takes longer (a HomeKit check that times out) is still reported in this run.
       // A run held up longer than that ends here; its late results come with the next run.
-      const eventSource = new EventSource(`${this.apiUrl}/stream`);
+      const eventSource = new EventSource(`${this.apiUrl}/stream`, {
+        fetch: (input, init) => fetch(input, { ...init, headers: { ...init.headers, [API_TOKEN_HEADER]: this.apiToken } }),
+      });
       let finish: () => void = () => undefined;
       const finished = new Promise<void>(resolve => {
         const timer = setTimeout(() => finish(), DISCOVERY_STREAM_MAX_MS);
@@ -108,8 +119,8 @@ export default class DeviceManager {
           this.log.error('Error parsing discovery SSE event:', error);
         }
       };
-      eventSource.onerror = (error: Event) => {
-        this.log.error('Discovery EventSource error:', error);
+      eventSource.onerror = (error: ErrorEvent) => {
+        this.log.error(`Discovery EventSource error: ${error.message ?? error.code ?? 'unknown error'}`);
         finish();
       };
 
@@ -121,7 +132,7 @@ export default class DeviceManager {
 
   async getSysInfo(host: string): Promise<SysInfo | undefined> {
     try {
-      const response = await axios.post(`${this.apiUrl}/getSysInfo`, { host });
+      const response = await this.api.post('/getSysInfo', { host });
       const sysInfo: SysInfo | undefined = response.data?.sys_info;
       if (!sysInfo) {
         this.log.debug(`[getSysInfo] No sys_info payload returned for host ${host}`);
@@ -169,7 +180,6 @@ export default class DeviceManager {
     childNumber?: number,
     lightOn?: boolean,
   ): Promise<void> {
-    const url = `${this.apiUrl}/controlDevice`;
     const deadline = homeKitWriteDeadline.getStore();
     const remainingMs = deadline === undefined ? undefined : deadline - performance.now();
     if (remainingMs !== undefined && remainingMs <= 0) {
@@ -187,10 +197,15 @@ export default class DeviceManager {
     };
     let response;
     try {
-      response = await axios.post(url, payload);
+      response = await this.api.post('/controlDevice', payload);
     } catch (error) {
       this.handleAxiosError(error, 'controlDevice');
-      throw new Error(`Control request failed (${feature}/${action}) on ${host}`, { cause: error });
+      // The cause keeps only the error code: the axios error holds the request, token included, and a
+      // logged error prints its cause in full. handleAxiosError has logged the summary.
+      throw new Error(`Control request failed (${feature}/${action}) on ${host}`, {
+        // eslint-disable-next-line preserve-caught-error -- the axios error must not reach a log
+        cause: axios.isAxiosError(error) ? (error.code ?? 'AxiosError') : error,
+      });
     }
     if (response.data?.status !== 'success') {
       const reason = response.data?.message ?? response.data?.error ?? 'unknown error';
