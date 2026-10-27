@@ -70,19 +70,24 @@
         "title": "Polling Interval (seconds)",
         "type": "integer",
         "description": "How often to check device status in the background (seconds)",
-        "default": 5
+        "default": 5,
+        "minimum": 1,
+        "maximum": 2147483
       },
       "discoveryPollingInterval": {
         "title": "Discovery Polling Interval (seconds)",
         "type": "integer",
         "description": "How often to discover new devices in the background (seconds)",
-        "default": 300
+        "default": 300,
+        "minimum": 60,
+        "maximum": 2147483
       },
       "offlineInterval": {
         "title": "Offline Interval (days)",
         "type": "integer",
         "description": "How often to remove offline devices in the background (days)",
-        "default": 7
+        "default": 7,
+        "minimum": 1
       },
       "disableBroadcast": {
         "title": "Disable Broadcast Discovery",
@@ -136,7 +141,9 @@
         "title": "Wait Time Update (milliseconds)",
         "type": "integer",
         "description": "The time to wait to combine similar commands for a device before sending a command to a device (milliseconds). Default: 100.",
-        "default": 100
+        "default": 100,
+        "minimum": 0,
+        "maximum": 60000
       },
       "pythonPath": {
         "title": "Python Path",

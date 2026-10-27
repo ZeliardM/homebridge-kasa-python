@@ -17,6 +17,8 @@ const HOMEKIT_WRITE_BUDGET_MS = 8960;
 const homeKitWriteDeadline = new AsyncLocalStorage<number>();
 
 const DISCOVERY_STREAM_MAX_MS = 30000;
+// The service only starts the run before it answers.
+const DISCOVER_REQUEST_TIMEOUT_MS = 10000;
 
 // Every request to the Python service carries the token it was started with (see kasaApi.py).
 export const API_TOKEN_HEADER = 'X-Kasa-Api-Token';
@@ -31,7 +33,6 @@ type ControlValue = CharacteristicValue | HSV;
 
 export default class DeviceManager {
   private log!: Logger;
-  private apiUrl!: string;
   private api!: AxiosInstance;
   private apiToken!: string;
   private enableCredentials!: boolean;
@@ -47,14 +48,18 @@ export default class DeviceManager {
     this.refreshConfigSnapshot();
   }
 
+  // The service gets a new port each time it is started again
+  private get apiUrl(): string {
+    return `http://127.0.0.1:${this.platform.port}`;
+  }
+
   private refreshConfigSnapshot(): void {
     this.log = this.platform.log;
     this.enableCredentials = this.platform.config.enableCredentials;
     this.username = this.platform.config.username;
     this.password = this.platform.config.password;
-    this.apiUrl = `http://127.0.0.1:${this.platform.port}`;
     this.apiToken = this.platform.apiToken;
-    this.api = axios.create({ baseURL: this.apiUrl, headers: { [API_TOKEN_HEADER]: this.apiToken } });
+    this.api = axios.create({ headers: { [API_TOKEN_HEADER]: this.apiToken } });
     this.disableBroadcast = this.platform.config.discoveryOptions.disableBroadcast;
     this.additionalBroadcasts = this.platform.config.discoveryOptions.additionalBroadcasts;
     this.manualDeviceHosts = this.platform.config.discoveryOptions.manualDevices.map(d => d.host);
@@ -62,16 +67,19 @@ export default class DeviceManager {
     this.includeMacs = this.platform.config.discoveryOptions.includeMacAddresses;
   }
 
+  // Resolves once the service reports that it has handled every device this run found. Rejects when the request or
+  // the stream fails, or when the run is not done within DISCOVERY_STREAM_MAX_MS: the devices reported until then are
+  // still added and updated, but such a run cannot tell which devices are gone.
   async discoverDevices(): Promise<void> {
     this.log.debug('Starting device discovery...');
+    // python-kasa logs in with these to every device that answers discovery, so they are sent only
+    // when the user turned Enable Credentials on, not merely because they are still in the config.
+    const authConfig = this.enableCredentials && this.username && this.password
+      ? { auth: { username: this.username, password: this.password } }
+      : {};
     try {
-      // python-kasa logs in with these to every device that answers discovery, so they are sent only
-      // when the user turned Enable Credentials on, not merely because they are still in the config.
-      const authConfig = this.enableCredentials && this.username && this.password
-        ? { auth: { username: this.username, password: this.password } }
-        : {};
       await this.api.post<Record<string, { sys_info: SysInfo; feature_info: FeatureInfo }>>(
-        '/discover',
+        `${this.apiUrl}/discover`,
         {
           disableBroadcast: this.disableBroadcast,
           additionalBroadcasts: this.additionalBroadcasts,
@@ -79,24 +87,32 @@ export default class DeviceManager {
           excludeMacAddresses: this.excludeMacs,
           includeMacAddresses: this.includeMacs,
         },
-        authConfig,
+        { ...authConfig, timeout: DISCOVER_REQUEST_TIMEOUT_MS },
       );
+    } catch (error) {
+      throw this.requestFailed('Discovery request failed', error);
+    }
 
-      // The service sends discovery_complete once it has handled every device this run found, so
-      // a device that takes longer (a HomeKit check that times out) is still reported in this run.
-      // A run held up longer than that ends here; its late results come with the next run.
+    // The service sends discovery_complete once it has handled every device this run found, so
+    // a device that takes longer (a HomeKit check that times out) is still reported in this run.
+    // A run held up longer than that ends here; its late results come with the next run.
+    await new Promise<void>((resolve, reject) => {
       const eventSource = new EventSource(`${this.apiUrl}/stream`, {
         fetch: (input, init) => fetch(input, { ...init, headers: { ...init.headers, [API_TOKEN_HEADER]: this.apiToken } }),
       });
-      let finish: () => void = () => undefined;
-      const finished = new Promise<void>(resolve => {
-        const timer = setTimeout(() => finish(), DISCOVERY_STREAM_MAX_MS);
-        finish = () => {
-          clearTimeout(timer);
-          eventSource.close();
+      const finish = (error?: Error) => {
+        clearTimeout(timer);
+        eventSource.close();
+        if (error) {
+          reject(error);
+        } else {
           resolve();
-        };
-      });
+        }
+      };
+      const timer = setTimeout(
+        () => finish(new Error(`Discovery did not finish within ${DISCOVERY_STREAM_MAX_MS / 1000} s`)),
+        DISCOVERY_STREAM_MAX_MS,
+      );
       eventSource.onmessage = (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data);
@@ -124,19 +140,14 @@ export default class DeviceManager {
         }
       };
       eventSource.onerror = (error: ErrorEvent) => {
-        this.log.error(`Discovery EventSource error: ${error.message ?? error.code ?? 'unknown error'}`);
-        finish();
+        finish(new Error(`Discovery stream failed: ${error.message ?? error.code ?? 'unknown error'}`));
       };
-
-      await finished;
-    } catch (error) {
-      this.handleAxiosError(error, 'discoverDevices');
-    }
+    });
   }
 
   async getSysInfo(host: string): Promise<SysInfo | undefined> {
     try {
-      const response = await this.api.post('/getSysInfo', { host });
+      const response = await this.api.post(`${this.apiUrl}/getSysInfo`, { host });
       const sysInfo: SysInfo | undefined = response.data?.sys_info;
       if (!sysInfo) {
         this.log.debug(`[getSysInfo] No sys_info payload returned for host ${host}`);
@@ -201,15 +212,9 @@ export default class DeviceManager {
     };
     let response;
     try {
-      response = await this.api.post('/controlDevice', payload);
+      response = await this.api.post(`${this.apiUrl}/controlDevice`, payload);
     } catch (error) {
-      this.handleAxiosError(error, 'controlDevice');
-      // The cause keeps only the error code: the axios error holds the request, token included, and a
-      // logged error prints its cause in full. handleAxiosError has logged the summary.
-      throw new Error(`Control request failed (${feature}/${action}) on ${host}`, {
-        // eslint-disable-next-line preserve-caught-error -- the axios error must not reach a log
-        cause: axios.isAxiosError(error) ? (error.code ?? 'AxiosError') : error,
-      });
+      throw this.requestFailed(`Control request failed (${feature}/${action}) on ${host}`, error);
     }
     if (response.data?.status !== 'success') {
       const reason = response.data?.message ?? response.data?.error ?? 'unknown error';
@@ -235,30 +240,38 @@ export default class DeviceManager {
     }
   }
 
+  // An error for a failed request to the service, with a one-line reason. Its cause is only the error code: the axios
+  // error holds the request, the token and the TP-Link account included, and a logged error prints its cause in full.
+  private requestFailed(message: string, error: unknown): Error {
+    return new Error(`${message}: ${this.describeError(error)}`, {
+      cause: axios.isAxiosError(error) ? (error.code ?? 'AxiosError') : error,
+    });
+  }
+
+  private describeError(error: unknown): string {
+    if (axios.isAxiosError(error)) {
+      if (error.response) {
+        const message = error.response.data?.error || error.response.statusText || 'Unknown error';
+        return `HTTP ${error.response.status}: ${message}`;
+      } else if (error.code === 'ECONNREFUSED') {
+        return 'Connection refused (device API offline?)';
+      } else if (error.code === 'ETIMEDOUT') {
+        return 'Connection timed out (network issue)';
+      }
+      return `Axios error: ${error.message}`;
+    } else if (error instanceof Error) {
+      return `Error: ${error.message}`;
+    }
+    return `Unknown error: ${JSON.stringify(error)}`;
+  }
+
   private handleAxiosError(error: unknown, context: string, level: 'debug' | 'error' = 'error'): void {
     const writeLog = level === 'debug'
       ? this.log.debug.bind(this.log)
       : this.log.error.bind(this.log);
-
-    if (axios.isAxiosError(error)) {
-      if (error.response) {
-        const statusCode = error.response.status;
-        const message = error.response.data?.error || error.response.statusText || 'Unknown error';
-        writeLog(`[${context}] HTTP ${statusCode}: ${message}`);
-      } else if (error.code === 'ECONNREFUSED') {
-        writeLog(`[${context}] Connection refused (device API offline?)`);
-      } else if (error.code === 'ETIMEDOUT') {
-        writeLog(`[${context}] Connection timed out (network issue)`);
-      } else {
-        writeLog(`[${context}] Axios error: ${error.message}`);
-      }
-    } else if (error instanceof Error) {
-      writeLog(`[${context}] Error: ${error.message}`);
-      if (error.stack) {
-        this.log.debug(error.stack);
-      }
-    } else {
-      writeLog(`[${context}] Unknown error: ${JSON.stringify(error)}`);
+    writeLog(`[${context}] ${this.describeError(error)}`);
+    if (!axios.isAxiosError(error) && error instanceof Error && error.stack) {
+      this.log.debug(error.stack);
     }
   }
 }
