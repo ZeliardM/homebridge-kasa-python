@@ -1,11 +1,15 @@
 # Changelog
-## [v3.3.0-beta.8](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.8)
+## [v3.3.0-beta.8](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.8) (2026-10-27)
 
 ### Bug Fixes
 
 - [fix] Handle retargeted Dependabot pull requests, label from branch names, and stop blaming devices for Python service failures [#403](https://github.com/ZeliardM/homebridge-kasa-python/pull/403) (@ZeliardM)
 - [fix] Keep accessories through Python service crashes, shutdowns, long downtime and bad configs [#402](https://github.com/ZeliardM/homebridge-kasa-python/pull/402) (@ZeliardM)
 - [fix] Close the Python service to the network, honour Enable Credentials, and keep Homebridge running on a failed version check [#401](https://github.com/ZeliardM/homebridge-kasa-python/pull/401) (@ZeliardM)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.3.0-beta.8 [beta-release] (@github-actions)
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.7...v3.3.0-beta.8
 
