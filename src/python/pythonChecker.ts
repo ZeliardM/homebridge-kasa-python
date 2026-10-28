@@ -242,11 +242,13 @@ class PythonChecker {
     this.log.debug('Updating pip in virtual environment');
     let failure: string;
     try {
-      // `python -m pip`, not the pip executable: on Windows pip.exe cannot replace itself while it runs.
+      // `python -m pip`, not the pip executable: on Windows pip.exe cannot replace itself while it runs. `-m` puts
+      // the current directory (Homebridge's storage directory) first on sys.path; `-P` (Python 3.11+, the oldest
+      // version this plugin supports) leaves it out, so a `pip` there is not run instead of the venv's.
       const [stdout, stderr, exitCode] = await runCommand(
         this.log,
         this.venvPythonExecutable,
-        ['-m', 'pip', 'install', '--upgrade', 'pip'],
+        ['-P', '-m', 'pip', 'install', '--upgrade', 'pip'],
         undefined,
         !this.advancedPythonLogging,
         !this.advancedPythonLogging,
@@ -258,15 +260,18 @@ class PythonChecker {
         this.log.debug(upgraded ? `Pip upgraded to ${upgraded}` : `No newer pip found${kept ? `, keeping pip ${kept}` : ''}`);
         return;
       }
-      failure = `exit code ${exitCode}${this.lastLine(stderr)}`;
+      failure = `exit code ${exitCode}${this.errorLine(stderr)}`;
     } catch (error) {
       failure = error instanceof Error ? error.message : String(error);
     }
     this.log.warn(`Could not upgrade pip in the virtual environment (${failure}); installing requirements with the current pip.`);
   }
 
-  private lastLine(output: string): string {
-    const line = output.trim().split(/\r?\n/).at(-1)?.trim();
+  // pip states why it failed on an `ERROR:` line, but may print more after it, such as its `[notice]` about a newer
+  // pip. Without an `ERROR:` line, the last line is the best guess.
+  private errorLine(output: string): string {
+    const lines = output.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const line = lines.filter(line => line.startsWith('ERROR:')).at(-1) ?? lines.at(-1);
     return line ? `: ${line}` : '';
   }
 
