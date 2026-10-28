@@ -1,3 +1,4 @@
+import { LogLevel } from 'homebridge';
 import { isObjectLike } from './utils.js';
 import type { ConfigDevice } from './devices/deviceTypes.js';
 
@@ -51,6 +52,7 @@ export interface KasaPythonConfigInput {
   waitTimeUpdate?: number;
   pythonPath?: string;
   advancedPythonLogging?: boolean;
+  logLevel?: LogLevel;
 }
 
 export type KasaPythonConfig = {
@@ -79,6 +81,7 @@ export type KasaPythonConfig = {
     waitTimeUpdate: number;
     pythonPath?: string;
     advancedPythonLogging: boolean;
+    logLevel: LogLevel;
   };
 };
 
@@ -108,6 +111,7 @@ export const defaultConfig: KasaPythonConfig = {
     waitTimeUpdate: 100,
     pythonPath: '',
     advancedPythonLogging: false,
+    logLevel: LogLevel.INFO,
   },
 };
 
@@ -280,6 +284,7 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
       waitTimeUpdate: parsedConfig.waitTimeUpdate ?? defaultConfig.advancedOptions.waitTimeUpdate,
       pythonPath: parsedConfig.pythonPath ?? defaultConfig.advancedOptions.pythonPath,
       advancedPythonLogging: parsedConfig.advancedPythonLogging ?? defaultConfig.advancedOptions.advancedPythonLogging,
+      logLevel: parsedConfig.logLevel ?? defaultConfig.advancedOptions.logLevel,
     },
   };
 }

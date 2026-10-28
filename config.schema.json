@@ -144,6 +144,14 @@
         "type": "boolean",
         "description": "Enable detailed logging for Python scripts. Only shows logs when Debug Mode in Homebridge is enabled.",
         "default": false
+      },
+      "logLevel": {
+        "title": "Log Level",
+        "type": "string",
+        "enum": [ "info", "warn", "error"],
+        "enumNames": ["Info (Default)", "Warn", "Error"],
+        "description": "The minimum level of log messages. For example, if 'Error' is selected then `Info` and `Warn` are silenced.",
+        "default": "info"
       }
     }
   },
@@ -270,7 +278,8 @@
       "items": [
         "waitTimeUpdate",
         "pythonPath",
-        "advancedPythonLogging"
+        "advancedPythonLogging",
+        "logLevel"
       ]
     }
   ]

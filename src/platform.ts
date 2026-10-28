@@ -8,6 +8,7 @@ import type {
   Service,
   WithUUID,
 } from 'homebridge';
+import { LogLevel } from 'homebridge';
 
 import path from 'node:path';
 import { ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -52,6 +53,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public readonly offlineAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
   public readonly Service: typeof Service;
   public readonly storagePath: string;
+  public readonly log: Logging;
   public config: KasaPythonConfig;
   public deviceManager: DeviceManager | undefined;
   public energyCharacteristics: EnergyCharacteristics | undefined;
@@ -68,11 +70,22 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
   private platformInitialization: Promise<void>;
 
-  constructor(public readonly log: Logging, config: PlatformConfig, public readonly api: API) {
+  constructor(log: Logging, config: PlatformConfig, public readonly api: API) {
     this.Service = this.api.hap.Service;
     this.Characteristic = this.api.hap.Characteristic;
     this.storagePath = this.api.user.storagePath();
     this.config = parseConfig(config);
+    this.log = log;
+    switch(this.config.advancedOptions.logLevel) {
+      case LogLevel.ERROR:
+        this.log.warn = (_message: string, ..._parameters: unknown[]) => {};
+      // eslint-disable-next-line no-fallthrough
+      case LogLevel.WARN:
+        this.log.info = (_message: string, ..._parameters: unknown[]) => {};
+      // eslint-disable-next-line no-fallthrough
+      case LogLevel.INFO:
+        this.log.debug = (_message: string, ..._parameters: unknown[]) => {};
+    }
     this.energyCharacteristics = this.config.energyOptions.enableEnergyMonitoring
       ? createEnergyCharacteristics(this.api.hap)
       : undefined;
