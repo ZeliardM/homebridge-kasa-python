@@ -115,7 +115,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     try {
       this.config = parseConfig(config, message => this.log.warn(message));
     } catch (error) {
-      this.log.error(
+      log.error(
         `Invalid configuration, so ${PLATFORM_NAME} will not start. Fix the plugin settings and restart Homebridge. ` +
         (error instanceof Error ? error.message : String(error)),
       );
