@@ -17,13 +17,13 @@ env:
 jobs:
   detect-fork:
     name: Detect Fork
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       is_fork: ${{ steps.detect-fork-context.outputs.is_fork }}
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -33,7 +33,7 @@ jobs:
 
   prepare:
     name: Validate Environment
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: detect-fork
     if: needs.detect-fork.outputs.is_fork == 'false'
     steps:
@@ -50,28 +50,28 @@ jobs:
 
   finalize_release:
     name: Finalize CHANGELOG.md and Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: prepare
     if: needs.prepare.result == 'success'
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.event.release.target_commitish }}
 
-      - name: Setup Node 24
+      - name: Setup Node 26
         id: setup-node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
 
-      - name: Setup Python 3.13
+      - name: Setup Python 3.15
         id: setup-python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.15'
 
       - name: Finalize CHANGELOG.md and Release
         id: finalize-release
@@ -98,24 +98,30 @@ jobs:
 
   publish:
     name: Publish to NPM
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: codeql
     if: needs.codeql.result == 'success'
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.event.release.tag_name || github.ref_name }}
 
-      - name: Setup Node 24
+      - name: Setup Node 26
         id: setup-node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           registry-url: https://registry.npmjs.org
           cache: npm
+
+      - name: Setup Python 3.15
+        id: setup-python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.15'
 
       - name: Install Node Dependencies
         id: install-node-deps
@@ -140,24 +146,55 @@ jobs:
           set -euo pipefail
           echo "::notice::Published on npm - ${{ steps.publish.outputs.NPM_VERSION }}"
 
+  sync_latest_to_beta:
+    name: Sync latest to beta
+    runs-on: ubuntu-26.04
+    needs: publish
+    if: >
+      needs.publish.result == 'success' &&
+      github.event.release.prerelease == false &&
+      github.event.release.target_commitish == 'latest'
+    steps:
+      - name: Checkout beta
+        id: checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: beta
+
+      - name: Setup Python 3.15
+        id: setup-python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.15'
+
+      - name: Sync latest into beta
+        id: sync
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/sync_latest_to_beta.py
+
   notify_discord:
     name: Discord Notification
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: publish
     if: needs.publish.result == 'success'
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.ref }}
 
-      - name: Setup Python 3.13
+      - name: Setup Python 3.15
         id: setup-python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.15'
 
       - name: Post Discord Notification
         id: post
@@ -171,7 +208,7 @@ jobs:
 
   fork-notice:
     name: Fork Notice
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: detect-fork
     if: needs.detect-fork.outputs.is_fork == 'true'
     steps:

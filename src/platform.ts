@@ -12,12 +12,12 @@ import { LogLevel } from 'homebridge';
 
 import path from 'node:path';
 import { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { EventEmitter } from 'node:events';
+import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import HomeKitDevice from './devices/baseDevice.js';
 import create from './devices/create.js';
-import DeviceManager, { deviceEventEmitter } from './devices/deviceManager.js';
+import DeviceManager, { API_TOKEN_HEADER, deviceEventEmitter } from './devices/deviceManager.js';
 import PythonChecker from './python/pythonChecker.js';
 import { parseConfig } from './config.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
@@ -31,23 +31,47 @@ import {
   lookupCharacteristicNameByUUID,
   runCommand,
   satisfiesVersion,
+  settlesWithin,
   waitForServer,
 } from './utils.js';
 import { createEnergyCharacteristics } from './devices/energyCharacteristics.js';
 import type { KasaPythonConfig } from './config.js';
 import type { KasaDevice } from './devices/deviceTypes.js';
+import type { PackageConfig } from './utils.js';
 import type { EnergyCharacteristics } from './devices/energyCharacteristics.js';
 
 export type KasaPythonAccessoryContext = {
   deviceId?: string;
   lastSeen?: Date;
+  // Set by discovery only: completed discovery runs have not found the device
   offline?: boolean;
+  // How long (ms) completed discovery runs have kept missing it, counting only time Homebridge was running
+  missingFor?: number;
 };
 
-let packageConfig: { name: string; version: string; engines: { node: string } };
+let packageConfig: PackageConfig;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// A Python service that exits is started again after 5 s, and after twice as long each time it exits again soon after,
+// up to 5 minutes. One that ran for 10 minutes starts over at 5 s.
+const KASA_API_RESTART_MIN_MS = 5000;
+const KASA_API_RESTART_MAX_MS = 300000;
+const KASA_API_STABLE_MS = 600000;
+// Lines of the service's stderr logged when it exits
+const KASA_API_STDERR_LINES = 20;
+// Uvicorn waits for open connections, such as a discovery stream, before it exits on SIGTERM
+const KASA_API_KILL_AFTER_MS = 3000;
+// Homebridge exits 5 s after the signal without waiting for the shutdown listener
+const SHUTDOWN_WAIT_MS = 2000;
+
+function formatDays(ms: number): string {
+  const days = ms / (24 * 60 * 60 * 1000);
+  return `${days.toFixed(days < 10 ? 1 : 0)} days`;
+}
+
 export default class KasaPythonPlatform implements DynamicPlatformPlugin {
+  // Passed to the Python service in its environment, never on its command line, and sent with every request to it.
+  public readonly apiToken: string = randomBytes(32).toString('hex');
   public readonly Characteristic: typeof Characteristic;
   public readonly configuredAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
   public readonly offlineAccessories: Map<string, PlatformAccessory<KasaPythonAccessoryContext>> = new Map();
@@ -59,7 +83,6 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   public energyCharacteristics: EnergyCharacteristics | undefined;
   public isShuttingDown: boolean = false;
   public periodicDeviceDiscovering: boolean = false;
-  public periodicDeviceDiscoveryEmitter: EventEmitter;
   public port: number = 0;
   public taskQueue: TaskQueue;
   public venvPythonExecutable: string = '';
@@ -67,14 +90,38 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private deviceDiscoveredHandler?: (device: KasaDevice) => Promise<void>;
   private discoveryInterval?: NodeJS.Timeout;
   private hideHomeKitMatter: boolean = true;
-  private kasaProcess: ChildProcessWithoutNullStreams | undefined | null = null;
+  private configInvalid = false;
+  private deferredDiscoveryTask?: () => Promise<void>;
+  private kasaApiAvailable = false;
+  private kasaApiRestartDelayMs = KASA_API_RESTART_MIN_MS;
+  private kasaApiRestartTimer?: NodeJS.Timeout;
+  private kasaApiStartedAt = 0;
+  private kasaApiStderrTail: string[] = [];
+  private kasaProcess: ChildProcessWithoutNullStreams | null = null;
+  private lastReconciledAt?: number;
   private platformInitialization: Promise<void>;
+
+  // Whether the Python service is running and answered /health; HomeKit reads get No Response while it is not
+  public get isKasaApiAvailable(): boolean {
+    return this.kasaApiAvailable;
+  }
 
   constructor(log: Logging, config: PlatformConfig, public readonly api: API) {
     this.Service = this.api.hap.Service;
     this.Characteristic = this.api.hap.Characteristic;
     this.storagePath = this.api.user.storagePath();
-    this.config = parseConfig(config);
+    // Homebridge does not catch errors thrown here, so a bad config would stop the whole bridge.
+    // Log it and stay idle instead; cached accessories stay registered.
+    try {
+      this.config = parseConfig(config, message => this.log.warn(message));
+    } catch (error) {
+      this.log.error(
+        `Invalid configuration, so ${PLATFORM_NAME} will not start. Fix the plugin settings and restart Homebridge. ` +
+        (error instanceof Error ? error.message : String(error)),
+      );
+      this.config = parseConfig({});
+      this.configInvalid = true;
+    }
     this.log = log;
     switch(this.config.advancedOptions.logLevel) {
       case LogLevel.ERROR:
@@ -86,48 +133,72 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       case LogLevel.INFO:
         this.log.debug = (_message: string, ..._parameters: unknown[]) => {};
     }
+    if (!this.configInvalid && !this.config.enableCredentials && (this.config.username || this.config.password)) {
+      this.log.warn('A username or password is set, but Enable Credentials is off, so they are not used. ' +
+        'Turn on Enable Credentials if your devices need your TP-Link account.');
+    }
+    if (!this.configInvalid && this.config.discoveryOptions.disableBroadcast && this.config.discoveryOptions.manualDevices.length === 0) {
+      this.log.warn('Broadcast discovery is disabled and no Manual Devices are configured, so no devices will be discovered.');
+    }
     this.energyCharacteristics = this.config.energyOptions.enableEnergyMonitoring
       ? createEnergyCharacteristics(this.api.hap)
       : undefined;
-    this.periodicDeviceDiscoveryEmitter = new EventEmitter();
     this.taskQueue = new TaskQueue(this.log, () => this.isShuttingDown);
 
-    this.periodicDeviceDiscoveryEmitter.setMaxListeners(255);
     this.setupDeviceEventEmitter('firstDiscovery');
 
     this.platformInitialization = this.initializePlatform();
+    // Handled in the didFinishLaunching listener; without this, a failure before that listener runs is an
+    // unhandled rejection, which stops Homebridge
+    this.platformInitialization.catch(() => undefined);
 
     this.api.on('didFinishLaunching', async () => {
       this.log.debug('KasaPython Platform finished launching');
-      await this.platformInitialization;
-      await this.didFinishLaunching();
+      try {
+        await this.platformInitialization;
+      } catch (error) {
+        this.log.error(
+          `Platform initialization failed, so ${PLATFORM_NAME} will not start: ` +
+          (error instanceof Error ? error.message : String(error)),
+        );
+        return;
+      }
+      if (this.configInvalid) {
+        return;
+      }
+      // Before startup, which can take minutes: if the initial discovery finds one of these devices again, it
+      // registers a new accessory with the same UUID, which Homebridge refuses while the old one is still there
       if (this.offlineAccessories.size > 0) {
-        this.log.debug('Unregistering offline accessories');
+        for (const accessory of this.offlineAccessories.values()) {
+          this.log.warn(
+            `Removing [${accessory.displayName}] from HomeKit: discovery has not found it for ` +
+            `${formatDays(accessory.context.missingFor ?? 0)} while Homebridge was running.`,
+          );
+        }
         this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, Array.from(this.offlineAccessories.values()));
         this.offlineAccessories.clear();
       }
+      await this.didFinishLaunching();
     });
 
     this.api.on('shutdown', async () => {
       this.log.debug('KasaPython shutting down');
-      if (!this.isShuttingDown) {
-        this.isShuttingDown = true;
-      }
+      this.isShuttingDown = true;
       if (this.discoveryInterval) {
         clearInterval(this.discoveryInterval);
         this.log.debug('Cleared periodic device discovery interval');
       }
+      // First: Homebridge exits 5 s after the signal without waiting for this listener, and a service left running
+      // then keeps running on its own. Polls, writes and discovery still talking to it fail at once.
+      this.stopKasaApi();
       this.log.debug('Stopping all polling tasks');
       for (const device of this.homekitDevicesById.values()) {
-        await device.stopPolling(true);
+        void device.stopPolling();
       }
       this.log.debug('Waiting for tasks to complete');
-      try {
-        await this.taskQueue.waitForEmptyQueue();
-      } catch (error) {
-        this.log.error('Error while waiting for task queue to empty during shutdown:', error);
+      if (!await settlesWithin(this.taskQueue.waitForEmptyQueue(), SHUTDOWN_WAIT_MS)) {
+        this.log.debug(`Tasks were still running ${SHUTDOWN_WAIT_MS / 1000} s after shutdown started`);
       }
-      this.stopKasaApi();
     });
   }
 
@@ -171,25 +242,20 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     try {
       this.log.debug('Checking Node.js version');
       if (!satisfiesVersion(process.version, packageConfig.engines.node)) {
-        this.log.error(`Error: not using minimum node version ${packageConfig.engines.node}`);
+        this.log.error(`Node.js ${process.version} is not a supported version; this plugin supports ${packageConfig.engines.node}`);
       } else {
         this.log.debug(`Node.js version ${process.version} satisfies the requirement ${packageConfig.engines.node}`);
       }
 
       this.log.debug('Checking Homebridge version');
-      if (
-        this.api.versionGreaterOrEqual &&
-        !(
-          this.api.versionGreaterOrEqual('1.8.0') ||
-          this.api.versionGreaterOrEqual('2.0.0')
-        )
-      ) {
+      if (!satisfiesVersion(this.api.serverVersion, packageConfig.engines.homebridge)) {
         throw new Error(
-          `homebridge-kasa-python requires Homebridge ^1.8.0 || ^2.0.0-beta.0. Currently running: ${this.api.serverVersion}`,
+          `homebridge-kasa-python requires Homebridge ${packageConfig.engines.homebridge}. ` +
+          `Currently running: ${this.api.serverVersion}`,
         );
       } else {
         this.log.debug(
-          `Homebridge version ${this.api.serverVersion} satisfies the requirement ^1.8.0 || ^2.0.0-beta.0`,
+          `Homebridge version ${this.api.serverVersion} satisfies the requirement ${packageConfig.engines.homebridge}`,
         );
       }
     } catch (error) {
@@ -204,21 +270,37 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     try {
       this.log.debug('Checking Python environment');
       await this.checkPython();
-
-      this.log.debug('Getting available port');
-      this.port = await getAvailablePort();
-      this.log.debug(`Port assigned: ${this.port}`);
+      // Creating the venv can take minutes; Homebridge may be stopping by then
+      if (this.isShuttingDown) {
+        return;
+      }
 
       this.log.debug('Initializing DeviceManager');
       this.deviceManager = new DeviceManager(this);
       this.log.debug('DeviceManager initialized');
 
-      await this.startKasaApi();
+      try {
+        await this.startKasaApi();
+      } catch (error) {
+        // Periodic discovery is still set up; it waits for the service, which is started again
+        if (!this.isShuttingDown) {
+          this.log.error(`The Kasa API did not start: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        this.stopKasaApi();
+        this.scheduleKasaApiRestart();
+      }
+      if (this.isShuttingDown) {
+        // The shutdown listener ran while the service was starting
+        this.stopKasaApi();
+        return;
+      }
 
-      await waitForServer(`http://127.0.0.1:${this.port}/health`, this.log);
-
-      await this.discoverDevices();
-      this.log.debug('Device discovery completed');
+      if (this.kasaApiAvailable) {
+        await this.discoverDevices();
+      }
+      if (this.isShuttingDown) {
+        return;
+      }
 
       const discoveredDeviceIds = new Set<string>();
       this.setupPeriodicDiscovery(discoveredDeviceIds);
@@ -236,6 +318,7 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     };
 
     const deferredDiscoveryTask = deferAndCombine(discoveryTask, this.config.advancedOptions.waitTimeUpdate);
+    this.deferredDiscoveryTask = deferredDiscoveryTask;
 
     this.discoveryInterval = setInterval(() => {
       try {
@@ -252,9 +335,15 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     try {
       if (this.deviceManager) {
         await this.deviceManager.discoverDevices();
+        this.log.debug('Device discovery completed');
       }
     } catch (error) {
-      this.log.error('Error during discoverDevices:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (this.isShuttingDown) {
+        this.log.debug(`Device discovery stopped by shutdown: ${message}`);
+      } else {
+        this.log.error(`Device discovery did not complete: ${message}`);
+      }
     }
   }
 
@@ -268,19 +357,36 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       this.log.debug('Platform is shutting down, skipping periodic device discovery');
       return;
     }
+    if (!this.kasaApiAvailable) {
+      // Nothing is found while it is down, and that must not count against any device
+      this.log.debug('The Kasa API is not running, skipping periodic device discovery');
+      return;
+    }
     this.periodicDeviceDiscovering = true;
+    let discoveryCompleted = false;
     discoveredDeviceIds.clear();
     this.log.debug('Cleared discoveredDeviceIds set before discovery.');
     try {
       if (this.deviceManager) {
+        // Only a run that reported every device it found tells which devices are gone
         await this.deviceManager.discoverDevices();
+        discoveryCompleted = true;
       }
     } catch (error) {
-      this.log.error('Error during periodic device discovery:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (this.isShuttingDown) {
+        this.log.debug(`Periodic device discovery stopped by shutdown: ${message}`);
+      } else {
+        this.log.warn(`Periodic device discovery did not complete, so offline accessories were not reconciled: ${message}`);
+      }
     } finally {
-      this.handleOfflineDevices(discoveredDeviceIds);
+      if (this.isShuttingDown) {
+        // Shutdown stops the service, and the devices it had not reported yet would all look gone
+        this.log.debug('Skipping offline accessory reconciliation because Homebridge is shutting down');
+      } else if (discoveryCompleted) {
+        this.handleOfflineDevices(discoveredDeviceIds);
+      }
       this.periodicDeviceDiscovering = false;
-      this.periodicDeviceDiscoveryEmitter.emit('periodicDeviceDiscoveryComplete');
       this.log.debug('Finished periodic device discovery');
     }
   }
@@ -302,8 +408,17 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
   }
 
+  // After a completed discovery run. An accessory it did not find, whose device has not answered a poll within the
+  // last discovery interval either, is flagged offline in the accessory cache, and it is removed once completed runs
+  // have missed it for the offline interval. Only time Homebridge was running counts, so downtime removes nothing.
   private handleOfflineDevices(discoveredDeviceIds: Set<string>): void {
     const now = new Date();
+    const reconciledAt = performance.now();
+    const discoveryInterval = this.config.discoveryOptions.discoveryPollingInterval;
+    // Since the previous completed run, at most two discovery intervals: a failed run in between still counts, an
+    // outage of the service does not
+    const elapsed = this.lastReconciledAt === undefined ? 0 : Math.min(reconciledAt - this.lastReconciledAt, 2 * discoveryInterval);
+    this.lastReconciledAt = reconciledAt;
     this.configuredAccessories.forEach((accessory, uuid) => {
       const deviceId = accessory.context.deviceId;
       if (!deviceId) {
@@ -313,26 +428,41 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       if (discoveredDeviceIds.has(deviceId)) {
         this.log.debug(`Accessory [${accessory.displayName}] was discovered and is online.`);
         this.updateAccessoryStatus(accessory, now, false);
-      } else {
-        this.handleOfflineAccessory(accessory, uuid, now);
+        return;
       }
+      const answeredAt = this.homekitDevicesById.get(deviceId)?.lastAnsweredAt;
+      if (answeredAt !== undefined && reconciledAt - answeredAt <= discoveryInterval) {
+        // Discovery does not reach every device that answers at its address (a device on another subnet)
+        this.log.debug(`Accessory [${accessory.displayName}] was not discovered but answers polls.`);
+        this.updateAccessoryStatus(accessory, accessory.context.lastSeen ?? now, false);
+        return;
+      }
+      this.handleOfflineAccessory(accessory, uuid, elapsed, now);
     });
   }
 
   private handleOfflineAccessory(
     accessory: PlatformAccessory<KasaPythonAccessoryContext>,
     uuid: string,
+    elapsed: number,
     now: Date,
   ): void {
-    const timeSinceLastSeen = now.getTime() - new Date(accessory.context.lastSeen || 0).getTime();
+    const missingFor = accessory.context.offline ? (accessory.context.missingFor ?? 0) + elapsed : 0;
+    accessory.context.missingFor = missingFor;
     const offlineInterval = this.config.discoveryOptions.offlineInterval;
-    if (timeSinceLastSeen > offlineInterval) {
-      this.log.debug(`Accessory [${accessory.displayName}] is offline and outside the offline interval. Removing.`);
+    if (missingFor >= offlineInterval) {
+      this.log.warn(
+        `Removing [${accessory.displayName}] from HomeKit: discovery has not found it for ` +
+        `${formatDays(missingFor)} while Homebridge was running.`,
+      );
+      this.removeTrackedDevice(accessory.context.deviceId, accessory.UUID);
       this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       this.configuredAccessories.delete(uuid);
     } else if (!accessory.context.offline) {
-      this.log.debug(`Accessory [${accessory.displayName}] is offline but within the offline interval.`);
+      this.log.debug(`Accessory [${accessory.displayName}] was not discovered; flagging it offline.`);
       this.updateAccessoryStatus(accessory, accessory.context.lastSeen || now, true);
+    } else {
+      this.log.debug(`Accessory [${accessory.displayName}] has not been discovered for ${formatDays(missingFor)}.`);
     }
   }
 
@@ -354,22 +484,19 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     this.updateAccessoryStatus(accessory, now, false);
     const existingDevice = this.homekitDevicesById.get(device.sys_info.device_id);
     if (existingDevice) {
-      if (!existingDevice.isUpdating) {
-        const comingOnline = existingDevice.kasaDevice.offline && !device.offline;
-        existingDevice.kasaDevice.sys_info = device.sys_info;
-        existingDevice.kasaDevice.feature_info = device.feature_info;
-        existingDevice.kasaDevice.last_seen = device.last_seen;
-        existingDevice.kasaDevice.offline = device.offline;
-        if (comingOnline) {
-          this.log.debug(`Device [${device.sys_info.device_id}] was offline and is now online. Updating and restarting polling.`);
-          existingDevice.updateAfterPeriodicDiscovery(true);
-          existingDevice.startPolling();
-        } else {
-          this.log.debug(`Updating existing HomeKit device [${device.sys_info.device_id}].`);
-          existingDevice.updateAfterPeriodicDiscovery();
-        }
+      // Discovery only refreshes identity, so it applies even while a poll or write is in flight.
+      // Otherwise a slow, failing read of an old address keeps every later report from landing.
+      const comingOnline = existingDevice.kasaDevice.offline && !device.offline;
+      const moved = existingDevice.kasaDevice.sys_info.host !== device.sys_info.host;
+      existingDevice.updateFromDiscovery(device);
+      existingDevice.markDeviceReachable(device.last_seen);
+      if (comingOnline || moved) {
+        this.log.debug(`Device [${device.sys_info.device_id}] is back online or at a new address. Updating and restarting polling.`);
+        existingDevice.updateAfterPeriodicDiscovery();
+        existingDevice.startPolling();
       } else {
-        this.log.debug(`HomeKit device [${device.sys_info.device_id}] is currently updating. Skipping update.`);
+        // Its own polling keeps the state current; discovery only refreshed its identity.
+        this.log.debug(`Updated existing HomeKit device [${device.sys_info.device_id}] from discovery.`);
       }
     } else {
       await this.addNewDevice(device);
@@ -390,6 +517,9 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
 
     accessory.context.lastSeen = lastSeen;
     accessory.context.offline = offline;
+    if (!offline) {
+      delete accessory.context.missingFor;
+    }
 
     if (offlineStatusChanged) {
       this.api.updatePlatformAccessories([accessory]);
@@ -399,44 +529,163 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private async checkPython(): Promise<void> {
     try {
       this.log.debug('Running PythonChecker');
-      await new PythonChecker(this).allInOne();
+      await new PythonChecker(this, packageConfig.engines.python).allInOne();
     } catch (error) {
       this.log.error('Error checking python environment:', error);
       throw error;
     }
   }
 
+  // Starts the service on a free port and waits until it answers /health; throws if it does not.
   private async startKasaApi(): Promise<void> {
     const scriptPath = path.join(__dirname, 'python', 'startKasaApi.py');
     this.hideHomeKitMatter = this.config.homekitOptions.hideHomeKitMatter;
-    this.log.debug('Starting Kasa API with script:', scriptPath);
+    this.port = await getAvailablePort();
+    this.log.debug(`Starting Kasa API with script: ${scriptPath} on port ${this.port}`);
 
+    let kasaProcess: ChildProcessWithoutNullStreams;
+    let firstOutput: string;
     try {
-      const [, , , kasaProcessInstance] = await runCommand(
+      const [, stderr, , kasaProcessInstance] = await runCommand(
         this.log,
         this.venvPythonExecutable,
         [scriptPath, this.port.toString(), this.hideHomeKitMatter.toString()],
-        undefined,
+        { env: { KASA_API_TOKEN: this.apiToken } },
         this.config.advancedOptions.advancedPythonLogging ? false : true,
         this.config.advancedOptions.advancedPythonLogging ? false : true,
         true,
       );
-
-      this.kasaProcess = kasaProcessInstance;
-      this.log.debug('Kasa API process started successfully');
+      kasaProcess = kasaProcessInstance!;
+      firstOutput = stderr;
     } catch (error) {
-      this.log.error(`Error starting kasaApi.py process: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw error;
+      throw new Error(`Error starting kasaApi.py process: ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
+    }
+
+    this.kasaProcess = kasaProcess;
+    this.kasaApiStartedAt = performance.now();
+    this.kasaApiStderrTail = [];
+    this.recordKasaApiStderr(firstOutput);
+    kasaProcess.stderr.on('data', (data: string) => this.recordKasaApiStderr(data));
+    // An exit before /health answers fails this start, and the caller handles it; a later one is handled by
+    // onKasaApiExit
+    const healthCheck = new AbortController();
+    const exited = new Promise<never>((_, reject) => {
+      kasaProcess.once('close', (code, signal) => {
+        healthCheck.abort();
+        const output = this.kasaApiStderrTail.join('\n');
+        reject(new Error(`kasaApi.py exited (${code ?? signal}) before it answered${output ? `. Its last output:\n${output}` : ''}`));
+        this.onKasaApiExit(kasaProcess, code, signal);
+      });
+    });
+    exited.catch(() => undefined);
+    this.log.debug('Kasa API process started successfully');
+
+    try {
+      await Promise.race([
+        waitForServer(`http://127.0.0.1:${this.port}/health`, this.log, {
+          headers: { [API_TOKEN_HEADER]: this.apiToken },
+          signal: healthCheck.signal,
+        }),
+        exited,
+      ]);
+    } finally {
+      healthCheck.abort();
+    }
+    if (this.kasaProcess === kasaProcess) {
+      this.kasaApiAvailable = true;
+    }
+  }
+
+  private recordKasaApiStderr(data: string): void {
+    const lines = data.split('\n').map(line => line.trimEnd()).filter(line => line.length > 0);
+    this.kasaApiStderrTail.push(...lines);
+    this.kasaApiStderrTail.splice(0, Math.max(0, this.kasaApiStderrTail.length - KASA_API_STDERR_LINES));
+  }
+
+  // Nothing else notices when the service dies: every poll and write fails, and discovery finds nothing.
+  private onKasaApiExit(kasaProcess: ChildProcessWithoutNullStreams, code: number | null, signal: NodeJS.Signals | null): void {
+    if (kasaProcess !== this.kasaProcess) {
+      // Stopped on purpose (stopKasaApi clears kasaProcess first)
+      return;
+    }
+    const wasAvailable = this.kasaApiAvailable;
+    this.kasaProcess = null;
+    this.kasaApiAvailable = false;
+    if (this.isShuttingDown || !wasAvailable) {
+      // Still starting: startKasaApi fails, and its caller logs it and starts it again
+      return;
+    }
+    const output = this.kasaApiStderrTail.join('\n');
+    this.log.error(
+      `The Kasa API (kasaApi.py) exited unexpectedly (${code !== null ? `exit code ${code}` : `signal ${signal}`}). ` +
+      (output ? `Its last output:\n${output}` : 'It wrote nothing to stderr.'),
+    );
+    if (performance.now() - this.kasaApiStartedAt >= KASA_API_STABLE_MS) {
+      this.kasaApiRestartDelayMs = KASA_API_RESTART_MIN_MS;
+    }
+    this.scheduleKasaApiRestart();
+  }
+
+  private scheduleKasaApiRestart(): void {
+    if (this.isShuttingDown || this.kasaApiRestartTimer) {
+      return;
+    }
+    const delay = this.kasaApiRestartDelayMs;
+    this.kasaApiRestartDelayMs = Math.min(delay * 2, KASA_API_RESTART_MAX_MS);
+    this.log.warn(`Starting the Kasa API again in ${delay / 1000} s. Until then devices show No Response.`);
+    this.kasaApiRestartTimer = setTimeout(() => {
+      this.kasaApiRestartTimer = undefined;
+      void this.restartKasaApi();
+    }, delay);
+  }
+
+  private async restartKasaApi(): Promise<void> {
+    if (this.isShuttingDown) {
+      return;
+    }
+    try {
+      await this.startKasaApi();
+    } catch (error) {
+      if (this.isShuttingDown) {
+        return;
+      }
+      this.log.error(`The Kasa API did not start: ${error instanceof Error ? error.message : String(error)}`);
+      this.stopKasaApi();
+      this.scheduleKasaApiRestart();
+      return;
+    }
+    if (this.isShuttingDown) {
+      this.stopKasaApi();
+      return;
+    }
+    this.log.info('The Kasa API is running again. Discovering devices to connect to them again.');
+    // The new service has no device connections until discovery makes them; polls fail until then
+    if (this.deferredDiscoveryTask) {
+      this.taskQueue.addTask(this.deferredDiscoveryTask);
     }
   }
 
   private stopKasaApi(): void {
     this.log.debug('Stopping Kasa API');
+    if (this.kasaApiRestartTimer) {
+      clearTimeout(this.kasaApiRestartTimer);
+      this.kasaApiRestartTimer = undefined;
+    }
+    const kasaProcess = this.kasaProcess;
+    this.kasaProcess = null;
+    this.kasaApiAvailable = false;
 
-    if (this.kasaProcess) {
+    if (kasaProcess && kasaProcess.exitCode === null && kasaProcess.signalCode === null) {
       this.log.debug('Kasa API process found, attempting to kill the process');
-      this.kasaProcess.kill();
-      this.kasaProcess = null;
+      kasaProcess.kill();
+      // Not unref'd: during shutdown this keeps Homebridge up until the service is gone (it exits after 5 s anyway)
+      const killTimer = setTimeout(() => {
+        if (kasaProcess.exitCode === null && kasaProcess.signalCode === null) {
+          this.log.debug(`Kasa API process still running ${KASA_API_KILL_AFTER_MS / 1000} s after SIGTERM, sending SIGKILL`);
+          kasaProcess.kill('SIGKILL');
+        }
+      }, KASA_API_KILL_AFTER_MS);
+      kasaProcess.once('exit', () => clearTimeout(killTimer));
       this.log.debug('Kasa API process successfully killed');
     } else {
       this.log.debug('No Kasa API process found to stop');
@@ -498,28 +747,19 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       accessory.context.offline = false;
     }
 
-    if (accessory.context.lastSeen) {
-      const now = new Date();
-      const timeSinceLastSeen = now.getTime() - new Date(accessory.context.lastSeen).getTime();
-      const offlineInterval = this.config.discoveryOptions.offlineInterval;
+    // Also for an accessory moved to offlineAccessories below: it stays in HomeKit until it is unregistered, and
+    // for good when the config is invalid or initialization fails
+    this.refuseWritesUntilFound(accessory);
 
-      this.log.debug(`Platform Accessory [${accessory.displayName}] last seen ${timeSinceLastSeen}ms ago, ` +
-        `offline interval is ${offlineInterval}ms, offline status: ${accessory.context.offline}`);
-
-      if (timeSinceLastSeen > offlineInterval && accessory.context.offline === true) {
-        this.log.debug(
-          `Platform Accessory [${accessory.displayName}] is offline and outside the offline interval, ` +
-          'moving to offlineAccessories',
-        );
-        this.configuredAccessories.delete(accessory.UUID);
-        this.offlineAccessories.set(accessory.UUID, accessory);
-        return;
-      } else if (timeSinceLastSeen < offlineInterval && accessory.context.offline === true) {
-        this.log.debug(`Platform Accessory [${accessory.displayName}] is offline and within offline interval.`);
-      } else if (accessory.context.offline === false) {
-        this.log.debug(`Platform Accessory [${accessory.displayName}] is online, updating lastSeen time.`);
-        this.updateAccessoryStatus(accessory, now, false);
-      }
+    // Only completed discovery runs that missed the device count, and only while Homebridge was running: a long
+    // downtime removes nothing. This catches an offline interval lowered since then. With an invalid config the
+    // offline interval is not known, so nothing is removed.
+    const missingFor = accessory.context.missingFor ?? 0;
+    if (!this.configInvalid && accessory.context.offline === true && missingFor >= this.config.discoveryOptions.offlineInterval) {
+      this.log.debug(`Platform Accessory [${accessory.displayName}] has been missing too long, moving to offlineAccessories`);
+      this.configuredAccessories.delete(accessory.UUID);
+      this.offlineAccessories.set(accessory.UUID, accessory);
+      return;
     }
 
     if (!this.configuredAccessories.has(accessory.UUID)) {
@@ -536,6 +776,23 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
     }
   }
 
+  // A cached accessory has no handlers until discovery finds its device and the device class sets
+  // its own. Until then HomeKit would accept a write and drop it, so it answers No Response instead.
+  private refuseWritesUntilFound(accessory: PlatformAccessory<KasaPythonAccessoryContext>): void {
+    const { Characteristic: C, HapStatusError, HAPStatus } = this.api.hap;
+    const writable = [C.On, C.Brightness, C.ColorTemperature, C.Hue, C.Saturation, C.Active, C.RotationSpeed];
+    for (const service of accessory.services) {
+      for (const type of writable) {
+        if (service.testCharacteristic(type)) {
+          service.getCharacteristic(type).onSet(() => {
+            this.log.warn(`[${accessory.displayName}] has not been found since Homebridge started, so the write was not sent.`);
+            throw new HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+          });
+        }
+      }
+    }
+  }
+
   private async foundDevice(device: KasaDevice): Promise<void> {
     const { sys_info: { alias: deviceAlias, device_id: deviceId, device_type: deviceType, host: deviceHost } } = device;
 
@@ -544,9 +801,17 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       return;
     }
 
-    if (this.homekitDevicesById.has(deviceId)) {
-      this.log.debug(`HomeKit device already added: [${deviceAlias}] ${deviceType} [${deviceId}]`);
-      return;
+    const existingDevice = this.homekitDevicesById.get(deviceId);
+    if (existingDevice) {
+      if (!this.configuredAccessories.has(existingDevice.homebridgeAccessory.UUID)) {
+        this.log.warn(
+          `HomeKit device [${deviceAlias}] ${deviceType} [${deviceId}] is missing its accessory. Recreating it.`,
+        );
+        this.removeTrackedDevice(deviceId, existingDevice.homebridgeAccessory.UUID);
+      } else {
+        this.log.debug(`HomeKit device already added: [${deviceAlias}] ${deviceType} [${deviceId}]`);
+        return;
+      }
     }
 
     this.log.info(`Adding HomeKit device: [${deviceAlias}] ${deviceType} [${deviceId}] at host [${deviceHost}]`);
@@ -562,5 +827,28 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
   private async createHomeKitDevice(kasaDevice: KasaDevice): Promise<HomeKitDevice | undefined> {
     this.log.debug('Creating HomeKit device for:', kasaDevice.sys_info);
     return await create(this, kasaDevice);
+  }
+
+  private removeTrackedDevice(deviceId: string | undefined, accessoryUuid: string): void {
+    if (!deviceId) {
+      return;
+    }
+
+    const trackedDevice = this.homekitDevicesById.get(deviceId);
+    if (!trackedDevice) {
+      return;
+    }
+
+    if (trackedDevice.homebridgeAccessory.UUID !== accessoryUuid) {
+      this.log.debug(
+        `Skipping tracked device cleanup for [${deviceId}] because UUIDs do not match ` +
+        `(${trackedDevice.homebridgeAccessory.UUID} !== ${accessoryUuid}).`,
+      );
+      return;
+    }
+
+    this.homekitDevicesById.delete(deviceId);
+    trackedDevice.removeFromPlatform();
+    this.log.debug(`Removed tracked HomeKit device for [${deviceId}].`);
   }
 }

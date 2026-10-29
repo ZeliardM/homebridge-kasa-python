@@ -1,4 +1,7 @@
 import { Categories } from 'homebridge';
+import type { AdaptiveLightingController } from 'homebridge';
+
+import { AsyncResource } from 'node:async_hooks';
 
 import HomeKitDevice from './baseDevice.js';
 import {
@@ -11,14 +14,21 @@ import type KasaPythonPlatform from '../platform.js';
 import type { CharacteristicDescriptor, DescriptorContext, LightBulb } from './deviceTypes.js';
 
 export default class HomeKitDeviceLightBulb extends HomeKitDevice {
+  private readonly adaptiveLightingColorModeTemperature = 140;
   private hasBrightness: boolean;
   private hasColorTemp: boolean;
   private hasHSV: boolean;
+  private adaptiveLightingController?: AdaptiveLightingController;
 
   private pendingHSV: { hue?: number; saturation?: number } = {};
   private hsvFlushTimer: NodeJS.Timeout | null = null;
   private hsvFlushInProgress: boolean = false;
+  // Schedules the next flush from the write that arrived during a flush, so it carries that
+  // write's HomeKit deadline rather than the one of the write being flushed.
+  private hsvRescheduleFromWrite: (() => void) | null = null;
   private hsvWaiters: Array<{ resolve: () => void; reject: (error?: unknown) => void }> = [];
+  private colorWrittenWhileOff = false;
+  private colorWrittenSincePoll = false;
 
   constructor(
     platform: KasaPythonPlatform,
@@ -29,6 +39,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     this.hasColorTemp = !!kasaDevice.feature_info.color_temp;
     this.hasHSV = !!kasaDevice.feature_info.hsv;
     this.setupPrimaryService();
+    this.setupAdaptiveLighting();
   }
 
   public async initialize(): Promise<void> {
@@ -46,8 +57,12 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     const onDescriptor = buildOnDescriptor(
       C,
       async (value, context) => {
+        if (this.shouldSkipTurnOn('', value)) {
+          return;
+        }
         await this.deviceManager!.controlDevice(context.device.host, 'state', value);
       },
+      { debouncePolls: 2 },
     );
 
     const list: CharacteristicDescriptor[] = [onDescriptor];
@@ -57,6 +72,9 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
         C,
         async (value, context) => {
           await this.deviceManager!.controlDevice(context.device.host, 'brightness', value);
+          if (value > 0) {
+            this.noteTurnedOnByBrightness('');
+          }
         },
       ));
     }
@@ -65,7 +83,8 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
       list.push(buildColorTemperatureDescriptor(
         C,
         async (value, context) => {
-          await this.deviceManager!.controlDevice(context.device.host, 'color_temp', value);
+          await this.deviceManager!.controlDevice(context.device.host, 'color_temp', value, undefined, this.colorWriteOptions());
+          this.syncHueSaturationFromColorTemperature(Number(value), context.alias);
         },
       ));
     }
@@ -91,8 +110,92 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     return list;
   }
 
+  protected async updateAllServicesAndCharacteristics(forceUpdate: boolean): Promise<void> {
+    const wasOn = this.previousSnapshot?.sys_info.state === true;
+    const previousColorTemp = this.previousSnapshot?.sys_info.color_temp;
+    const previousHue = this.previousSnapshot?.sys_info.hsv?.hue;
+    const previousSaturation = this.previousSnapshot?.sys_info.hsv?.saturation;
+    const colorWrittenSincePoll = this.colorWrittenSincePoll;
+    this.colorWrittenSincePoll = false;
+
+    await super.updateAllServicesAndCharacteristics(forceUpdate);
+
+    if (!this.adaptiveLightingController?.isAdaptiveLightingActive() || forceUpdate) {
+      return;
+    }
+
+    // Colors written while the bulb was off may only show up once it is on again, so a
+    // difference then is not an external change. The first poll after our own color write
+    // shows how the device applied it (clamped to its range, with its own hue and saturation),
+    // so it becomes the new baseline instead.
+    const isOn = this.kasaDevice.sys_info.state === true;
+    if (!isOn || !wasOn || this.colorWrittenWhileOff || colorWrittenSincePoll) {
+      if (isOn) {
+        this.colorWrittenWhileOff = false;
+      }
+      return;
+    }
+
+    const currentColorTemp = this.kasaDevice.sys_info.color_temp;
+    const currentHue = this.kasaDevice.sys_info.hsv?.hue;
+    const currentSaturation = this.kasaDevice.sys_info.hsv?.saturation;
+    const colorChanged = previousColorTemp !== currentColorTemp;
+    const hueChanged = previousHue !== currentHue;
+    const saturationChanged = previousSaturation !== currentSaturation;
+
+    if (colorChanged || hueChanged || saturationChanged) {
+      this.log.debug('Disabling Adaptive Lighting due to external color state change');
+      this.adaptiveLightingController.disableAdaptiveLighting();
+    }
+  }
+
+  private setupAdaptiveLighting(): void {
+    if (!this.primaryService || !this.hasBrightness || !this.hasColorTemp || this.adaptiveLightingController) {
+      return;
+    }
+
+    const controller = new this.platform.api.hap.AdaptiveLightingController(this.primaryService);
+    this.homebridgeAccessory.configureController(controller);
+    this.adaptiveLightingController = controller;
+  }
+
+  private syncHueSaturationFromColorTemperature(colorTemperature: number, alias: string): void {
+    if (!this.primaryService || !this.hasHSV) {
+      return;
+    }
+
+    const { hue, saturation } = this.platform.api.hap.ColorUtils.colorTemperatureToHueAndSaturation(colorTemperature);
+    this.kasaDevice.sys_info.hsv = { hue, saturation };
+
+    this.updateValue(
+      this.primaryService,
+      this.primaryService.getCharacteristic(this.platform.Characteristic.Hue),
+      alias,
+      hue,
+      false,
+    );
+    this.updateValue(
+      this.primaryService,
+      this.primaryService.getCharacteristic(this.platform.Characteristic.Saturation),
+      alias,
+      saturation,
+      false,
+    );
+  }
+
+  private cacheColorTemperatureForColorMode(): void {
+    if (!this.primaryService || !this.hasColorTemp) {
+      return;
+    }
+
+    this.kasaDevice.sys_info.color_temp = this.adaptiveLightingColorModeTemperature;
+    this.primaryService.getCharacteristic(this.platform.Characteristic.ColorTemperature).value =
+      this.adaptiveLightingColorModeTemperature;
+  }
+
   private scheduleHSVFlush(host: string): void {
     if (this.hsvFlushInProgress) {
+      this.hsvRescheduleFromWrite = AsyncResource.bind(() => this.scheduleHSVFlush(host));
       return;
     }
 
@@ -128,19 +231,31 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
     const saturation = pendingHSV.saturation ?? currentHSV.saturation ?? 0;
 
     try {
-      await this.deviceManager!.controlDevice(host, 'hsv', { hue, saturation });
+      await this.deviceManager!.controlDevice(host, 'hsv', { hue, saturation }, undefined, this.colorWriteOptions());
       this.kasaDevice.sys_info.hsv = { hue, saturation };
+      this.cacheColorTemperatureForColorMode();
       waiters.forEach(waiter => waiter.resolve());
     } catch (error) {
       waiters.forEach(waiter => waiter.reject(error));
-      throw error;
     } finally {
       this.hsvFlushInProgress = false;
+      const reschedule = this.hsvRescheduleFromWrite ?? (() => this.scheduleHSVFlush(host));
+      this.hsvRescheduleFromWrite = null;
 
       if (this.pendingHSV.hue !== undefined || this.pendingHSV.saturation !== undefined) {
-        this.scheduleHSVFlush(host);
+        reschedule();
       }
     }
+  }
+
+  // A color change on its own turns the bulb on, so while it is off ask the device to stay off.
+  private colorWriteOptions(): { lightOn?: boolean } {
+    this.colorWrittenSincePoll = true;
+    if (this.kasaDevice.sys_info.state !== false) {
+      return {};
+    }
+    this.colorWrittenWhileOff = true;
+    return { lightOn: false };
   }
 
   public identify(): void {

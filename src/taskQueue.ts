@@ -4,7 +4,7 @@ export class TaskQueue {
   private queue: (() => Promise<void>)[] = [];
   private running: boolean = false;
   private log: Logging;
-  private resolveEmptyQueue: (() => void) | null = null;
+  private emptyQueueWaiters: (() => void)[] = [];
   private isShuttingDownRef: () => boolean;
 
   constructor(log: Logging, isShuttingDownRef: () => boolean) {
@@ -37,18 +37,20 @@ export class TaskQueue {
       }
     }
     this.running = false;
-    if (this.resolveEmptyQueue) {
-      this.resolveEmptyQueue();
-      this.resolveEmptyQueue = null;
+    const waiters = this.emptyQueueWaiters;
+    this.emptyQueueWaiters = [];
+    for (const resolve of waiters) {
+      resolve();
     }
   }
 
+  // Every caller waits until the queue is empty, not only the last one to ask
   public async waitForEmptyQueue(): Promise<void> {
     if (this.queue.length === 0 && !this.running) {
       return;
     }
     return new Promise<void>((resolve) => {
-      this.resolveEmptyQueue = resolve;
+      this.emptyQueueWaiters.push(resolve);
     });
   }
 }

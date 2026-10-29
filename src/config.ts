@@ -45,6 +45,7 @@ export interface KasaPythonConfigInput {
   pollingInterval?: number;
   discoveryPollingInterval?: number;
   offlineInterval?: number;
+  disableBroadcast?: boolean;
   additionalBroadcasts?: string[];
   manualDevices?: (string | ConfigDevice)[];
   excludeMacAddresses?: string[];
@@ -72,6 +73,7 @@ export type KasaPythonConfig = {
     pollingInterval: number;
     discoveryPollingInterval: number;
     offlineInterval: number;
+    disableBroadcast: boolean;
     additionalBroadcasts: string[];
     manualDevices: ConfigDevice[];
     excludeMacAddresses: string[];
@@ -102,6 +104,7 @@ export const defaultConfig: KasaPythonConfig = {
     pollingInterval: 5,
     discoveryPollingInterval: 300,
     offlineInterval: 7,
+    disableBroadcast: false,
     additionalBroadcasts: [],
     manualDevices: [],
     excludeMacAddresses: [],
@@ -125,22 +128,23 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function normalizeManualDevices(manualDevices: (string | ConfigDevice)[] | undefined | null): ConfigDevice[] {
+// A blank row in the Manual Devices list (no host, or an empty one) is skipped with a warning.
+function normalizeManualDevices(
+  manualDevices: (string | ConfigDevice)[] | undefined | null,
+  warn: (message: string) => void,
+): ConfigDevice[] {
   if (!manualDevices || manualDevices.length === 0) {
     return [];
   }
 
-  return manualDevices.flatMap(device => {
-    if (typeof device === 'string') {
-      return isNonEmptyString(device) ? [{ host: device }] : [];
-    }
-
-    const migratedDevice = device as LegacyConfigDevice;
-    if (!isNonEmptyString(migratedDevice.host)) {
+  return manualDevices.flatMap((device, index) => {
+    const host = typeof device === 'string' ? device : (device as LegacyConfigDevice).host;
+    if (!isNonEmptyString(host)) {
+      warn(`\`manualDevices[${index}]\` has no host; skipping it.`);
       return [];
     }
 
-    return [{ host: migratedDevice.host }];
+    return [{ host }];
   });
 }
 
@@ -159,9 +163,6 @@ function validateManualDevices(
 
   manualDevices.forEach((entry, index) => {
     if (typeof entry === 'string') {
-      if (!isNonEmptyString(entry)) {
-        errors.push(`\`manualDevices[${index}]\` should not be an empty string.`);
-      }
       return;
     }
 
@@ -170,9 +171,10 @@ function validateManualDevices(
       return;
     }
 
-    const device = entry as Record<string, unknown>;
-    if (!isNonEmptyString(device.host)) {
-      errors.push(`\`manualDevices[${index}].host\` should be a non-empty string.`);
+    // A missing or empty host is a blank row, which normalizeManualDevices skips.
+    const host = (entry as Record<string, unknown>).host;
+    if (host !== undefined && host !== null && typeof host !== 'string') {
+      errors.push(`\`manualDevices[${index}].host\` should be a string.`);
     }
   });
 }
@@ -191,6 +193,7 @@ function validateConfig(config: Record<string, unknown>): string[] {
   validateType(config, 'pollingInterval', 'number', errors);
   validateType(config, 'discoveryPollingInterval', 'number', errors);
   validateType(config, 'offlineInterval', 'number', errors);
+  validateType(config, 'disableBroadcast', 'boolean', errors);
 
   if (config.additionalBroadcasts !== undefined && !Array.isArray(config.additionalBroadcasts)) {
     errors.push('`additionalBroadcasts` should be an array of strings.');
@@ -210,27 +213,7 @@ function validateConfig(config: Record<string, unknown>): string[] {
   validateType(config, 'pythonPath', 'string', errors);
   validateType(config, 'advancedPythonLogging', 'boolean', errors);
 
-  validatePowerThreshold(config.powerThreshold, errors);
-
   return errors;
-}
-
-function validatePowerThreshold(value: unknown, errors: string[]): void {
-  if (value === undefined) {
-    return;
-  }
-
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return;
-  }
-
-  if (value < 0.001) {
-    errors.push('`powerThreshold` should be at least 0.001.');
-  }
-
-  if (Math.abs(Math.round(value * 1000) - (value * 1000)) > Number.EPSILON * 1000) {
-    errors.push('`powerThreshold` should use no more than three decimal places.');
-  }
 }
 
 function validateType(
@@ -244,7 +227,20 @@ function validateType(
   }
 }
 
-export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
+// Node fires a timer given more than 2^31-1 ms (about 24.8 days) after 1 ms instead, so the intervals that
+// drive timers stay below that.
+const MAX_TIMER_SECONDS = 2147483;
+// Longer than one discovery run, which waits up to 30 s for the service to report every device it found.
+const MIN_DISCOVERY_POLLING_INTERVAL_SECONDS = 60;
+const MAX_WAIT_TIME_UPDATE_MS = 60000;
+const MIN_POWER_THRESHOLD_WATTS = 0.001;
+
+// Wrong types are errors. Numbers out of range are clamped with a warning instead, so a hand-edited value does not
+// stop the plugin.
+export function parseConfig(
+  config: Record<string, unknown>,
+  warn: (message: string) => void = () => undefined,
+): KasaPythonConfig {
   if (!isObjectLike(config)) {
     throw new ConfigParseError('Error parsing config');
   }
@@ -254,9 +250,39 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     throw new ConfigParseError('Error parsing config', errors);
   }
 
-  const parsedConfig = { ...defaultConfig, ...config } as KasaPythonConfigInput;
-  const normalizedManualDevices = normalizeManualDevices(parsedConfig.manualDevices)
-    ?? defaultConfig.discoveryOptions.manualDevices;
+  const parsedConfig = config as KasaPythonConfigInput;
+  const normalizedManualDevices = normalizeManualDevices(parsedConfig.manualDevices, warn);
+
+  const clamp = (key: keyof KasaPythonConfigInput, value: number, fallback: number, min: number, max = Infinity): number => {
+    if (!Number.isFinite(value)) {
+      warn(`\`${key}\` is ${value}; using ${fallback}.`);
+      return fallback;
+    }
+    const clamped = Math.min(Math.max(value, min), max);
+    if (clamped !== value) {
+      const limit = value < min ? `below the minimum of ${min}` : `above the maximum of ${max}`;
+      warn(`\`${key}\` is ${value}, ${limit}; using ${clamped}.`);
+    }
+    return clamped;
+  };
+  const number = (key: keyof KasaPythonConfigInput, fallback: number, min: number, max?: number): number =>
+    clamp(key, (parsedConfig[key] as number | undefined) ?? fallback, fallback, min, max);
+
+  const pollingInterval = number('pollingInterval', defaultConfig.discoveryOptions.pollingInterval, 1, MAX_TIMER_SECONDS);
+  const discoveryPollingInterval = number(
+    'discoveryPollingInterval',
+    defaultConfig.discoveryOptions.discoveryPollingInterval,
+    MIN_DISCOVERY_POLLING_INTERVAL_SECONDS,
+    MAX_TIMER_SECONDS,
+  );
+  const offlineInterval = number('offlineInterval', defaultConfig.discoveryOptions.offlineInterval, 1);
+  const waitTimeUpdate = number('waitTimeUpdate', defaultConfig.advancedOptions.waitTimeUpdate, 0, MAX_WAIT_TIME_UPDATE_MS);
+  let powerThreshold = number('powerThreshold', defaultConfig.energyOptions.powerThreshold, MIN_POWER_THRESHOLD_WATTS);
+  const roundedPowerThreshold = Math.round(powerThreshold * 1000) / 1000;
+  if (roundedPowerThreshold !== powerThreshold) {
+    warn(`\`powerThreshold\` is ${powerThreshold}, which has more than three decimal places; using ${roundedPowerThreshold}.`);
+    powerThreshold = roundedPowerThreshold;
+  }
 
   return {
     name: parsedConfig.name ?? defaultConfig.name,
@@ -265,23 +291,24 @@ export function parseConfig(config: Record<string, unknown>): KasaPythonConfig {
     password: parsedConfig.password ?? defaultConfig.password,
     energyOptions: {
       enableEnergyMonitoring: parsedConfig.enableEnergyMonitoring ?? defaultConfig.energyOptions.enableEnergyMonitoring,
-      powerThreshold: parsedConfig.powerThreshold ?? defaultConfig.energyOptions.powerThreshold,
+      powerThreshold,
       logEnergyMonitoring: parsedConfig.logEnergyMonitoring ?? defaultConfig.energyOptions.logEnergyMonitoring,
     },
     homekitOptions: {
       hideHomeKitMatter: parsedConfig.hideHomeKitMatter ?? defaultConfig.homekitOptions.hideHomeKitMatter,
     },
     discoveryOptions: {
-      pollingInterval: (parsedConfig.pollingInterval ?? defaultConfig.discoveryOptions.pollingInterval) * 1000,
-      discoveryPollingInterval: (parsedConfig.discoveryPollingInterval ?? defaultConfig.discoveryOptions.discoveryPollingInterval) * 1000,
-      offlineInterval: (parsedConfig.offlineInterval ?? defaultConfig.discoveryOptions.offlineInterval) * 24 * 60 * 60 * 1000,
+      pollingInterval: pollingInterval * 1000,
+      discoveryPollingInterval: discoveryPollingInterval * 1000,
+      offlineInterval: offlineInterval * 24 * 60 * 60 * 1000,
+      disableBroadcast: parsedConfig.disableBroadcast ?? defaultConfig.discoveryOptions.disableBroadcast,
       additionalBroadcasts: parsedConfig.additionalBroadcasts ?? defaultConfig.discoveryOptions.additionalBroadcasts,
       manualDevices: normalizedManualDevices,
       excludeMacAddresses: parsedConfig.excludeMacAddresses ?? defaultConfig.discoveryOptions.excludeMacAddresses,
       includeMacAddresses: parsedConfig.includeMacAddresses ?? defaultConfig.discoveryOptions.includeMacAddresses,
     },
     advancedOptions: {
-      waitTimeUpdate: parsedConfig.waitTimeUpdate ?? defaultConfig.advancedOptions.waitTimeUpdate,
+      waitTimeUpdate,
       pythonPath: parsedConfig.pythonPath ?? defaultConfig.advancedOptions.pythonPath,
       advancedPythonLogging: parsedConfig.advancedPythonLogging ?? defaultConfig.advancedOptions.advancedPythonLogging,
       logLevel: parsedConfig.logLevel ?? defaultConfig.advancedOptions.logLevel,

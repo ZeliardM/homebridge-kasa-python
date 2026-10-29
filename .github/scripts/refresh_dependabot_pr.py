@@ -6,8 +6,12 @@ This script is intended for Dependabot PRs that were originally opened
 against the default "latest" branch and then retargeted to "beta" by the
 workflow. For supported npm lockfile-only PRs, it rebuilds the PR branch from
 origin/beta and reapplies the security fix using `npm audit fix
---package-lock-only`, then force-pushes the refreshed branch so the next
-`synchronize` workflow run can validate and auto-merge it cleanly.
+--package-lock-only`, then force-pushes the refreshed branch. The push is
+made with GITHUB_TOKEN and starts no workflow, so the auto-merge asks for a
+push to the branch, which builds and merges the refreshed branch. Dependabot
+does not rebase a branch someone else changed, so after a refresh that push is
+an empty commit. The PR must not be closed: Dependabot deletes its branch when
+its PR is closed.
 
 If the regenerated branch has no package changes after rebuilding from beta,
 the script creates an empty refresh commit so the PR can still move forward as
@@ -130,10 +134,7 @@ def _push_branch(head_ref: str, *, dry_run: bool) -> None:
     if dry_run:
         print(f"[refresh] DRY_RUN enabled; skipping push to {head_ref}")
         return
-    common.run(
-        ["git", "push", "--force-with-lease", "origin", f"HEAD:refs/heads/{head_ref}"],
-        check=True,
-    )
+    common.git_push(["--force-with-lease", "origin", f"HEAD:refs/heads/{head_ref}"])
 
 
 def _should_refresh(pr: dict, changed_files: list[str], original_base_ref: str) -> tuple[bool, str]:
@@ -158,8 +159,11 @@ def _refresh_npm_lockfile(head_ref: str, pr_number: str, *, dry_run: bool) -> tu
     common.run(["git", "checkout", "-B", head_ref, f"origin/{head_ref}"], check=True)
     common.run(["git", "reset", "--hard", "origin/beta"], check=True)
 
+    # `npm audit fix` exits 1 while any advisory is left, including ones whose only fix is a
+    # breaking update. Those must not fail the refresh; --audit-level=none keeps the exit code
+    # for real errors only.
     audit = common.run(
-        [_npm_executable(), "audit", "fix", "--package-lock-only"],
+        [_npm_executable(), "audit", "fix", "--package-lock-only", "--audit-level=none"],
         check=False,
     )
     if audit.returncode != 0:

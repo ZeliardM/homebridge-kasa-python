@@ -522,6 +522,62 @@ def _latest_versions(changelog: str) -> tuple[Version | None, Version | None]:
     latest_beta = max(beta, key=_version_sort_key) if beta else None
     return latest_stable, latest_beta
 
+def _release_version(rel: dict) -> Version | None:
+    if not isinstance(rel, dict):
+        return None
+    for key in ("tag_name", "name"):
+        raw = str(rel.get(key) or "").strip()
+        if not raw:
+            continue
+        try:
+            version = Version.parse(raw)
+        except Exception:
+            continue
+        if not version.is_beta():
+            return version
+    return None
+
+def _latest_published_stable_release(context: Context) -> Version | None:
+    if not context.github_repository or not context.github_token:
+        return None
+    try:
+        published: list[Version] = []
+        for rel in common.gh_releases(
+            context.github_repository, context.github_token, max_pages=50
+        ):
+            if not isinstance(rel, dict):
+                continue
+            if rel.get("draft") or rel.get("prerelease"):
+                continue
+            version = _release_version(rel)
+            if version is not None:
+                published.append(version)
+        latest = max(published, key=_version_sort_key) if published else None
+        if latest is not None:
+            print(
+                "[release-manager] latest published stable release -> "
+                f"{latest.tag()}"
+            )
+        return latest
+    except Exception as e:
+        print(
+            "[release-manager] Warning: unable to read published stable releases: "
+            f"{e}"
+        )
+        return None
+
+def _effective_latest_stable(context: Context, changelog: str) -> Version | None:
+    changelog_stable, _ = _latest_versions(changelog)
+    published_stable = _latest_published_stable_release(context)
+    if published_stable is not None:
+        if changelog_stable is not None and changelog_stable != published_stable:
+            print(
+                "[release-manager] using published stable baseline "
+                f"{published_stable.tag()} instead of changelog {changelog_stable.tag()}"
+            )
+        return published_stable
+    return changelog_stable
+
 def _section_is_published(content: str, tag: str) -> bool:
     prefix = f"## [{tag}]"
     for l in content.splitlines():
@@ -580,6 +636,14 @@ def _bump_base(latest_stable: Version | None, bump: str) -> Version:
         return base.bump_minor()
     return base.bump_patch()
 
+def _draft_is_stale_for_latest_stable(
+    draft: Version,
+    latest_stable: Version | None,
+) -> bool:
+    if latest_stable is None:
+        return False
+    return draft.base() <= latest_stable.base()
+
 def _decide_beta_target(
     content: str,
     latest_stable: Version | None,
@@ -601,6 +665,16 @@ def _decide_beta_target(
         f"bump={required_bump}, required_base={required_base.tag()}"
     )
     if existing_unpublished:
+        if _draft_is_stale_for_latest_stable(existing_unpublished, latest_stable):
+            target = Version(
+                required_base.major, required_base.minor, required_base.patch, 0
+            )
+            print(
+                "[release-manager] _decide_beta_target: replacing stale draft "
+                f"{existing_unpublished.tag()} -> {target.tag()} after stable "
+                f"{latest_stable.tag() if latest_stable else 'None'}"
+            )
+            return target, True, existing_unpublished
         draft_base = existing_unpublished.base()
         draft_bump = _base_bump_level(latest_stable, draft_base)
         if draft_bump == "patch":
@@ -724,7 +798,7 @@ def _create_beta_entry(
     *,
     reason: str,
 ) -> tuple[str, Version]:
-    latest_stable, _ = _latest_versions(content)
+    latest_stable = _effective_latest_stable(context, content)
     target_version, replace, existing_unpublished = _decide_beta_target(
         content,
         latest_stable,
@@ -732,11 +806,14 @@ def _create_beta_entry(
     )
     compare_from = None
     if replace and existing_unpublished:
-        existing_block = _find_section_block(content, existing_unpublished.tag())
-        compare_from = _section_compare_from(
-            existing_block,
-            existing_unpublished.tag(),
-        ) or _beta_compare_from(existing_unpublished, latest_stable)
+        if _draft_is_stale_for_latest_stable(existing_unpublished, latest_stable):
+            compare_from = _beta_compare_from(target_version, latest_stable)
+        else:
+            existing_block = _find_section_block(content, existing_unpublished.tag())
+            compare_from = _section_compare_from(
+                existing_block,
+                existing_unpublished.tag(),
+            ) or _beta_compare_from(existing_unpublished, latest_stable)
         content, _ = _escalate_beta_draft(
             context,
             content,
@@ -744,7 +821,6 @@ def _create_beta_entry(
             target_version,
             reason=reason,
         )
-        latest_stable, _ = _latest_versions(content)
     if compare_from is None:
         compare_from = _beta_compare_from(target_version, latest_stable)
     if f"## [{target_version.tag()}]" in content:
@@ -1226,7 +1302,8 @@ def _handle_commit_push(context: Context) -> None:
                     pr = p if isinstance(p, dict) else {}
                 pr_user = (pr.get("user") or {}).get("login") or ""
                 base_ref = (pr.get("base") or {}).get("ref", "") or ""
-                if pr.get("merged") is True and base_ref == "beta" and "dependabot" not in str(pr_user).lower():
+                # Dependabot's pull requests are handled like any other, including the already-recorded check.
+                if pr.get("merged") is True and base_ref == "beta":
                     if _pr_already_recorded(context, pr_num_int, content):
                         print(f"[release-manager] PR #{pr_num_int} already recorded; skipping.")
                         processed_prs.add(pr_num_int)
@@ -1243,41 +1320,8 @@ def _handle_commit_push(context: Context) -> None:
                     else:
                         labels_list = [((l.get("name") or "").lower()) for l in pr.get("labels", []) if isinstance(l, dict)]
                     labels_path = _write_labels_temp(labels_list)
-                    try:
-                        pr_context = Context(
-                            github_repository=context.github_repository,
-                            github_token=context.github_token,
-                            mode="pr-merge",
-                        )
-                        pr_context.pull_request_author = pr_user
-                        pr_context.pull_request_branch = base_ref
-                        pr_context.pull_request_number = str(pr_num_int)
-                        pr_context.pull_request_title = pr.get("title") or ""
-                        pr_context.pull_request_labels = labels_path
-                        _handle_pr_merge(pr_context)
-                        processed_prs.add(pr_num_int)
-                        content = _read_changelog()
-                        _, last_beta = _latest_versions(content)
-                        final_target_version = last_beta or final_target_version
-                        if first_sha7 is None:
-                            first_sha7 = sha7
-                        last_sha7 = sha7
-                        processed_this_sha = True
-                        break
-                    finally:
-                        if labels_path and os.path.exists(labels_path):
-                            try:
-                                os.unlink(labels_path)
-                            except Exception:
-                                pass
-                if "dependabot" in str(pr_user).lower() and pr.get("merged") is True:
-                    print(f"[release-manager] Commit {sha7} is part of Dependabot PR #{pr_num_int}; delegating to PR merge handler.")
-                    label_code, label_data = common.github_api(context.github_repository, context.github_token, f"/issues/{pr_num_int}/labels")
-                    if label_code == 200 and isinstance(label_data, list):
-                        labels_list = [((l.get("name") or "").lower()) for l in label_data]
-                    else:
-                        labels_list = [((l.get("name") or "").lower()) for l in pr.get("labels", []) if isinstance(l, dict)]
-                    labels_path = _write_labels_temp(labels_list)
+                    if pr_user == "dependabot[bot]":
+                        print(f"[release-manager] Commit {sha7} is part of Dependabot PR #{pr_num_int}; delegating to PR merge handler.")
                     try:
                         pr_context = Context(
                             github_repository=context.github_repository,
@@ -1306,7 +1350,7 @@ def _handle_commit_push(context: Context) -> None:
                             except Exception:
                                 pass
             if processed_this_sha:
-                print(f"[release-manager] Commit {sha7} handled via Dependabot PR; skipping manual commit handling.")
+                print(f"[release-manager] Commit {sha7} handled via its PR; skipping manual commit handling.")
                 continue
             print(f"[release-manager] Commit {sha7} is part of PR(s) {pr_nums}; skipping manual changelog entry.")
             continue

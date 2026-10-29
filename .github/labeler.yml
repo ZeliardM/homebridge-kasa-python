@@ -8,9 +8,6 @@ branding:
 
 enhancement:
   - any:
-    - changed-files:
-      - any-glob-to-any-file: 'src/**/*'
-      - any-glob-to-any-file: 'config.schema.json'
     - head-branch:
       - '^feature/.*'
       - '^feat/.*'

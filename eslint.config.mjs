@@ -1,27 +1,15 @@
 import js from '@eslint/js';
 import stylistic from '@stylistic/eslint-plugin';
-import tsParser from '@typescript-eslint/parser';
-import path from 'node:path';
-import { FlatCompat } from '@eslint/eslintrc';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-  recommendedConfig: js.configs.recommended,
-  allConfig: js.configs.all,
-});
+import tseslint from 'typescript-eslint';
 
 export default [{
   ignores: ['**/dist'],
-}, ...compat.extends(
-  'eslint:recommended',
-  'plugin:@typescript-eslint/eslint-recommended',
-  'plugin:@typescript-eslint/recommended',
-), {
+},
+js.configs.recommended,
+...tseslint.configs.recommended,
+{
   languageOptions: {
-    parser: tsParser,
+    parser: tseslint.parser,
     ecmaVersion: 2018,
     sourceType: 'module',
   },
@@ -31,27 +19,26 @@ export default [{
   },
 
   rules: {
-    quotes: ['warn', 'single'],
-    indent: ['warn', 2, {
+    '@stylistic/quotes': ['warn', 'single'],
+    '@stylistic/indent': ['warn', 2, {
       SwitchCase: 1,
     }],
-    semi: ['off'],
-    'comma-dangle': ['warn', 'always-multiline'],
+    '@stylistic/comma-dangle': ['warn', 'always-multiline'],
     'dot-notation': 'off',
     eqeqeq: 'warn',
     curly: ['warn', 'all'],
-    'brace-style': ['warn'],
+    '@stylistic/brace-style': ['warn'],
     'prefer-arrow-callback': ['warn'],
-    'max-len': ['warn', 140],
+    '@stylistic/max-len': ['warn', 140],
     'no-console': ['warn'],
     'no-non-null-assertion': ['off'],
-    'comma-spacing': ['error'],
-    'no-multi-spaces': ['warn', {
+    '@stylistic/comma-spacing': ['error'],
+    '@stylistic/no-multi-spaces': ['warn', {
       ignoreEOLComments: true,
     }],
-    'no-trailing-spaces': ['warn'],
+    '@stylistic/no-trailing-spaces': ['warn'],
     'no-constant-condition': 'off',
-    'lines-between-class-members': ['warn', 'always', {
+    '@stylistic/lines-between-class-members': ['warn', 'always', {
       exceptAfterSingleLine: true,
     }],
     '@typescript-eslint/explicit-function-return-type': 'off',

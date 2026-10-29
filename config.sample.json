@@ -20,6 +20,7 @@
       "pollingInterval": 5,
       "discoveryPollingInterval": 300,
       "offlineInterval": 7,
+      "disableBroadcast": false,
       "waitTimeUpdate": 100,
       "pythonPath": "/usr/bin/python3",
       "advancedPythonLogging": false,

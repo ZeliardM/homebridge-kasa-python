@@ -47,7 +47,7 @@ export default class HomeKitDevicePowerStrip extends HomeKitParentDevice {
           const idx = this.extractChildIndex(context.child ?? {});
           await this.deviceManager!.controlDevice(context.device.host, 'state', value, idx);
         },
-        supportsEnergy ? undefined : syncGroup,
+        { syncGroup: supportsEnergy ? undefined : syncGroup },
       ),
       buildOutletInUseDescriptor(C, supportsEnergy, syncGroup),
     ];

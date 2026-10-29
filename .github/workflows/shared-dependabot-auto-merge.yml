@@ -5,6 +5,7 @@ on:
   workflow_call: {}
 
 permissions:
+  actions: read
   contents: write
   issues: write
   pull-requests: write
@@ -12,7 +13,10 @@ permissions:
 env:
   GITHUB_REPOSITORY: ${{ github.repository }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # The base when the event fired, before the pull request workflow moved the pull request to beta
+  ORIGINAL_PULL_REQUEST_BASE_REF: ${{ github.event.pull_request.base.ref }}
   PULL_REQUEST_AUTHOR: ${{ github.event.pull_request.user.login }}
+  PULL_REQUEST_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
   PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
   PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
   PULL_REQUEST_URL: ${{ github.event.pull_request.html_url }}
@@ -24,13 +28,13 @@ concurrency:
 jobs:
   auto-merge:
     name: Auto-Merge Dependabot Pull Request
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       is_merged: ${{ steps.merge_output.outputs.is_merged }}
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -40,9 +44,17 @@ jobs:
         run: |
           set -euo pipefail
           LABELS="$(gh api repos/"$GITHUB_REPOSITORY"/issues/"$PULL_REQUEST_NUMBER"/labels --jq '.[].name' || true)"
+          # Merge only what the label job marked auto-merge: minor and patch updates, and lockfile-only
+          # changes when Dependabot's metadata could not be read. A major update, any other update without
+          # metadata, or a failed label lookup waits for review.
           block=true
-          if ! printf '%s\n' "$LABELS" | grep -qi '^dependency-major$'; then
+          if printf '%s\n' "$LABELS" | grep -qi '^auto-merge$' && ! printf '%s\n' "$LABELS" | grep -qi '^dependency-major$'; then
             block=false
+          fi
+          # Merge only Dependabot's own pull requests from a branch in this repository, whatever the caller checks
+          if [ "$PULL_REQUEST_AUTHOR" != 'dependabot[bot]' ] || [ "$PULL_REQUEST_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+            echo "::warning::Not merged automatically: opened by ${PULL_REQUEST_AUTHOR} from ${PULL_REQUEST_HEAD_REPOSITORY:-a deleted repository}."
+            block=true
           fi
           echo "block=$block" >> "$GITHUB_OUTPUT"
 
@@ -51,9 +63,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ steps.safety.outputs.block }}" = "false" ]; then
+          if [ "${{ steps.safety.outputs.block }}" = "false" ] && [ "$ORIGINAL_PULL_REQUEST_BASE_REF" != "beta" ]; then
             {
-              echo "✅ Dependabot Update is Safe and will be Auto-Merged."
+              echo "⚠️ Dependabot Update was opened against ${ORIGINAL_PULL_REQUEST_BASE_REF} and moved to beta, so no Pull Request Build runs for it."
+              echo "Comment \`@dependabot rebase\` on it: the push from Dependabot runs the Pull Request Build and the Auto-Merge."
+              echo "If Dependabot cannot rebase it because this workflow refreshed the branch, push an empty commit to the branch instead."
+              echo "Do not close it: Dependabot deletes its branch when its pull request is closed."
+              echo
+              echo "<!-- COPILOT-STICKY:DEPENDABOT -->"
+            } > body.txt
+          elif [ "${{ steps.safety.outputs.block }}" = "false" ]; then
+            {
+              echo "✅ Dependabot Update is Safe and will be Auto-Merged once the Pull Request Build passes."
               echo
               echo "<!-- COPILOT-STICKY:DEPENDABOT -->"
             } > body.txt
@@ -67,28 +88,136 @@ jobs:
 
       - name: Upsert Sticky Comment
         id: upsert_sticky
+        # The comment is informational; failing to post it must not block the merge.
+        continue-on-error: true
         uses: ./.github/actions/sticky-comment
         with:
           number: ${{ env.PULL_REQUEST_NUMBER }}
           marker: "<!-- COPILOT-STICKY:DEPENDABOT -->"
           body_file: body.txt
 
-      - name: Auto-Merge Pull Request
-        id: auto_merge
+      - name: Wait for the Pull Request Build
+        id: build
         if: steps.safety.outcome == 'success' && steps.safety.outputs.block == 'false'
-        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          gh pr merge --auto --squash "$PULL_REQUEST_URL"
+          # The build runs only for pull requests into beta, and moving one to beta (an edit made with
+          # GITHUB_TOKEN, like the refresh push) starts no workflow, so a pull request opened against
+          # another branch has no build to wait for. A push to the branch runs the build and this again.
+          # Never ask for a close and reopen: Dependabot deletes its branch when its pull request is closed.
+          if [ "$ORIGINAL_PULL_REQUEST_BASE_REF" != "beta" ]; then
+            echo "::error::This pull request was opened against ${ORIGINAL_PULL_REQUEST_BASE_REF} and moved to beta, so no Pull Request Build runs for it. Comment '@dependabot rebase' on it: the push from Dependabot runs the build and the auto-merge. If Dependabot cannot rebase it because this workflow refreshed the branch, push an empty commit to the branch instead. Do not close it: Dependabot deletes its branch when its pull request is closed."
+            exit 1
+          fi
+          # Merge only a commit whose Pull Request Build passed. The build covers every Node and
+          # Python version the plugin supports, and an update can break one of them (quart 0.23
+          # needs Python 3.13). A new commit gets its own run of this workflow.
+          max_wait=${BUILD_WAIT_SECONDS:-1800}
+          interval=${BUILD_POLL_SECONDS:-20}
+          head_oid="$(gh pr view "$PULL_REQUEST_URL" --json headRefOid --jq .headRefOid)"
+          runs_api="repos/${GITHUB_REPOSITORY}/actions/workflows/pull-request-build.yml/runs"
+          waited=0
+          while :; do
+            run="$(gh api "${runs_api}?head_sha=${head_oid}&event=pull_request&per_page=1" \
+              --jq '.workflow_runs[0] | select(. != null) | [.status, (.conclusion // "none"), .html_url] | @tsv' || true)"
+            IFS=$'\t' read -r status conclusion url <<< "$run"
+            if [ "$status" = "completed" ]; then
+              break
+            fi
+            current="$(gh pr view "$PULL_REQUEST_URL" --json headRefOid --jq .headRefOid || echo "$head_oid")"
+            if [ "$current" != "$head_oid" ]; then
+              echo "::notice::The branch changed while waiting for the build; the run for the new commit merges it."
+              exit 0
+            fi
+            if [ "$waited" -ge "$max_wait" ]; then
+              echo "::error::No finished Pull Request Build for ${head_oid} after ${max_wait} s. Check the Pull Request Build for this commit, or start one with a push: comment '@dependabot rebase', or push an empty commit to the branch if Dependabot cannot rebase it. Do not close the pull request: Dependabot deletes its branch when its pull request is closed."
+              exit 1
+            fi
+            sleep "$interval"
+            waited=$(( waited + interval ))
+          done
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::The Pull Request Build for ${head_oid} ended with '${conclusion}', so it is not merged: ${url}"
+            exit 1
+          fi
+          echo "::notice::The Pull Request Build passed for ${head_oid}: ${url}"
+          echo "head=${head_oid}" >> "$GITHUB_OUTPUT"
+
+      - name: Auto-Merge Pull Request
+        id: auto_merge
+        if: steps.build.outputs.head != ''
+        shell: bash
+        env:
+          BUILT_HEAD: ${{ steps.build.outputs.head }}
+        run: |
+          set -euo pipefail
+          # Dependabot opens several pull requests at once. Each merge moves beta, and GitHub then
+          # rechecks the others for a few seconds, so wait for that check and retry instead of
+          # giving up. A real conflict is left to Dependabot, whose rebase starts a new run.
+          max_attempts=${MAX_ATTEMPTS:-16}
+          sleep_seconds=${SLEEP_SECONDS:-10}
+          start_head="$BUILT_HEAD"
+          tmp_err="$(mktemp)"
+          for attempt in $(seq 1 "$max_attempts"); do
+            if [ "$attempt" -gt 1 ]; then
+              # Jitter keeps runs that started together from retrying in lockstep.
+              sleep $(( sleep_seconds + RANDOM % (sleep_seconds + 1) ))
+            fi
+            if ! pr_info="$(gh pr view "$PULL_REQUEST_URL" --json state,mergeable,mergeStateStatus,headRefOid \
+              --jq '[.state, .mergeable, .mergeStateStatus, .headRefOid] | @tsv' 2>"$tmp_err")"; then
+              echo "::notice::Attempt ${attempt}/${max_attempts}: could not read the pull request: $(tr '\n' ' ' < "$tmp_err")"
+              continue
+            fi
+            IFS=$'\t' read -r pr_state mergeable merge_state head_oid <<< "$pr_info"
+            start_head="${start_head:-$head_oid}"
+            echo "::notice::Attempt ${attempt}/${max_attempts}: state=${pr_state}, mergeable=${mergeable}, mergeStateStatus=${merge_state}"
+
+            if [ "$pr_state" = "MERGED" ]; then
+              echo "merged=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$pr_state" != "OPEN" ]; then
+              echo "::notice::The pull request is ${pr_state}; nothing to merge."
+              exit 0
+            fi
+            if [ "$head_oid" != "$start_head" ]; then
+              echo "::notice::The branch changed during this run; the run for the new commit merges it."
+              exit 0
+            fi
+            if [ "$mergeable" = "CONFLICTING" ]; then
+              echo "::warning::The pull request conflicts with beta; Dependabot rebases it and the next run merges it."
+              exit 0
+            fi
+            if [ "$mergeable" != "MERGEABLE" ]; then
+              continue
+            fi
+            if gh pr merge --squash --match-head-commit "$head_oid" "$PULL_REQUEST_URL" 2>"$tmp_err"; then
+              echo "merged=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::notice::Merge attempt failed: $(tr '\n' ' ' < "$tmp_err")"
+          done
+          # A merge that GitHub applied but reported as failed on the last attempt still counts.
+          if [ "$(gh pr view "$PULL_REQUEST_URL" --json state --jq .state 2>/dev/null || true)" = "MERGED" ]; then
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::error::Not merged after ${max_attempts} attempts. Merge it by hand, or start a new run with a push: comment '@dependabot rebase', or push an empty commit to the branch if Dependabot cannot rebase it because this workflow refreshed it."
+          exit 1
 
       - name: Set Merge Result Output
         id: merge_output
         if: always()
         shell: bash
+        env:
+          STEP_MERGED: ${{ steps.auto_merge.outputs.merged }}
         run: |
           set -euo pipefail
-          if [ "${{ steps.auto_merge.outcome }}" = "success" ]; then
+          # The merge step exits 0 without merging on a conflict, a closed pull request or a new
+          # commit, so only an actual merge (or a merged pull request) counts here.
+          pr_state="$(gh pr view "$PULL_REQUEST_URL" --json state --jq .state 2>/dev/null || echo UNKNOWN)"
+          if [ "$pr_state" = "MERGED" ] || [ "$STEP_MERGED" = "true" ]; then
             echo "is_merged=true" >> "$GITHUB_OUTPUT"
           else
             echo "is_merged=false" >> "$GITHUB_OUTPUT"
@@ -96,27 +225,27 @@ jobs:
 
   post-merge-release:
     name: Update CHANGELOG.md and Release from Dependabot Merge
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: auto-merge
-    if: needs.auto-merge.outputs.is_merged == 'true'
+    if: ${{ !cancelled() && needs.auto-merge.outputs.is_merged == 'true' }}
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Setup Node 24
+      - name: Setup Node 26
         id: setup-node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
 
-      - name: Setup Python 3.13
+      - name: Setup Python 3.15
         id: setup-python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.15'
 
       - name: Fetch current labels for Pull Request
         id: fetch-labels
@@ -144,8 +273,11 @@ jobs:
           PULL_REQUEST_LABELS: ${{ steps.labels.outputs.path }}
         run: |
           set -euo pipefail
-          export PULL_REQUEST_BRANCH="$(gh pr view "$PULL_REQUEST_NUMBER" --json baseRefName --jq .baseRefName)"
-          MAX_ATTEMPTS=${MAX_ATTEMPTS:-5}
+          PULL_REQUEST_BRANCH="$(gh pr view "$PULL_REQUEST_NUMBER" --json baseRefName --jq .baseRefName)"
+          export PULL_REQUEST_BRANCH
+          # Several of these run at once after a Dependabot burst. Each push race leaves one winner
+          # per round and the others re-sync and retry, so allow more rounds than a burst has PRs.
+          MAX_ATTEMPTS=${MAX_ATTEMPTS:-8}
           BASE_SLEEP=${BASE_SLEEP:-5}
           JITTER=${JITTER:-10}
           attempt=1

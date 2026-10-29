@@ -12,11 +12,11 @@ permissions:
 jobs:
   stale:
     name: Stale Issues and Pull Requests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Stale
         id: stale
-        uses: actions/stale@v10
+        uses: actions/stale@v11
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           days-before-issue-stale: 60

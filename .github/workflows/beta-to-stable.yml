@@ -16,13 +16,13 @@ env:
 jobs:
   detect-fork:
     name: Detect Fork
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       is_fork: ${{ steps.detect-fork-context.outputs.is_fork }}
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -32,7 +32,7 @@ jobs:
 
   prepare:
     name: Validate Environment
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: detect-fork
     if: needs.detect-fork.outputs.is_fork == 'false'
     steps:
@@ -46,21 +46,21 @@ jobs:
 
   create-pr:
     name: Create Stable Release Pull Request
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: prepare
     if: needs.prepare.result == 'success'
     steps:
       - name: Checkout Actions
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Setup Python 3.13
+      - name: Setup Python 3.15
         id: setup-python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.15'
 
       - name: Create Stable Release Pull Request
         id: create-pr
@@ -71,7 +71,7 @@ jobs:
 
   fork-notice:
     name: Fork Notice
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: detect-fork
     if: needs.detect-fork.outputs.is_fork == 'true'
     steps:

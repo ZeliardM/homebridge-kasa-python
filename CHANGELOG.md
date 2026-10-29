@@ -1,4 +1,178 @@
 # Changelog
+## [v3.3.0-beta.8](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.8) (2026-10-27)
+
+### Bug Fixes
+
+- [fix] Handle retargeted Dependabot pull requests, label from branch names, and stop blaming devices for Python service failures [#403](https://github.com/ZeliardM/homebridge-kasa-python/pull/403) (@ZeliardM)
+- [fix] Keep accessories through Python service crashes, shutdowns, long downtime and bad configs [#402](https://github.com/ZeliardM/homebridge-kasa-python/pull/402) (@ZeliardM)
+- [fix] Close the Python service to the network, honour Enable Credentials, and keep Homebridge running on a failed version check [#401](https://github.com/ZeliardM/homebridge-kasa-python/pull/401) (@ZeliardM)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.3.0-beta.8 [beta-release] (@github-actions)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.7...v3.3.0-beta.8
+
+## [v3.3.0-beta.7](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.7) (2026-10-26)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.3.0-beta.7 [beta-release] (@github-actions)
+- [other] Retry release pushes when GitHub fails them [#399](https://github.com/ZeliardM/homebridge-kasa-python/pull/399) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.6...v3.3.0-beta.7
+
+## [v3.3.0-beta.6](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.6) (2026-10-26)
+
+### Bug Fixes
+
+- [fix] Keep devices working through discovery and network drops, move to python-kasa 0.12.0 and support Python 3.15 [#398](https://github.com/ZeliardM/homebridge-kasa-python/pull/398) (@ZeliardM)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.3.0-beta.6 [beta-release] (@github-actions)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.5...v3.3.0-beta.6
+
+## [v3.3.0-beta.5](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.5) (2026-10-24)
+
+### Bug Fixes
+
+- [fix] Fix devices stuck after a failed write, slow writes during discovery, and Adaptive Lighting turning itself off [#396](https://github.com/ZeliardM/homebridge-kasa-python/pull/396) (@ZeliardM)
+- [fix] Stop deferAndCombine from dropping back-to-back requests [#388](https://github.com/ZeliardM/homebridge-kasa-python/pull/388) (@lmcquade)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.3.0-beta.5 [beta-release] (@github-actions)
+- [other] Fix Dependabot auto-merge when several pull requests open at once [#397](https://github.com/ZeliardM/homebridge-kasa-python/pull/397) (@ZeliardM)
+- npm-dev(deps-dev): bump typescript-eslint from 8.71.2 to 8.72.0 [#395](https://github.com/ZeliardM/homebridge-kasa-python/pull/395) (@dependabot[bot])
+- npm-dev(deps-dev): bump eslint from 10.12.0 to 10.13.0 [#394](https://github.com/ZeliardM/homebridge-kasa-python/pull/394) (@dependabot[bot])
+- npm(deps): bump eventsource from 5.1.2 to 5.1.3 [#393](https://github.com/ZeliardM/homebridge-kasa-python/pull/393) (@dependabot[bot])
+- npm-dev(deps-dev): bump @types/node from 26.6.4 to 26.6.5 [#391](https://github.com/ZeliardM/homebridge-kasa-python/pull/391) (@dependabot[bot])
+- npm-dev(deps-dev): bump typescript-eslint from 8.71.1 to 8.71.2 [#390](https://github.com/ZeliardM/homebridge-kasa-python/pull/390) (@dependabot[bot])
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.4...v3.3.0-beta.5
+
+## [v3.3.0-beta.4](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.4) (2026-10-08)
+
+### Featured Changes
+
+- [feature] Add four device models, a broadcast discovery option, and HomeKit state fixes [#387](https://github.com/ZeliardM/homebridge-kasa-python/pull/387) (@ZeliardM)
+
+### Bug Fixes
+
+- Fix manual devices never being rediscovered after going offline [#384](https://github.com/ZeliardM/homebridge-kasa-python/pull/384) (@aashishvanand)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.3.0-beta.4 [beta-release] (@github-actions)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.3...v3.3.0-beta.4
+
+## [v3.3.0-beta.3](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.3) (2026-10-08)
+
+### Featured Changes
+
+- [feature] Update all dependencies, move to python-kasa 0.11.0.1, and fix strip discovery [#386](https://github.com/ZeliardM/homebridge-kasa-python/pull/386) (@ZeliardM)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.3.0-beta.3 [beta-release] (@github-actions)
+- pip(deps): bump uvicorn from 0.53.0 to 0.54.0 [#385](https://github.com/ZeliardM/homebridge-kasa-python/pull/385) (@dependabot[bot])
+- pip(deps): bump tzdata from 2026.3 to 2026.4 [#380](https://github.com/ZeliardM/homebridge-kasa-python/pull/380) (@dependabot[bot])
+- pip(deps): bump uvicorn from 0.52.4 to 0.53.0 [#379](https://github.com/ZeliardM/homebridge-kasa-python/pull/379) (@dependabot[bot])
+- pip(deps): bump anyio from 4.14.2 to 4.15.1 [#378](https://github.com/ZeliardM/homebridge-kasa-python/pull/378) (@dependabot[bot])
+- pip(deps): bump quart from 0.22.0 to 0.23.1 [#377](https://github.com/ZeliardM/homebridge-kasa-python/pull/377) (@dependabot[bot])
+- pip(deps): bump uvicorn from 0.52.3 to 0.52.4 [#374](https://github.com/ZeliardM/homebridge-kasa-python/pull/374) (@dependabot[bot])
+- pip(deps): bump quart from 0.21.0 to 0.22.0 [#373](https://github.com/ZeliardM/homebridge-kasa-python/pull/373) (@dependabot[bot])
+- pip(deps): bump uvicorn from 0.52.1 to 0.52.3 [#371](https://github.com/ZeliardM/homebridge-kasa-python/pull/371) (@dependabot[bot])
+- npm-dev(deps-dev): bump typescript-eslint from 8.65.0 to 8.66.0 [#366](https://github.com/ZeliardM/homebridge-kasa-python/pull/366) (@dependabot[bot])
+- pip(deps): bump uvicorn from 0.51.0 to 0.52.1 [#365](https://github.com/ZeliardM/homebridge-kasa-python/pull/365) (@dependabot[bot])
+- npm-dev(deps-dev): bump eslint from 10.7.0 to 10.8.0 [#362](https://github.com/ZeliardM/homebridge-kasa-python/pull/362) (@dependabot[bot])
+- npm-dev(deps-dev): bump typescript-eslint from 8.59.4 to 8.65.0 [#360](https://github.com/ZeliardM/homebridge-kasa-python/pull/360) (@dependabot[bot])
+- npm-dev(deps-dev): bump homebridge from 2.1.1 to 2.2.1 [#359](https://github.com/ZeliardM/homebridge-kasa-python/pull/359) (@dependabot[bot])
+- pip(deps): bump quart from 0.20.0 to 0.21.0 [#357](https://github.com/ZeliardM/homebridge-kasa-python/pull/357) (@dependabot[bot])
+- npm-dev(deps-dev): bump homebridge from 2.1.0 to 2.1.1 [#353](https://github.com/ZeliardM/homebridge-kasa-python/pull/353) (@dependabot[bot])
+- npm-dev(deps-dev): bump eslint from 10.5.0 to 10.7.0 [#351](https://github.com/ZeliardM/homebridge-kasa-python/pull/351) (@dependabot[bot])
+- pip(deps): bump anyio from 4.14.1 to 4.14.2 [#350](https://github.com/ZeliardM/homebridge-kasa-python/pull/350) (@dependabot[bot])
+- pip(deps): bump tzdata from 2026.2 to 2026.3 [#347](https://github.com/ZeliardM/homebridge-kasa-python/pull/347) (@dependabot[bot])
+- pip(deps): bump uvicorn from 0.49.0 to 0.51.0 [#346](https://github.com/ZeliardM/homebridge-kasa-python/pull/346) (@dependabot[bot])
+- npm(deps): bump axios from 1.16.1 to 1.18.1 [#341](https://github.com/ZeliardM/homebridge-kasa-python/pull/341) (@dependabot[bot])
+- pip(deps): bump anyio from 4.14.0 to 4.14.1 [#338](https://github.com/ZeliardM/homebridge-kasa-python/pull/338) (@dependabot[bot])
+- pip(deps): bump anyio from 4.13.0 to 4.14.0 [#333](https://github.com/ZeliardM/homebridge-kasa-python/pull/333) (@dependabot[bot])
+- npm-dev(deps-dev): bump eslint from 10.4.1 to 10.5.0 [#331](https://github.com/ZeliardM/homebridge-kasa-python/pull/331) (@dependabot[bot])
+- npm-dev(deps-dev): bump @types/node from 25.9.1 to 25.9.3 [#329](https://github.com/ZeliardM/homebridge-kasa-python/pull/329) (@dependabot[bot])
+- npm-dev(deps-dev): bump homebridge from 2.0.2 to 2.1.0 [#327](https://github.com/ZeliardM/homebridge-kasa-python/pull/327) (@dependabot[bot])
+- pip(deps): bump uvicorn from 0.48.0 to 0.49.0 [#325](https://github.com/ZeliardM/homebridge-kasa-python/pull/325) (@dependabot[bot])
+- npm-dev(deps-dev): bump eslint from 10.4.0 to 10.4.1 [#324](https://github.com/ZeliardM/homebridge-kasa-python/pull/324) (@dependabot[bot])
+- pip(deps): bump uvicorn from 0.47.0 to 0.48.0 [#322](https://github.com/ZeliardM/homebridge-kasa-python/pull/322) (@dependabot[bot])
+- npm-dev(deps-dev): bump @types/node from 25.6.2 to 25.9.1 [#320](https://github.com/ZeliardM/homebridge-kasa-python/pull/320) (@dependabot[bot])
+- npm-dev(deps-dev): bump typescript-eslint from 8.59.2 to 8.59.4 [#319](https://github.com/ZeliardM/homebridge-kasa-python/pull/319) (@dependabot[bot])
+- npm(deps): bump axios from 1.16.0 to 1.16.1 [#318](https://github.com/ZeliardM/homebridge-kasa-python/pull/318) (@dependabot[bot])
+- npm-dev(deps-dev): bump eslint from 10.3.0 to 10.4.0 [#317](https://github.com/ZeliardM/homebridge-kasa-python/pull/317) (@dependabot[bot])
+- npm-dev(deps-dev): bump homebridge from 2.0.1 to 2.0.2 [#316](https://github.com/ZeliardM/homebridge-kasa-python/pull/316) (@dependabot[bot])
+- pip(deps): bump uvicorn from 0.46.0 to 0.47.0 [#313](https://github.com/ZeliardM/homebridge-kasa-python/pull/313) (@dependabot[bot])
+- npm-dev(deps-dev): bump @types/node from 25.6.0 to 25.6.2 [#311](https://github.com/ZeliardM/homebridge-kasa-python/pull/311) (@dependabot[bot])
+- npm-dev(deps-dev): bump homebridge from 2.0.0 to 2.0.1 [#310](https://github.com/ZeliardM/homebridge-kasa-python/pull/310) (@dependabot[bot])
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.2...v3.3.0-beta.3
+
+## [v3.3.0-beta.2](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.2) (2026-05-05)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.3.0-beta.2 [beta-release] (@github-actions)
+- [other] Update build, lint, test workflow [d983d96](https://github.com/ZeliardM/homebridge-kasa-python/commit/d983d962c3757610a58ccfd409ef6f631d616a9f) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.1...v3.3.0-beta.2
+
+## [v3.3.0-beta.1](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.1) (2026-05-05)
+
+### Featured Changes
+
+- [enhancement] Add AdaptiveLighting Features [5bad6d5](https://github.com/ZeliardM/homebridge-kasa-python/commit/5bad6d53313b58b91859f404696d6c3711d35178) (@ZeliardM)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.3.0-beta.1 [beta-release] (@github-actions)
+- npm-dev(deps-dev): bump eslint from 10.2.1 to 10.3.0 [#306](https://github.com/ZeliardM/homebridge-kasa-python/pull/306) (@dependabot[bot])
+- npm-dev(deps-dev): bump homebridge from 2.0.0-beta.101 to 2.0.0-beta.105 [#305](https://github.com/ZeliardM/homebridge-kasa-python/pull/305) (@dependabot[bot])
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.0...v3.3.0-beta.1
+
+## [v3.3.0-beta.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.0) (2026-04-25)
+
+### Featured Changes
+
+- [enhancement] Improve polling error handling [039257d](https://github.com/ZeliardM/homebridge-kasa-python/commit/039257d01f429e653b9d8281a6e5e8d029a8410f) (@ZeliardM)
+- [enhancement] Add L530EA Support [53cd544](https://github.com/ZeliardM/homebridge-kasa-python/commit/53cd5449872d77e2c75b2d5217101e7d60b37e2f) (@ZeliardM)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.3.0-beta.0 [beta-release] (@github-actions)
+- [other] Improve Workflow Release Handling [5050983](https://github.com/ZeliardM/homebridge-kasa-python/commit/5050983c17b86fffd8f15601589323fe1a21faba) (@ZeliardM)
+- [other] Release Workflow Version Handling Fixes [c2132b2](https://github.com/ZeliardM/homebridge-kasa-python/commit/c2132b26988909cf6a8dbc02c6f3923839ed7741) (@ZeliardM)
+- [other] Dependabot workflow fixes [ea20de9](https://github.com/ZeliardM/homebridge-kasa-python/commit/ea20de94954a68667857c7760af71890522d6546) (@ZeliardM)
+- [other] Workflow fixes for dependabot auto-merge [d1ca8b2](https://github.com/ZeliardM/homebridge-kasa-python/commit/d1ca8b27175dc98bb5ae60a5cb63252d28ad5298) (@ZeliardM)
+- npm-dev(deps-dev): bump homebridge from 2.0.0-beta.99 to 2.0.0-beta.101 [#301](https://github.com/ZeliardM/homebridge-kasa-python/pull/301) (@dependabot[bot])
+- pip(deps): bump tzdata from 2026.1 to 2026.2 [#300](https://github.com/ZeliardM/homebridge-kasa-python/pull/300) (@dependabot[bot])
+- pip(deps): bump uvicorn from 0.45.0 to 0.46.0 [#299](https://github.com/ZeliardM/homebridge-kasa-python/pull/299) (@dependabot[bot])
+- npm-dev(deps-dev): bump homebridge from 2.0.0-beta.87 to 2.0.0-beta.89 [#295](https://github.com/ZeliardM/homebridge-kasa-python/pull/295) (@dependabot[bot])
+- npm-dev(deps-dev): bump typescript-eslint from 8.57.2 to 8.58.1 [#293](https://github.com/ZeliardM/homebridge-kasa-python/pull/293) (@dependabot[bot])
+- npm-dev(deps-dev): bump @types/node from 25.5.2 to 25.6.0 [#292](https://github.com/ZeliardM/homebridge-kasa-python/pull/292) (@dependabot[bot])
+- npm(deps): bump axios from 1.13.6 to 1.15.0 [#291](https://github.com/ZeliardM/homebridge-kasa-python/pull/291) (@dependabot[bot])
+- npm-dev(deps-dev): bump eslint from 10.1.0 to 10.2.0 [#290](https://github.com/ZeliardM/homebridge-kasa-python/pull/290) (@dependabot[bot])
+- pip(deps): bump uvicorn from 0.43.0 to 0.44.0 [#289](https://github.com/ZeliardM/homebridge-kasa-python/pull/289) (@dependabot[bot])
+- ci(deps): bump dependabot/fetch-metadata from 2 to 3 [#288](https://github.com/ZeliardM/homebridge-kasa-python/pull/288) (@dependabot[bot])
+- npm-dev(deps-dev): bump @types/node from 25.5.0 to 25.5.2 [#283](https://github.com/ZeliardM/homebridge-kasa-python/pull/283) (@dependabot[bot])
+- pip(deps): bump uvicorn from 0.42.0 to 0.43.0 [#282](https://github.com/ZeliardM/homebridge-kasa-python/pull/282) (@dependabot[bot])
+- npm-dev(deps-dev): bump homebridge from 2.0.0-beta.79 to 2.0.0-beta.84 [#281](https://github.com/ZeliardM/homebridge-kasa-python/pull/281) (@dependabot[bot])
+- pip(deps): bump tzdata from 2025.3 to 2026.1 [#280](https://github.com/ZeliardM/homebridge-kasa-python/pull/280) (@dependabot[bot])
+- npm-dev(deps-dev): bump typescript-eslint from 8.57.1 to 8.57.2 [#275](https://github.com/ZeliardM/homebridge-kasa-python/pull/275) (@dependabot[bot])
+- npm-dev(deps-dev): bump typescript from 5.9.3 to 6.0.2 [#274](https://github.com/ZeliardM/homebridge-kasa-python/pull/274) (@dependabot[bot])
+- pip(deps): bump anyio from 4.12.1 to 4.13.0 [#272](https://github.com/ZeliardM/homebridge-kasa-python/pull/272) (@dependabot[bot])
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.2.0...v3.3.0-beta.0
 
 ## [v3.2.0](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.2.0) (2026-03-23)
 

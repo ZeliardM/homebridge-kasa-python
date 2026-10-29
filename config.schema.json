@@ -3,7 +3,7 @@
   "pluginType": "platform",
   "singular": true,
   "strictValidation": true,
-  "headerDisplay": "Kasa Python Plugin.<p>Most users do not require configuration and can just click \"Save\" to get started. See [README](https://github.com/ZeliardM/homebridge-kasa-python/blob/master/README.md) for more information.</p>",
+  "headerDisplay": "Kasa Python Plugin.<p>Most users do not require configuration and can just click \"Save\" to get started. See [README](https://github.com/ZeliardM/homebridge-kasa-python/blob/latest/README.md) for more information.</p>",
   "footerDisplay": "",
   "schema": {
     "type": "object",
@@ -70,19 +70,30 @@
         "title": "Polling Interval (seconds)",
         "type": "integer",
         "description": "How often to check device status in the background (seconds)",
-        "default": 5
+        "default": 5,
+        "minimum": 1,
+        "maximum": 2147483
       },
       "discoveryPollingInterval": {
         "title": "Discovery Polling Interval (seconds)",
         "type": "integer",
         "description": "How often to discover new devices in the background (seconds)",
-        "default": 300
+        "default": 300,
+        "minimum": 60,
+        "maximum": 2147483
       },
       "offlineInterval": {
         "title": "Offline Interval (days)",
         "type": "integer",
         "description": "How often to remove offline devices in the background (days)",
-        "default": 7
+        "default": 7,
+        "minimum": 1
+      },
+      "disableBroadcast": {
+        "title": "Disable Broadcast Discovery",
+        "type": "boolean",
+        "description": "Only discover the devices listed under Manual Devices, each one directly by its IP address. Broadcast discovery, including Additional Broadcasts, is turned off. Devices that are not in Manual Devices are no longer found and are removed after the Offline Interval.",
+        "default": false
       },
       "additionalBroadcasts": {
         "title": "Additional Broadcast Addresses",
@@ -130,7 +141,9 @@
         "title": "Wait Time Update (milliseconds)",
         "type": "integer",
         "description": "The time to wait to combine similar commands for a device before sending a command to a device (milliseconds). Default: 100.",
-        "default": 100
+        "default": 100,
+        "minimum": 0,
+        "maximum": 60000
       },
       "pythonPath": {
         "title": "Python Path",
@@ -201,6 +214,7 @@
         "pollingInterval",
         "discoveryPollingInterval",
         "offlineInterval",
+        "disableBroadcast",
         {
           "type": "fieldset",
           "title": "Additional Broadcasts",

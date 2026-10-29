@@ -1,6 +1,7 @@
 import type { CharacteristicValue, Service, WithUUID } from 'homebridge';
 
 import HomeKitDevice from './baseDevice.js';
+import { runHomeKitWrite } from './deviceManager.js';
 import type {
   CharacteristicDescriptor,
   ChildDevice,
@@ -70,6 +71,9 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
   }
 
   private async childOnGet(service: Service, child: ChildDevice, descriptor: CharacteristicDescriptor) {
+    if (this.kasaDevice.offline || !this.platform.isKasaApiAvailable) {
+      throw this.communicationFailure();
+    }
     const context = this.buildChildDescriptorContext(child);
     try {
       let value = service.getCharacteristic(descriptor.type).value;
@@ -80,8 +84,6 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
       return value;
     } catch (error) {
       this.log.error(`Child OnGet error (${child.alias}) ${descriptor.name}`, error);
-      this.kasaDevice.offline = true;
-      await this.stopPolling();
       return this.defaultValueForCharacteristic(descriptor.type);
     }
   }
@@ -118,8 +120,10 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
       if (!this.deviceManager) {
         throw new Error('Device manager undefined');
       }
+      this.ensureAddressIsOwn();
       try {
         this.isUpdating = true;
+        this.markWriteStarted();
         const context = this.buildChildDescriptorContext(child);
         await descriptor.applySet!(value, context);
 
@@ -140,8 +144,7 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
         this.previousSnapshot = JSON.parse(JSON.stringify(this.kasaDevice));
       } catch (error) {
         this.log.error(`Child OnSet error (${child.alias}) ${descriptor.name}`, error);
-        this.kasaDevice.offline = true;
-        await this.stopPolling();
+        throw this.communicationFailure();
       } finally {
         if (!isGrouped) {
           this.isUpdating = false;
@@ -151,12 +154,12 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
     };
 
     if (this.shouldBypassChildSetLock(child, descriptor)) {
-      await runSet();
+      await runHomeKitWrite(runSet);
       return;
     }
 
     const lockKey = this.makeLockKey();
-    await this.withLock(lockKey, runSet);
+    await runHomeKitWrite(() => this.withLock(lockKey, runSet));
   }
 
   private shouldBypassChildSetLock(child: ChildDevice, descriptor: CharacteristicDescriptor): boolean {
@@ -206,6 +209,12 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
             const nextDeviceValue = descriptor.getCurrent(context) as CharacteristicValue;
             const debounceKey = `${this.childKey(child)}:${descriptor.type.UUID}`;
             const effectiveNext = this.resolveWithDebounce(debounceKey, hkValue, nextDeviceValue, descriptor.debouncePolls, forceUpdate);
+            if (!forceUpdate && effectiveNext !== nextDeviceValue && hkValue !== nextDeviceValue) {
+              this.log.debug(
+                `Debouncing ${descriptor.name ?? descriptor.type.UUID} on ${context.alias}: ` +
+                `keeping ${hkValue}, observed ${nextDeviceValue}`,
+              );
+            }
             this.updateIfChanged(
               service,
               characteristic,

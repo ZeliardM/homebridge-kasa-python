@@ -8,29 +8,30 @@ import { delay, prefixLogger, runCommand } from '../utils.js';
 import type KasaPythonPlatform from '../platform.js';
 
 const __dirname: string = path.dirname(fileURLToPath(import.meta.url));
-const SUPPORTED_PYTHON_VERSIONS: string[] = ['3.11', '3.12', '3.13'];
 
 class PythonChecker {
   private readonly log: Logger;
   private readonly platform: KasaPythonPlatform;
   private readonly advancedPythonLogging: boolean;
+  private readonly supportedVersions: string[];
   private readonly pythonExecutables: string[];
   private readonly pluginDirPath: string;
   private readonly venvPath: string;
   private readonly venvConfigPath: string;
   private readonly requirementsPath: string = path.join(__dirname, '..', '..', 'requirements.txt');
   private pythonExecutable: string = '';
+  private pythonVersion: string = '';
   private venvPipExecutable: string = '';
   private venvPythonExecutable: string = '';
 
-  public constructor(platform: KasaPythonPlatform) {
+  public constructor(platform: KasaPythonPlatform, pythonEngines: string) {
     this.platform = platform;
     this.log = prefixLogger(this.platform.log, '[Python Check]');
     this.advancedPythonLogging = this.platform.config.advancedOptions?.advancedPythonLogging ?? false;
+    // package.json engines.python lists each supported minor version: "^3.11 || ^3.12 || ...".
+    this.supportedVersions = pythonEngines.split('||').map(range => range.trim().replace(/^\^/, ''));
     this.pythonExecutables = [
-      'python3.13',
-      'python3.12',
-      'python3.11',
+      ...[...this.supportedVersions].reverse().map(version => `python${version}`),
       'python3',
       'python',
     ];
@@ -73,7 +74,7 @@ class PythonChecker {
         );
       } else {
         const version = await this.getPythonVersion(userPythonPath);
-        if (version && SUPPORTED_PYTHON_VERSIONS.includes(version)) {
+        if (version && this.supportedVersions.includes(version)) {
           this.setPythonExecutables(userPythonPath, version);
           return;
         } else {
@@ -85,14 +86,17 @@ class PythonChecker {
       const resolved = await this.resolvePythonExecutable(executable);
       if (resolved) {
         const version = await this.getPythonVersion(resolved);
-        if (version && SUPPORTED_PYTHON_VERSIONS.includes(version)) {
+        if (version && this.supportedVersions.includes(version)) {
           this.setPythonExecutables(resolved, version);
           return;
         }
       }
     }
-    this.log.error('No supported Python version found. Install Python 3.11, 3.12, or 3.13 and restart Homebridge.');
-    throw new Error('No supported Python version found. Install Python 3.11, 3.12, or 3.13 and restart Homebridge.');
+    const versions = this.supportedVersions;
+    const message = 'No supported Python version found. ' +
+      `Install Python ${versions.slice(0, -1).join(', ')}, or ${versions.at(-1)} and restart Homebridge.`;
+    this.log.error(message);
+    throw new Error(message);
   }
 
   private async getPythonVersion(executablePath: string): Promise<string | null> {
@@ -139,6 +143,7 @@ class PythonChecker {
 
   private setPythonExecutables(pythonPath: string, version: string): void {
     this.pythonExecutable = pythonPath;
+    this.pythonVersion = version;
     const majorMinor = version;
     if (process.platform === 'win32') {
       this.venvPythonExecutable = path.join(this.venvPath, 'Scripts', 'python.exe');
@@ -264,8 +269,44 @@ class PythonChecker {
       !this.advancedPythonLogging,
     );
     const installed = this.stringToObject(freezeStdout);
-    const required = this.stringToObject(fs.readFileSync(this.requirementsPath, 'utf8'));
+    const required = this.stringToObject(this.applicableRequirements(fs.readFileSync(this.requirementsPath, 'utf8')));
     return Object.keys(required).every(pkg => installed[pkg] === required[pkg]);
+  }
+
+  private applicableRequirements(value: string): string {
+    return value.split('\n').flatMap(line => {
+      const [requirement, marker] = line.split(';').map(x => x.trim());
+      return !marker || this.pythonVersionMarkerMatches(marker) ? [requirement] : [];
+    }).join('\n');
+  }
+
+  private pythonVersionMarkerMatches(marker: string): boolean {
+    const match = marker.match(/^python_version\s*(<=|>=|==|!=|<|>)\s*["'](\d+(?:\.\d+)*)["']$/);
+    if (!match) {
+      return true;
+    }
+    const [, operator, version] = match;
+    const comparison = this.compareVersions(this.pythonVersion, version);
+    switch (operator) {
+      case '<': return comparison < 0;
+      case '<=': return comparison <= 0;
+      case '>': return comparison > 0;
+      case '>=': return comparison >= 0;
+      case '==': return comparison === 0;
+      default: return comparison !== 0;
+    }
+  }
+
+  private compareVersions(a: string, b: string): number {
+    const left = a.split('.').map(Number);
+    const right = b.split('.').map(Number);
+    for (let i = 0; i < Math.max(left.length, right.length); i++) {
+      const difference = (left[i] ?? 0) - (right[i] ?? 0);
+      if (difference !== 0) {
+        return difference;
+      }
+    }
+    return 0;
   }
 
   private stringToObject(value: string): Record<string, string> {
@@ -280,10 +321,15 @@ class PythonChecker {
 
   private async installRequirements(): Promise<void> {
     this.log.debug('Installing requirements from:', this.requirementsPath);
+    // This runs when a pinned version changes. Upgrade the packages those depend on too (aiohttp,
+    // cryptography, ...), so an existing venv ends up like a fresh one instead of keeping the
+    // versions from its first install. When the newest release of a dependency has no wheel for
+    // this machine (cryptography on Intel Macs), take the newest one that has, instead of building
+    // it from source.
     const [, , exitCode] = await runCommand(
       this.log,
       this.venvPipExecutable,
-      ['install', '-r', this.requirementsPath],
+      ['install', '--upgrade', '--upgrade-strategy', 'eager', '--prefer-binary', '-r', this.requirementsPath],
       undefined,
       !this.advancedPythonLogging,
       !this.advancedPythonLogging,
