@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.3.0-beta.9](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.9)
 
+### Bug Fixes
+
+- [fix] Upgrade pip before every install of the requirements, and keep the storage directory off sys.path [#408](https://github.com/ZeliardM/homebridge-kasa-python/pull/408) (@ZeliardM)
+
 ### Other Changes
 
 - npm-dev(deps-dev): bump typescript-eslint from 8.72.0 to 8.72.1 [#407](https://github.com/ZeliardM/homebridge-kasa-python/pull/407) (@dependabot[bot])
