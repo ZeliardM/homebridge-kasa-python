@@ -4,6 +4,7 @@
 ### Other Changes
 
 - npm-dev(deps-dev): bump typescript-eslint from 8.72.0 to 8.72.1 [#407](https://github.com/ZeliardM/homebridge-kasa-python/pull/407) (@dependabot[bot])
+- npm(deps): bump axios from 1.20.0 to 1.21.0 [#406](https://github.com/ZeliardM/homebridge-kasa-python/pull/406) (@dependabot[bot])
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.8...v3.3.0-beta.9
 
