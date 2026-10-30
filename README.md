@@ -30,7 +30,7 @@ Automatic Discovery may be possible only for some devices. If your device is not
 
 ## Requirements
 - Homebridge Supported Versions: 1.11.2 or later, and 2.0.0 or later.
-- Node.js Supported Versions: 22.12 or later, 24, and 26.
+- Node.js Supported Versions: 22.13 or later on the 22.x line, 24.x, and 26.x.
 - Python Supported Versions: 3.11, 3.12, 3.13, 3.14, and 3.15.
 - A supported Kasa/Tapo device.
 - Enabling Third Party Compatibility in the Tapo/Kasa App can improve device compatibility.
