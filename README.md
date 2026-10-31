@@ -63,6 +63,7 @@ npm install -g homebridge-kasa-python
 - Hide HomeKit or Matter Devices is enabled by default so supported native HomeKit/Matter devices are not duplicated in Homebridge.
 - Wait Time Update controls how long similar commands are combined before being sent to a device.
 - Advanced Python Logging only shows detailed Python-side logs when Homebridge Debug Mode is enabled.
+- Reduce Device Logging logs device changes (Set and Updating, including energy monitoring updates) and Adding HomeKit device as debug messages instead of info, so they only show when Homebridge Debug Mode is enabled.
 
 ## Energy Notes
 - Enable Energy Monitoring adds the extra HomeKit energy monitoring characteristics (Volts, Amperes, Watts, and KiloWattHours) for supported devices.
@@ -100,6 +101,7 @@ npm install -g homebridge-kasa-python
       "waitTimeUpdate": 100,
       "pythonPath": "/usr/bin/python3",
       "advancedPythonLogging": false,
+      "reduceDeviceLogging": false,
       "additionalBroadcasts": [
         "192.168.1.255",
         "192.168.2.255"
