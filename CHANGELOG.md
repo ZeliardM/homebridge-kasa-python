@@ -11,6 +11,7 @@
 
 ### Other Changes
 
+- [other] List Python 3.15 in the README's Python@latest badge [#411](https://github.com/ZeliardM/homebridge-kasa-python/pull/411) (@ZeliardM)
 - [other] Refresh Node and Python dependency versions [#409](https://github.com/ZeliardM/homebridge-kasa-python/pull/409) (@ZeliardM)
 - npm-dev(deps-dev): bump typescript-eslint from 8.72.0 to 8.72.1 [#407](https://github.com/ZeliardM/homebridge-kasa-python/pull/407) (@dependabot[bot])
 - npm(deps): bump axios from 1.20.0 to 1.21.0 [#406](https://github.com/ZeliardM/homebridge-kasa-python/pull/406) (@dependabot[bot])
