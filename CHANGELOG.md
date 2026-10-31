@@ -1,9 +1,13 @@
 # Changelog
-## [v3.3.0-beta.10](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.10)
+## [v3.3.0-beta.10](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.10) (2026-10-31)
 
 ### Bug Fixes
 
 - [fix] Keep a published release published when a late release flow updates it [#412](https://github.com/ZeliardM/homebridge-kasa-python/pull/412) (@ZeliardM)
+
+### Other Changes
+
+- Update CHANGELOG.md for beta release v3.3.0-beta.10 [beta-release] (@github-actions)
 
 **Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.9...v3.3.0-beta.10
 
