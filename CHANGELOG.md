@@ -1,6 +1,10 @@
 # Changelog
 ## [v3.3.0-beta.9](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.9)
 
+### Featured Changes
+
+- [enhancement] Add Reduce Device Logging to log routine device messages at debug [#410](https://github.com/ZeliardM/homebridge-kasa-python/pull/410) (@ZeliardM)
+
 ### Bug Fixes
 
 - [fix] Upgrade pip before every install of the requirements, and keep the storage directory off sys.path [#408](https://github.com/ZeliardM/homebridge-kasa-python/pull/408) (@ZeliardM)
