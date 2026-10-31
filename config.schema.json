@@ -157,6 +157,12 @@
         "type": "boolean",
         "description": "Enable detailed logging for Python scripts. Only shows logs when Debug Mode in Homebridge is enabled.",
         "default": false
+      },
+      "reduceDeviceLogging": {
+        "title": "Reduce Device Logging",
+        "type": "boolean",
+        "description": "Log device changes (Set and Updating, including energy monitoring updates) and Adding HomeKit device as debug messages instead of info. They show again when Debug Mode in Homebridge is enabled.",
+        "default": false
       }
     }
   },
@@ -284,7 +290,8 @@
       "items": [
         "waitTimeUpdate",
         "pythonPath",
-        "advancedPythonLogging"
+        "advancedPythonLogging",
+        "reduceDeviceLogging"
       ]
     }
   ]

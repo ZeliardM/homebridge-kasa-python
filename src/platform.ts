@@ -801,7 +801,12 @@ export default class KasaPythonPlatform implements DynamicPlatformPlugin {
       }
     }
 
-    this.log.info(`Adding HomeKit device: [${deviceAlias}] ${deviceType} [${deviceId}] at host [${deviceHost}]`);
+    const addingMessage = `Adding HomeKit device: [${deviceAlias}] ${deviceType} [${deviceId}] at host [${deviceHost}]`;
+    if (this.config.advancedOptions.reduceDeviceLogging) {
+      this.log.debug(addingMessage);
+    } else {
+      this.log.info(addingMessage);
+    }
     const homekitDevice = await this.createHomeKitDevice(device) as HomeKitDevice | undefined;
     if (homekitDevice) {
       this.homekitDevicesById.set(deviceId, homekitDevice);

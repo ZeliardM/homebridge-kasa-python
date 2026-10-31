@@ -504,7 +504,7 @@ export default abstract class HomeKitDevice {
                 postSetValue as CharacteristicValue,
               );
             } else {
-              this.log.info(`Set ${this.platform.lsc(this.primaryService, char)} on ${context.alias} to ${postSetValue}`);
+              this.logDeviceChange(`Set ${this.platform.lsc(this.primaryService, char)} on ${context.alias} to ${postSetValue}`);
             }
           }
         }
@@ -687,9 +687,18 @@ export default abstract class HomeKitDevice {
   ): void {
     const isEnergyCharacteristic = this.isEnergyMonitoringCharacteristic(characteristic);
     if (logUpdate && (!isEnergyCharacteristic || (isEnergyCharacteristic && this.platform.config.energyOptions.logEnergyMonitoring))) {
-      this.log.info(`Updating ${this.platform.lsc(service, characteristic)} on ${deviceAlias} to ${value}`);
+      this.logDeviceChange(`Updating ${this.platform.lsc(service, characteristic)} on ${deviceAlias} to ${value}`);
     }
     characteristic.updateValue(value);
+  }
+
+  // Reduce Device Logging moves routine change messages to debug.
+  protected logDeviceChange(message: string): void {
+    if (this.platform.config.advancedOptions.reduceDeviceLogging) {
+      this.log.debug(message);
+    } else {
+      this.log.info(message);
+    }
   }
 
   private isEnergyMonitoringCharacteristic(characteristic: Characteristic): boolean {
