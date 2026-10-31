@@ -903,7 +903,10 @@ def _upsert_release(
         fields: dict[str, any] = {"body": body, "name": tag}
         if rel.get("draft"):
             fields["tag_name"] = tag
-        fields["draft"] = bool(draft)
+            fields["draft"] = bool(draft)
+        elif draft:
+            # A run that started before the release was published must not make it a draft again.
+            print(f"[release-manager] Release {tag} is already published; keeping it published.")
         fields["prerelease"] = bool(prerelease)
         try:
             common.gh_release_update(context.github_repository, context.github_token, rel_id, **fields)
