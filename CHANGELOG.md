@@ -1,5 +1,5 @@
 # Changelog
-## [v3.3.0-beta.9](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.9)
+## [v3.3.0-beta.9](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.9) (2026-10-31)
 
 ### Featured Changes
 
@@ -11,6 +11,7 @@
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v3.3.0-beta.9 [beta-release] (@github-actions)
 - [other] List Python 3.15 in the README's Python@latest badge [#411](https://github.com/ZeliardM/homebridge-kasa-python/pull/411) (@ZeliardM)
 - [other] Refresh Node and Python dependency versions [#409](https://github.com/ZeliardM/homebridge-kasa-python/pull/409) (@ZeliardM)
 - npm-dev(deps-dev): bump typescript-eslint from 8.72.0 to 8.72.1 [#407](https://github.com/ZeliardM/homebridge-kasa-python/pull/407) (@dependabot[bot])
