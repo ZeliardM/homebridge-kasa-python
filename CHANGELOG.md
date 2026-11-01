@@ -1,4 +1,12 @@
 # Changelog
+## [v3.3.0-beta.11](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.11)
+
+### Other Changes
+
+- [other] Build and type check against Homebridge 2.5.0 [#414](https://github.com/ZeliardM/homebridge-kasa-python/pull/414) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.10...v3.3.0-beta.11
+
 ## [v3.3.0-beta.10](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.10) (2026-10-31)
 
 ### Bug Fixes
