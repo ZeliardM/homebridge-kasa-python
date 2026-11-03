@@ -1,4 +1,12 @@
 # Changelog
+## [v3.3.0-beta.12](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.12)
+
+### Other Changes
+
+- [other] Update rimraf to 6.1.4 [#417](https://github.com/ZeliardM/homebridge-kasa-python/pull/417) (@ZeliardM)
+
+**Full Changelog**: https://github.com/ZeliardM/homebridge-kasa-python/compare/v3.3.0-beta.11...v3.3.0-beta.12
+
 ## [v3.3.0-beta.11](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.11) (2026-11-03)
 
 ### Other Changes
