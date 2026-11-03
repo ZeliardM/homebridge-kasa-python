@@ -1,8 +1,9 @@
 # Changelog
-## [v3.3.0-beta.11](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.11)
+## [v3.3.0-beta.11](https://github.com/ZeliardM/homebridge-kasa-python/releases/tag/v3.3.0-beta.11) (2026-11-03)
 
 ### Other Changes
 
+- Update CHANGELOG.md for beta release v3.3.0-beta.11 [beta-release] (@github-actions)
 - [other] Refresh ESLint and anyio to their latest versions [#416](https://github.com/ZeliardM/homebridge-kasa-python/pull/416) (@ZeliardM)
 - [other] Build and type check against Homebridge 2.5.0 [#414](https://github.com/ZeliardM/homebridge-kasa-python/pull/414) (@ZeliardM)
 
