@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- npm(deps): bump axios from 1.21.0 to 1.21.1 [#420](https://github.com/ZeliardM/homebridge-kasa-python/pull/420) (@dependabot[bot])
 - npm(deps): bump eventsource from 5.1.4 to 5.1.5 [#419](https://github.com/ZeliardM/homebridge-kasa-python/pull/419) (@dependabot[bot])
 - [other] Update rimraf to 6.1.4 [#417](https://github.com/ZeliardM/homebridge-kasa-python/pull/417) (@ZeliardM)
 
