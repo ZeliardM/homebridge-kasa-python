@@ -77,6 +77,6 @@
   ],
   "dependencies": {
     "axios": "^1.21.0",
-    "eventsource": "^5.1.4"
+    "eventsource": "^5.1.5"
   }
 }
