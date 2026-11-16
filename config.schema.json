@@ -66,6 +66,13 @@
         "description": "Hide HomeKit or Matter Devices from Homebridge.",
         "default": true
       },
+      "brightnessStep": {
+        "title": "Brightness Step (%)",
+        "type": "integer",
+        "description": "Brightness increment for dimmers and bulbs, from 1 to 100. The Home app rounds brightness to a multiple of this value. 1 allows any brightness.",
+        "default": 1,
+        "minimum": 1
+      },
       "pollingInterval": {
         "title": "Polling Interval (seconds)",
         "type": "integer",
@@ -200,7 +207,8 @@
       "description": "Customize HomeKit options.",
       "expandable": true,
       "items": [
-        "hideHomeKitMatter"
+        "hideHomeKitMatter",
+        "brightnessStep"
       ]
     },
     {

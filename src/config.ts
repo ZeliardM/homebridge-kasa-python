@@ -41,6 +41,7 @@ export interface KasaPythonConfigInput {
   powerThreshold?: number;
   logEnergyMonitoring?: boolean;
   hideHomeKitMatter?: boolean;
+  brightnessStep?: number;
   pollingInterval?: number;
   discoveryPollingInterval?: number;
   offlineInterval?: number;
@@ -67,6 +68,7 @@ export type KasaPythonConfig = {
   };
   homekitOptions: {
     hideHomeKitMatter: boolean;
+    brightnessStep: number;
   };
   discoveryOptions: {
     pollingInterval: number;
@@ -98,6 +100,7 @@ export const defaultConfig: KasaPythonConfig = {
   },
   homekitOptions: {
     hideHomeKitMatter: true,
+    brightnessStep: 1,
   },
   discoveryOptions: {
     pollingInterval: 5,
@@ -189,6 +192,7 @@ function validateConfig(config: Record<string, unknown>): string[] {
   validateType(config, 'powerThreshold', 'number', errors);
   validateType(config, 'logEnergyMonitoring', 'boolean', errors);
   validateType(config, 'hideHomeKitMatter', 'boolean', errors);
+  validateType(config, 'brightnessStep', 'number', errors);
   validateType(config, 'pollingInterval', 'number', errors);
   validateType(config, 'discoveryPollingInterval', 'number', errors);
   validateType(config, 'offlineInterval', 'number', errors);
@@ -276,6 +280,11 @@ export function parseConfig(
     MAX_TIMER_SECONDS,
   );
   const offlineInterval = number('offlineInterval', defaultConfig.discoveryOptions.offlineInterval, 1);
+  let brightnessStep = number('brightnessStep', defaultConfig.homekitOptions.brightnessStep, 1, 100);
+  if (!Number.isInteger(brightnessStep)) {
+    warn(`\`brightnessStep\` is ${brightnessStep}, which is not a whole number; using ${Math.round(brightnessStep)}.`);
+    brightnessStep = Math.round(brightnessStep);
+  }
   const waitTimeUpdate = number('waitTimeUpdate', defaultConfig.advancedOptions.waitTimeUpdate, 0, MAX_WAIT_TIME_UPDATE_MS);
   let powerThreshold = number('powerThreshold', defaultConfig.energyOptions.powerThreshold, MIN_POWER_THRESHOLD_WATTS);
   const roundedPowerThreshold = Math.round(powerThreshold * 1000) / 1000;
@@ -296,6 +305,7 @@ export function parseConfig(
     },
     homekitOptions: {
       hideHomeKitMatter: parsedConfig.hideHomeKitMatter ?? defaultConfig.homekitOptions.hideHomeKitMatter,
+      brightnessStep,
     },
     discoveryOptions: {
       pollingInterval: pollingInterval * 1000,

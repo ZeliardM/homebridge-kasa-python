@@ -94,6 +94,7 @@ npm install -g homebridge-kasa-python
       "powerThreshold": 1.0,
       "logEnergyMonitoring": false,
       "hideHomeKitMatter": true,
+      "brightnessStep": 1,
       "pollingInterval": 5,
       "discoveryPollingInterval": 300,
       "offlineInterval": 7,

@@ -76,6 +76,7 @@ export default class HomeKitDeviceLightBulb extends HomeKitDevice {
             this.noteTurnedOnByBrightness('');
           }
         },
+        this.platform.config.homekitOptions.brightnessStep,
       ));
     }
 

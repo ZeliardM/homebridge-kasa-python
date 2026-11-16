@@ -2,6 +2,7 @@ import { PlatformAccessoryEvent } from 'homebridge';
 import type {
   Categories,
   Characteristic,
+  CharacteristicProps,
   CharacteristicValue,
   HapStatusError,
   Logger,
@@ -390,6 +391,7 @@ export default abstract class HomeKitDevice {
         descriptor.type,
         () => this.genericOnGet(descriptor),
         descriptor.writable ? (value: CharacteristicValue) => this.genericOnSet(descriptor, value) : undefined,
+        descriptor.props,
       );
       this.seedCharacteristicValue(this.primaryService, descriptor, this.buildDescriptorContext(), 'Seed error');
     }
@@ -408,8 +410,12 @@ export default abstract class HomeKitDevice {
     type: WithUUID<new () => Characteristic>,
     onGet: () => Promise<CharacteristicValue>,
     onSet?: (value: CharacteristicValue) => Promise<void>,
+    props?: Partial<CharacteristicProps>,
   ): void {
     const characteristic = service.getCharacteristic(type) ?? service.addCharacteristic(type);
+    if (props) {
+      characteristic.setProps(props);
+    }
     characteristic.onGet(onGet);
     if (onSet) {
       characteristic.onSet(onSet);
