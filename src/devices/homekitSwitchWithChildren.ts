@@ -73,6 +73,7 @@ export default class HomeKitDeviceSwitchWithChildren extends HomeKitParentDevice
               this.noteTurnedOnByBrightness(String(context.child?.id));
             }
           },
+          this.platform.config.homekitOptions.brightnessStep,
         ),
       );
     }

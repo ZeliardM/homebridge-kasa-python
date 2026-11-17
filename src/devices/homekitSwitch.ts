@@ -54,6 +54,7 @@ export default class HomeKitDeviceSwitch extends HomeKitDevice {
             this.noteTurnedOnByBrightness('');
           }
         },
+        this.platform.config.homekitOptions.brightnessStep,
       ));
     }
 
