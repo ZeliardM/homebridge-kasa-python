@@ -3,6 +3,7 @@
 
 ### Other Changes
 
+- npm-dev(deps-dev): bump @types/node from 26.6.6 to 26.6.7 [#427](https://github.com/ZeliardM/homebridge-kasa-python/pull/427) (@dependabot[bot])
 - [enhancement] Refresh dependency tooling and transitive packages [#425](https://github.com/ZeliardM/homebridge-kasa-python/pull/425) (@ZeliardM)
 - [other] Update Stylistic to 6.0.1 [#423](https://github.com/ZeliardM/homebridge-kasa-python/pull/423) (@ZeliardM)
 - [other] Update lint dependencies and fix minimatch audit findings [#422](https://github.com/ZeliardM/homebridge-kasa-python/pull/422) (@ZeliardM)
