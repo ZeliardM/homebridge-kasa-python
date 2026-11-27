@@ -39,11 +39,13 @@ export function buildOnDescriptor(
 export function buildBrightnessDescriptor(
   C: typeof Characteristic,
   setBrightness: (value: number, context: DescriptorContext) => Promise<void>,
+  brightnessStep = 1,
 ): CharacteristicDescriptor {
   return {
     type: C.Brightness,
     name: 'Brightness',
     writable: true,
+    props: { minStep: brightnessStep },
     getInitial: context => (context.child ? context.child.brightness : context.device.brightness) ?? 0,
     getCurrent: context => (context.child ? context.child.brightness : context.device.brightness) ?? 0,
     applySet: async (value, context) => {

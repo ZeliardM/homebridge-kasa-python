@@ -1,4 +1,4 @@
-import type { Characteristic, CharacteristicValue, WithUUID } from 'homebridge';
+import type { Characteristic, CharacteristicProps, CharacteristicValue, WithUUID } from 'homebridge';
 
 import type KasaPythonPlatform from '../platform.js';
 
@@ -139,6 +139,7 @@ export interface CharacteristicDescriptor {
   syncGroup?: string;
   debouncePolls?: number;
   syncHomeKitValueAfterSet?: boolean;
+  props?: Partial<CharacteristicProps>;
   getInitial(context: DescriptorContext): CharacteristicValue;
   getCurrent(context: DescriptorContext): CharacteristicValue;
   applySet?(value: CharacteristicValue, context: DescriptorContext): Promise<void>;

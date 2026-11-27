@@ -36,7 +36,13 @@ export default abstract class HomeKitParentDevice extends HomeKitDevice {
       const onSet = descriptor.writable
         ? (value: CharacteristicValue) => this.childOnSet(service!, child, descriptor, value)
         : undefined;
-      this.registerCharacteristic(service!, descriptor.type, () => this.childOnGet(service!, child, descriptor), onSet);
+      this.registerCharacteristic(
+        service!,
+        descriptor.type,
+        () => this.childOnGet(service!, child, descriptor),
+        onSet,
+        descriptor.props,
+      );
       this.seedCharacteristicValue(service!, descriptor, this.buildChildDescriptorContext(child), 'Child seed error');
     }
   }
